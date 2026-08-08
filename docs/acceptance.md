@@ -1,169 +1,273 @@
 # Acceptance
 
-Scope: what "accepted" means for `pestoura/planner-mcp`, the evidence that must exist, the isolated acceptance procedure, read-back evidence requirements, and the live read-only protocol. Companions: [testing.md](testing.md), [release-process.md](release-process.md), [observability.md](observability.md), [deployment.md](deployment.md), [ui-contract.md](ui-contract.md).
+Acceptance defines what evidence must exist before Planner MCP behaviour, capability states and
+releases may be claimed as valid.
 
-Prime directive: **acceptance is browser-evidenced**. A capability is accepted only when the browser worker demonstrably performed it and the result was read back from the UI. Microsoft Graph observations may accompany evidence as context but can never substitute for browser read-back, and their absence never blocks acceptance.
+Companions: [`testing.md`](testing.md), [`release-process.md`](release-process.md),
+[`ui-contract.md`](ui-contract.md), [`deployment.md`](deployment.md),
+[`planner-premium-capabilities.md`](planner-premium-capabilities.md) and
+[`definition-of-done.md`](definition-of-done.md).
 
-## 1. Acceptance levels
+## 1. Acceptance principle
 
-| Level | Environment | Data | Mutations | Who runs it | Gate for |
-|-------|-------------|------|-----------|-------------|----------|
-| A0 Structural | CI | none | none | automation | every PR |
-| A1 Functional | CI, mock UI | synthetic | mock only | automation | every PR |
-| A2 Isolated | compose stack, mock UI | seeded synthetic | yes (mock) | automation, nightly + pre-release | release |
-| A3 Live read-only | real tenant | real | **none** | human operator | claiming live support |
-| A4 Live mutating | real tenant, dedicated non-production plan | real, disposable | yes, per-operation approval | human operator | claiming live write support |
+Planner capability acceptance is **browser/UI-evidenced**. Microsoft Graph documentation or
+availability is never a substitute for the Planner Premium UI evidence required by this product.
 
-No level may be skipped, and A3 always precedes A4.
+Mock evidence proves implementation logic and fail-closed behavior. It does not prove that the real
+tenant currently exposes the same UI/capability.
 
-## 2. Acceptance criteria
+## 2. Acceptance levels
 
-### 2.1 Global criteria
+| Level | Environment | Data | Mutations | Automation | Purpose |
+| --- | --- | --- | --- | --- | --- |
+| A0 Structural | CI/static | none | none | automated | docs/contracts/security structure |
+| A1 Functional | unit/contract/mock | synthetic | mock only where required | automated | component logic |
+| A2 Isolated | full local stack + mock UI | synthetic | mock only | automated | end-to-end release safety |
+| A3 Live read-only | real tenant | real/request scoped | none | manual | live capability/UI read evidence |
+| A4 Live mutation | dedicated non-production Planner test plan | disposable | controlled | manual only | later live write support |
 
-| ID | Criterion | Verified at |
-|----|-----------|-------------|
-| AC-G1 | Every MCP tool in [tool-catalog.md](tool-catalog.md) is discoverable, schema-valid, and returns the documented error taxonomy. | A1 |
-| AC-G2 | Every mutating tool supports `dry_run` and produces zero side effects in that mode. | A1, A2 |
-| AC-G3 | Every mutating tool is idempotent under key replay. | A1, A2 |
-| AC-G4 | Every mutation is followed by a read-back and fails if read-back diverges. | A2, A4 |
-| AC-G5 | Every operation produces exactly one hash-chained audit row. | A2 |
-| AC-G6 | No log record in the run contains credential, PII, or business-content values. | A1, A2, A3 |
-| AC-G7 | Graph unavailability degrades context only; all functional scenarios pass with Graph disabled. | A2 |
-| AC-G8 | The worker is unreachable from outside the internal network. | A2 |
-| AC-G9 | Selector attestation reports zero misses. | A2 (mock), A3 (live) |
-| AC-G10 | MFA events emitted to Hermes contain exactly the permitted sanitized fields and no approval affordance. | A2, A3 |
+For `0.1.0`, A4 is out of scope and no public mutation tool is registered.
 
-### 2.2 Capability criteria
+## 3. Capability-state evidence
 
-Each Planner Premium capability listed in [planner-premium-capabilities.md](planner-premium-capabilities.md) carries a row in the capability matrix with an explicit status:
+The canonical capability states are:
 
-| Status | Meaning | Minimum evidence |
-|--------|---------|------------------|
-| `unsupported` | Not implemented; tool denies with `unsupported_premium`. | A1 denial test |
-| `mock-verified` | Works against the mock UI. | A2 evidence bundle |
-| `live-read-verified` | Reading verified on real Planner. | A3 evidence bundle |
-| `live-verified` | Writing verified on real Planner with read-back. | A4 evidence bundle |
-
-Documentation may state a capability as supported **only** at `live-verified`. Any weaker status must be rendered verbatim in user-facing docs.
-
-## 3. Evidence formats
-
-Evidence is a directory bundle plus a signed manifest.
-
+```text
+UNVERIFIED_LIVE
+DISCOVERED
+READ_ATTESTED
+MUTATION_ATTESTED
+SUPPORTED
+DEGRADED
+UI_DRIFT
+BLOCKED_CONDITIONAL_ACCESS
 ```
-evidence/<level>/<utc-timestamp>-<git-sha>/
+
+Minimum interpretation:
+
+| State | Evidence meaning |
+| --- | --- |
+| `UNVERIFIED_LIVE` | specified/implemented without sufficient real-tenant evidence |
+| `DISCOVERED` | capability observed in the target tenant/UI |
+| `READ_ATTESTED` | read path and UIContract fragment verified with live evidence |
+| `MUTATION_ATTESTED` | later: governed write + fresh UI read-back verified in an authorized test plan |
+| `SUPPORTED` | all capability-specific product/security/UI/evidence/release gates satisfied |
+| `DEGRADED` | bounded capability exists but an expected condition/dependency is degraded |
+| `UI_DRIFT` | UIContract no longer matches; affected capability fails closed |
+| `BLOCKED_CONDITIONAL_ACCESS` | tenant policy requires an unsupported/unacceptable device condition |
+
+No state is promoted merely because Microsoft documentation says the feature exists.
+
+## 4. A0/A1 acceptance
+
+Structural/functional acceptance covers:
+
+- compile/lint/type/schema/contract gates;
+- exact tool/manifest metadata;
+- policy and error taxonomy;
+- auth-state/MFA/CA/enrolment behavior;
+- UIContract registry and fail-closed drift behavior;
+- redaction/cardinality/privacy tests;
+- read-model normalization/snapshot logic;
+- mock-only mutation framework safety where P-031 infrastructure exists;
+- documentation and traceability integrity.
+
+For 0.1.0, contract acceptance explicitly proves exactly 17 public `READ` tools and no public
+mutation/generic browser primitive.
+
+## 5. A2 isolated acceptance — IA-01..IA-16
+
+A2 runs the full local stack against the mock Planner UI with no live Planner credentials or tenant
+network path.
+
+Canonical scenario families:
+
+| IA | Scenario | Required result |
+| --- | --- | --- |
+| IA-01 | control-plane health/readiness and contract bootstrap | healthy/schema-valid |
+| IA-02 | private worker reachability boundary | reachable only from intended internal path |
+| IA-03 | plan/task read model | deterministic normalized reads |
+| IA-04 | project snapshot | stable hash for unchanged synthetic state |
+| IA-05 | UIContract drift fixture | `UI_DRIFT`, fail closed, no arbitrary action |
+| IA-06 | authentication required/session-expired fixture | correct formal state/blocker |
+| IA-07 | Conditional Access managed-device fixture | `BLOCKER_CONDITIONAL_ACCESS`, zero bypass/retry |
+| IA-08 | Intune/enrolment/device-registration fixture | blocker/refusal; no enrolment action |
+| IA-09 | missing/invalid policy | `DENY` |
+| IA-10 | approval expiry/replay/change | reject stale/replayed/mismatched approval |
+| IA-11 | idempotency duplicate/conflict | one bounded effect in mock; conflict handled |
+| IA-12 | timeout/unknown mutation outcome in mock | fresh read-back before retry; uncertainty explicit |
+| IA-13 | saga/checkpoint recovery | verified steps not blindly replayed |
+| IA-14 | telemetry/redaction/cardinality | zero prohibited leakage/findings |
+| IA-15 | container/network/mount hardening | all posture assertions pass |
+| IA-16 | supply-chain/release evidence structure | scans/SBOM/evidence schemas valid |
+
+A later implementation may split scenarios further, but IA-01..IA-16 remain the canonical release
+acceptance family owned by P-069.
+
+## 6. A2 execution procedure
+
+Preconditions:
+
+- exact candidate SHA checked out;
+- required earlier CI gates green;
+- no live Planner credentials in the environment;
+- isolated/mock navigation configuration active;
+- production image digest requirements either resolved for a release candidate or explicitly
+  recorded as a blocker for a non-release development run.
+
+Procedure:
+
+1. start a fresh isolated stack;
+2. verify health/readiness and network boundaries;
+3. seed the synthetic mock Planner state;
+4. run UIContract/mock semantic validation;
+5. execute IA-01..IA-16;
+6. collect sanitized results/log/audit/metrics evidence;
+7. verify no live Planner target was contacted;
+8. validate evidence hashes/schema;
+9. tear down disposable state and verify no unexpected residue.
+
+A2 may exercise internal mutation/reconciliation framework behavior against the mock UI. It never
+enables those handlers in the public 0.1.0 MCP registry.
+
+## 7. Evidence bundle
+
+A release/acceptance evidence bundle is immutable and bound to the exact git SHA/environment.
+Representative structure:
+
+```text
+evidence/<level>/<timestamp>-<git-sha>/
   manifest.json
-  scenarios/<scenario-id>/
-    intent.json          # normalized tool call(s), redacted
-    result.json          # tool responses
-    read_back.json       # observed post-state + diff verdict
-    audit.ndjson         # audit rows for this scenario
-    logs.ndjson          # redacted log slice, filtered by operation_id
-    metrics.prom         # metrics snapshot delta
-    trace.json           # optional exported spans
-    screenshots/         # A2/A3/A4 only, sanitized, opt-in
-  selectors/attestation.json
-  environment.json       # image digests, versions, compose hash, env label
-  summary.md             # human-readable verdict per criterion
+  environment.json
+  summary.json
+  scenarios/
+  ui-contract/
+  security/
+  sbom/
 ```
 
-`manifest.json` fields:
+The manifest includes as applicable:
 
-| Field | Notes |
-|-------|-------|
-| `level` | `A2`, `A3`, `A4`. |
-| `git_sha`, `version` | Build identity, must match `plannermcp_build_info`. |
-| `image_digests` | All container images by digest, per [deployment.md](deployment.md). |
-| `scenarios` | Array of `{id, criteria[], outcome, operation_ids[]}`. |
-| `criteria_results` | Map criterion → `pass\|fail\|not_applicable` with justification for the last. |
-| `operator` | Human name/id for A3/A4; `automation` otherwise. |
-| `hashes` | sha256 of every file in the bundle. |
-| `chain_head` | Audit hash-chain head at bundle close. |
+- acceptance level;
+- git SHA/product/contract/UIContract versions;
+- scenario outcomes;
+- environment mode;
+- container image digests;
+- SBOM references/digests;
+- scan result references;
+- evidence file hashes;
+- blocker codes;
+- operator identifier for manual A3/A4 without unnecessary personal data.
 
-Rules: bundles are immutable; a correction produces a new bundle referencing the prior one via `supersedes`. Screenshots must pass the sanitization check (no real names/e-mails visible) before inclusion, and are omitted entirely if that cannot be guaranteed.
+Do not place passwords/tokens/cookies/browser profile exports or unredacted tenant content into an
+evidence bundle.
 
-## 4. Isolated acceptance procedure (A2)
+## 8. Read-back evidence
 
-Preconditions: clean checkout at the release candidate SHA; all A0/A1 gates green; image digests pinned; no live credentials present in the environment.
+For later mutation acceptance, success requires a **fresh UI read** after the action.
 
-| Step | Action | Pass condition |
-|------|--------|----------------|
-| 1 | Bring up the compose stack in `isolated` profile with fresh volumes. | All services healthy within 120 s. |
-| 2 | Record `environment.json` (digests, versions, compose file hash). | All images referenced by digest. |
-| 3 | Seed the mock Planner dataset from `tests/fixtures/seed/planner_seed.json`. | Seed checksum matches. |
-| 4 | Assert isolation: worker port unreachable from host; egress to public internet blocked. | Both assertions fail-closed. |
-| 5 | Run selector attestation against the mock UI. | Zero misses. |
-| 6 | Execute the scenario suite through the MCP endpoint exactly as a client would. | 100 % scenarios pass. |
-| 7 | Re-run every mutating scenario with the same idempotency key. | `outcome=replayed`, no additional state change. |
-| 8 | Re-run the suite with the Graph client disabled. | Identical functional results. |
-| 9 | Run the redaction detector over the full log stream. | Zero findings. |
-| 10 | Verify audit hash chain end to end. | Chain valid, one row per operation. |
-| 11 | Export the evidence bundle and compute hashes. | Manifest complete, all criteria mapped. |
-| 12 | Tear down; assert volumes removed. | No residue. |
+Read-back evidence records:
 
-Scenario suite must include at minimum: plan/bucket/task read; task create; task update (title, dates, assignments); premium field update; checklist add/complete; bucket move; task complete; task delete; conflict/duplicate handling; session expiry mid-operation; selector fallback path; read-back mismatch injection (must fail loudly); worker restart mid-queue.
+- operation/resource type and bounded reference;
+- requested normalized state/hash;
+- observed normalized state/hash;
+- intended changed fields;
+- guard fields that must remain unchanged where defined;
+- verdict (`VERIFIED`, mismatch/partial, `UNKNOWN_OUTCOME`);
+- attempt/deadline metadata;
+- UIContract/contract version used.
 
-## 5. Read-back evidence
+The write response itself is not read-back evidence. A timeout is not authorization to retry.
 
-Read-back is the verification step that re-reads the mutated resource *from the UI* after the write and compares it to the intended post-state.
+## 9. A3 live read-only acceptance
 
-| Element | Requirement |
-|---------|-------------|
-| Source | Fresh UI read, not the write response, not a cached DOM node. |
-| Timing | After the UI settles; bounded wait with explicit timeout; no fixed sleep. |
-| Scope | Every field the operation intended to change, plus a guard set of fields it must **not** change. |
-| Comparison | Normalized per [state-model.md](state-model.md); comparison of hashes for content fields, exact for enumerations and dates. |
-| Verdict | `match`, `mismatch`, `indeterminate`. `indeterminate` is treated as failure. |
-| Record | `read_back.json` with `expected_hashes`, `observed_hashes`, `changed_fields`, `guard_fields_unchanged`, `verdict`, `attempts`, `duration_ms`. |
-| Failure handling | Operation reported `failed`; audit row records the divergence; no automatic rollback is attempted unless the tool declares a compensating action. |
+A3 is manual, operator-controlled and mutation-free.
 
-`read_back.json` example:
+Required controls:
 
-```json
-{
-  "operation_id": "01J...",
-  "resource": {"kind": "task", "id_hash": "9f2a1c4b7d0e5a63"},
-  "expected_hashes": {"due_date": "2f0c...", "priority": "8ab1..."},
-  "observed_hashes": {"due_date": "2f0c...", "priority": "8ab1..."},
-  "guard_fields_unchanged": ["bucket", "assignments"],
-  "changed_fields": ["due_date", "priority"],
-  "verdict": "match",
-  "attempts": 1,
-  "duration_ms": 1840
-}
-```
+- use only the dedicated professional Chromium profile;
+- ensure public registry/mode is read-only;
+- no mutation handler/tool registered;
+- authenticate interactively in the browser;
+- MFA approval only in Microsoft Authenticator;
+- stop on managed/compliant/enrolled/certificate Conditional Access requirement;
+- stop on device-enrolment/Company Portal/Identity Broker/MDM prompts;
+- perform only planned read/navigation observations;
+- attest only UIContract fragments/capabilities actually observed;
+- sanitize evidence before persistence/distribution.
 
-## 6. Live read-only protocol (A3)
+Post-session evidence includes:
 
-Purpose: prove the UI contract holds against the real Planner Premium surface without any risk of data change.
+- exact build/contract/UIContract versions;
+- capabilities/fragments observed;
+- read results/evidence hashes required by the acceptance protocol;
+- confirmation that no mutation operation occurred;
+- explicit blocker records for anything not verifiable.
 
-| Guard | Implementation |
-|-------|----------------|
-| Mode | Worker started with `PLANNER_MODE=read_only`; mutating tool handlers are not registered at all, not merely refused. |
-| Interaction allowlist | Only navigation, scroll, expand, and read actions permitted; the action dispatcher rejects click targets not present in the read-only allowlist. |
-| Human presence | An operator must be present for the whole session and named in the manifest. |
-| Session | Uses the persistent profile; MFA approval happens exclusively in Microsoft Authenticator (see [authentication-and-mfa.md](authentication-and-mfa.md)). |
-| Scope | A named, pre-agreed plan; the operator confirms scope before start. |
-| Duration | Time-boxed; the worker exits on the configured deadline. |
-| Evidence | Selector attestation report, redacted logs, screenshots only after sanitization review. |
-| Abort | Any unexpected modal, write-capable dialog, or selector miss aborts the session and is recorded. |
+An A3 session never auto-promotes unrelated capabilities.
 
-Post-session checklist: confirm zero mutating operations in the audit export, confirm no write-capable code path executed (assertion counter `worker_operations_total{outcome}` shows only read tools), sanitize and attach evidence, then update the capability matrix to `live-read-verified` only for the capabilities actually exercised.
+## 10. A4 live mutation acceptance — later only
 
-## 7. Live mutating protocol (A4)
+A4 is introduced only after the relevant mutation release exists and A3/read safety is established.
+It is never automated and never uses a production project.
 
-Allowed only after A3 passes with zero selector misses. Requirements: a dedicated non-production plan; per-operation human approval recorded in the audit row; `dry_run` executed and reviewed first for each operation; read-back mandatory; a documented manual undo for each operation before it is attempted; and a hard stop on the first unexpected divergence. A4 is never scheduled, never automated, and never run from CI.
+Requirements include:
 
-## 8. Rejection conditions
+- dedicated disposable/non-production Planner test plan;
+- explicit scope and human oversight;
+- valid UIContract/live capability evidence;
+- policy/approval/idempotency/locks enabled;
+- dry-run reviewed before governed/destructive operations;
+- fresh read-back after each mutation;
+- exact partial/unknown outcome handling;
+- documented safe compensation where applicable;
+- immediate stop on first unexplained divergence.
 
-Acceptance fails outright — regardless of other results — on any of: a redaction finding, a broken audit chain, a selector miss at the level being claimed, a read-back mismatch not deliberately injected, a mutation observed during A3, worker reachability from outside the internal network, an image referenced by tag instead of digest, or an evidence bundle whose hashes do not verify.
+Only A4 evidence can contribute to `MUTATION_ATTESTED`/write `SUPPORTED` state.
 
-## 9. Backlog mapping
+## 11. Acceptance rejection conditions
 
-| Item | Backlog keys |
-|------|--------------|
-| Evidence bundle format + manifest signing | P-070, P-071 |
-| Isolated acceptance harness | P-071, P-072 |
-| Read-back verifier | P-026, P-027 |
-| Live read-only mode + allowlist | P-073 |
-| Capability matrix automation | P-074 |
+Acceptance fails when any applicable condition occurs:
+
+- documentation gate has error/warning;
+- required CI/security gate did not run or failed;
+- secret/redaction finding;
+- public 0.1 registry contains a mutation tool;
+- live tenant was contacted by automated CI mutation testing;
+- UIContract miss/drift on a capability being claimed;
+- unexpected mutation during A3;
+- Conditional Access/enrolment boundary was bypassed;
+- read-back mismatch/unknown outcome was hidden as success;
+- worker is reachable outside the intended private boundary;
+- required image digest is not real/verified;
+- HIGH/CRITICAL Trivy policy fails;
+- required SBOM invalid or empty;
+- evidence hash/schema does not verify.
+
+## 12. Release relationship
+
+For `0.1.0`:
+
+- A2/IA-01..IA-16 is required;
+- A3 is required only for claims of live Planner read support;
+- if A3 is not complete, release documentation explicitly avoids such claims;
+- A4 is not part of the release;
+- P-071/P-072/P-073 evidence must close before P-074.
+
+A gate unavailable because of GitHub billing/platform/quota is `BLOCKED/UNAVAILABLE`, never PASS.
+
+## 13. Backlog mapping
+
+| Acceptance concern | Canonical P-key(s) |
+| --- | --- |
+| Complete CI | P-068 |
+| IA-01..IA-16 isolated acceptance | P-069 |
+| Live read-only procedure | P-070 |
+| Traceability closure | P-071 |
+| Documentation completeness | P-072 |
+| Release process/gates | P-073 |
+| 0.1.0 release | P-074 |
+| Mutation framework safety used by mock scenarios | P-031 |
+| UI/auth prerequisites | P-014..P-024 |
+
+Acceptance evidence does not redefine the backlog; it proves it.

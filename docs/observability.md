@@ -1,215 +1,286 @@
 # Observability
 
-Scope: logging, metrics, tracing, audit trail and alerting for the `pestoura/planner-mcp` control plane and the `planner-browser-worker`. Companion documents: [architecture.md](architecture.md), [security.md](security.md), [privacy-boundary.md](privacy-boundary.md), [threat-model.md](threat-model.md), [browser-worker.md](browser-worker.md), [state-model.md](state-model.md).
+Observability covers structured logging, metrics, audit events and operational health for the
+Planner MCP control plane and private browser worker. It must make behaviour diagnosable without
+turning telemetry into a data-exfiltration channel.
 
-Governing rule: the browser worker is the primary execution surface. Everything observable about a Planner mutation must be explainable from browser worker telemetry alone. Microsoft Graph telemetry is **contextual enrichment only** and never gates health, readiness or success determination.
+Companions: [`security.md`](security.md), [`privacy-boundary.md`](privacy-boundary.md),
+[`state-model.md`](state-model.md), [`testing.md`](testing.md) and [`reporting.md`](reporting.md).
 
 ## 1. Principles
 
-| # | Principle | Consequence |
-|---|-----------|-------------|
-| O-1 | Structured only | No free-form `print`/unstructured logs anywhere in shipped code. |
-| O-2 | Redact at construction | Redaction happens in the log record factory, not at the sink. A sink outage must never leak raw values. |
-| O-3 | Low cardinality metrics | No task ids, plan ids, user ids, URLs or selectors in label values. |
-| O-4 | Correlate by `operation_id` | Every log line, span, metric exemplar and audit row carries the same `operation_id`. |
-| O-5 | Evidence-grade audit | The audit trail is append-only and sufficient to reconstruct what was changed in Planner and why. |
-| O-6 | No screenshots by default | Visual evidence is opt-in, isolated-acceptance only, and never emitted to the log stream. |
-| O-7 | Graph is contextual | Graph errors degrade enrichment fields; they never mark an operation failed. |
+- structured JSON logs only;
+- redaction before emission, not only at the sink;
+- fail closed if a value cannot be safely represented;
+- low-cardinality metrics with a closed label allow-list;
+- no passwords, cookies, auth headers, access/refresh tokens or browser session material;
+- no raw HTML/screenshots/DOM dumps in normal telemetry;
+- no task/plan/user/email/title/URL/operation identifiers in metric labels;
+- health/readiness must reflect real component state without leaking tenant/session secrets;
+- Graph-related telemetry, if Graph is ever used as an auxiliary path, is contextual only and never
+  determines Planner capability success.
 
-## 2. Structured log schema
+## 2. Canonical metrics
 
-Transport: one JSON object per line, UTF-8, newline delimited, written to stdout. No ANSI. No multi-line stack traces — exceptions are serialized into `error.stack` as an escaped string.
+The initial required metric surface includes:
 
-### 2.1 Envelope
+```text
+planner_tool_calls_total
+planner_tool_duration_seconds
+planner_browser_operations_total
+planner_auth_events_total
+planner_mfa_required_total
+planner_ui_validation_failures_total
+planner_policy_decisions_total
+planner_lock_events_total
+```
 
-| Field | Type | Required | Notes |
-|-------|------|----------|-------|
-| `ts` | string (RFC 3339, UTC, ms) | yes | Emitter clock. |
-| `level` | enum `debug\|info\|warn\|error\|critical` | yes | |
-| `service` | enum `planner-mcp\|planner-browser-worker` | yes | |
-| `version` | string | yes | Semver + short git sha. |
-| `env` | enum `dev\|ci\|isolated\|live` | yes | `live` enables strict redaction mode. |
-| `event` | string (dotted, closed set) | yes | e.g. `tool.invoke`, `worker.step`, `ui.selector.miss`. |
-| `msg` | string | yes | Static human string; no interpolated identifiers. |
-| `operation_id` | string (ULID) | yes | Chain-wide correlation id. |
-| `request_id` | string (ULID) | no | Per-HTTP-request id. |
-| `session_id` | string (ULID) | no | Browser profile session. |
-| `tool` | string | no | MCP tool name from [tool-catalog.md](tool-catalog.md). |
-| `phase` | enum `plan\|precondition\|act\|read_back\|reconcile\|finalize` | no | |
-| `outcome` | enum `ok\|noop\|retry\|denied\|failed` | no | Terminal-phase only. |
-| `duration_ms` | integer | no | |
-| `attempt` | integer | no | Retry counter, 1-based. |
-| `idempotency_key_hash` | string (sha256 hex, 16 chars) | no | Never the raw key. |
-| `resource` | object | no | See 2.2. |
-| `error` | object | no | See 2.3. |
-| `graph` | object | no | Contextual only; see 2.4. |
-| `redactions` | integer | yes | Count of fields redacted in this record. `0` is meaningful. |
+Additional metrics may be added only with bounded labels and a documented cardinality budget.
 
-### 2.2 `resource` sub-object
+### Allowed label examples
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `kind` | enum `plan\|bucket\|task\|checklist_item\|attachment\|field\|view` | Low cardinality. |
-| `id_hash` | string | sha256(id + per-deployment salt), 16 hex chars. |
-| `title_len` | integer | Length only, never the title. |
-| `premium` | boolean | Whether the resource requires Planner Premium semantics. |
+Safe low-cardinality dimensions include:
 
-### 2.3 `error` sub-object
+- service;
+- tool name from the fixed catalogue;
+- outcome/status enum;
+- mutation class enum;
+- auth state enum;
+- blocker/error code enum;
+- policy decision enum;
+- resource **type** (not resource id);
+- UI surface/contract fragment id only when the registry is bounded and reviewed.
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `class` | string | Exception class name. |
-| `code` | string | Stable internal code, e.g. `WRK_SELECTOR_MISS`. |
-| `retryable` | boolean | |
-| `stack` | string | Escaped, trimmed to 4 KiB, paths relativized to repo root. |
-| `selector_id` | string | Logical selector name from [ui-contract.md](ui-contract.md), never a raw CSS/XPath string. |
+### Prohibited metric labels
 
-### 2.4 `graph` sub-object (contextual)
+Never use:
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `available` | boolean | |
-| `latency_ms` | integer | |
-| `status` | integer | HTTP status, if any. |
-| `degraded_reason` | string | Closed set: `unauthorized`, `throttled`, `timeout`, `disabled`, `schema_mismatch`. |
+- task IDs;
+- plan IDs;
+- dependency IDs;
+- usernames/display names;
+- email/UPN;
+- titles/descriptions;
+- complete URLs;
+- operation IDs;
+- MFA numbers;
+- arbitrary exception strings.
 
-A `graph.available=false` record is always `level<=warn`. It must never produce `outcome=failed`.
+Registration of a metric with an unapproved label key/value source fails tests/startup according to
+the implementation policy.
 
-## 3. Redaction rules
+## 3. Structured logging
 
-Redaction is applied by a single `RedactingLogFactory` before serialization. Rejecting an unredactable value is preferred over emitting it.
+Each log event uses a stable schema containing only fields appropriate to its event type. Typical
+safe fields include:
 
-| Class | Examples | Rule |
-|-------|----------|------|
-| Credentials | passwords, cookies, `Authorization`, refresh/access tokens, session storage blobs | Dropped entirely; replaced with `"[redacted:credential]"`. |
-| MFA material | Authenticator number, challenge nonce | Allowed **only** in the sanitized MFA event (see [authentication-and-mfa.md](authentication-and-mfa.md)); never in general logs. |
-| Personal data | display names, UPNs, e-mail addresses, avatar URLs | Replaced by `"[redacted:pii]"`; optionally a stable salted hash in `*_hash`. |
-| Business content | task titles, descriptions, comments, checklist text, attachment filenames | Replaced by length + hash. Never verbatim. |
-| Identifiers | plan/bucket/task GUIDs | Salted-hash only (`id_hash`). |
-| URLs | Planner deep links | Scheme + host retained; path and query replaced by `/[redacted:path]`. |
-| Selectors | CSS/XPath used by Playwright | Logical `selector_id` only. |
-| Screenshots / DOM dumps | | Never in logs. Written to the isolated-acceptance evidence directory only, per [acceptance.md](acceptance.md). |
+```text
+timestamp
+level
+service
+version
+event
+tool
+outcome
+phase
+duration_ms
+attempt
+error_code
+mutation_class
+policy_decision
+redaction_count
+```
 
-Redaction invariants tested in CI (see [testing.md](testing.md)):
+`operation_id` may be present in logs as a correlation field if the privacy/security design accepts
+it for that sink; it must **not** become a Prometheus label.
 
-1. A record containing a value matching any credential/PII detector fails the test suite.
-2. `redactions` must equal the number of substitutions actually performed.
-3. Salt is per-deployment, sourced from a secret, never logged; hashes are therefore not cross-deployment linkable.
-4. `env=live` forbids `level=debug` emission of `resource.title_len` for premium fields flagged sensitive.
+Human/business data is excluded or transformed to the minimum bounded representation needed for
+operations. Log messages use static templates rather than interpolating raw request values.
 
-## 4. Metrics
+## 4. Redaction
 
-Prometheus exposition on the worker's internal port and the control plane's loopback admin port. Public ingress never exposes `/metrics`. All histogram buckets are explicit; no default `le` sprawl.
+Redaction applies recursively to structured objects and exception handling.
 
-### 4.1 Global label discipline
+Deny-listed classes include:
 
-Allowed label keys, closed set: `service`, `env`, `tool`, `phase`, `outcome`, `resource_kind`, `error_code`, `selector_id`, `reason`, `surface`. Every label value comes from an enumerated set validated at registration time. Unbounded values are rejected at startup by the metrics registry guard.
+- password/secret/passphrase values;
+- `Authorization` headers;
+- access/refresh tokens;
+- cookies/session/local-storage material;
+- browser profile paths/content when they reveal personal data;
+- private keys;
+- email/UPN and display names unless an explicitly approved report/tool contract requires them;
+- task titles/descriptions/comments/checklist content in system telemetry;
+- attachment filenames/content;
+- raw Planner deep-link paths/query strings;
+- raw selectors/DOM/HTML in ordinary logs.
 
-### 4.2 Control plane metrics
+A redaction test suite must include adversarial nested structures and exception messages.
 
-| Name | Type | Labels | Meaning |
-|------|------|--------|---------|
-| `plannermcp_tool_invocations_total` | counter | `tool`, `outcome` | MCP tool calls. |
-| `plannermcp_tool_duration_seconds` | histogram | `tool`, `phase` | End-to-end tool latency. Buckets: .1 .25 .5 1 2 5 10 30 60 120. |
-| `plannermcp_tool_denied_total` | counter | `tool`, `reason` | Policy/authorization denials. `reason` ∈ `scope`, `readonly_mode`, `dry_run`, `unsupported_premium`, `rate_limit`. |
-| `plannermcp_idempotency_outcomes_total` | counter | `outcome` | `outcome` ∈ `new`, `replayed`, `conflict`. |
-| `plannermcp_reconcile_runs_total` | counter | `outcome` | See [reconciliation.md](reconciliation.md). |
-| `plannermcp_reconcile_drift_items` | histogram | `resource_kind` | Drift items per run. Buckets: 0 1 2 5 10 25 50 100. |
-| `plannermcp_graph_context_total` | counter | `outcome`, `reason` | Contextual Graph calls. Never used in SLOs. |
-| `plannermcp_build_info` | gauge (=1) | `version`, `commit`, `env` | Static build identity. |
+## 5. MFA observability
 
-### 4.3 Browser worker metrics
+The normal log stream never contains the MFA number. The only place where the number may leave the
+worker/control plane is the dedicated sanitized MFA notification event defined in
+[`authentication-and-mfa.md`](authentication-and-mfa.md) and
+[`hermes-integration.md`](hermes-integration.md).
 
-| Name | Type | Labels | Meaning |
-|------|------|--------|---------|
-| `worker_operations_total` | counter | `tool`, `outcome` | Worker-side operations. |
-| `worker_step_duration_seconds` | histogram | `phase` | Per-phase timing. Buckets: .05 .1 .25 .5 1 2 5 10 30. |
-| `worker_selector_resolution_total` | counter | `selector_id`, `outcome` | `outcome` ∈ `hit`, `fallback`, `miss`. |
-| `worker_read_back_total` | counter | `resource_kind`, `outcome` | Post-write verification result. |
-| `worker_navigation_total` | counter | `surface`, `outcome` | `surface` ∈ `board`, `grid`, `timeline`, `task_detail`, `login`. |
-| `worker_session_state` | gauge | `state` | `state` ∈ `cold`, `warming`, `ready`, `mfa_required`, `expired`. |
-| `worker_mfa_events_total` | counter | `outcome` | `outcome` ∈ `raised`, `approved`, `expired`, `denied`. |
-| `worker_browser_restarts_total` | counter | `reason` | `reason` ∈ `crash`, `oom`, `stale_profile`, `manual`. |
-| `worker_queue_depth` | gauge | — | In-flight + queued operations. |
+Observability records only bounded states/counters such as challenge detected, expired, resumed or
+authenticated.
 
-### 4.4 Cardinality budget
+MFA approval remains exclusively in Microsoft Authenticator.
 
-| Metric family | Worst-case series | Guard |
-|---------------|-------------------|-------|
-| Tool families | tools × outcomes ≈ 40 × 5 = 200 | Tool names are a closed catalog. |
-| Selector family | selectors × 3 ≈ 120 × 3 = 360 | Selector ids come from the UI contract registry. |
-| Everything else | < 300 | Registry guard fails startup above 2 000 total series. |
+## 6. UIContract/drift observability
 
-## 5. Tracing
+Track bounded events for:
 
-OpenTelemetry, W3C `traceparent` propagated ChatGPT → Portal → control plane → worker. Sampling: parent-based, 100 % for mutating tools, 10 % for read-only tools, 100 % on error.
+- fragment validation success/failure;
+- attestation state changes;
+- selector/semantic validation failures;
+- `UI_DRIFT` blockers;
+- affected capability state transitions;
+- circuit-breaker open/close state where implemented.
 
-| Span | Emitter | Key attributes |
-|------|---------|----------------|
-| `mcp.tool` | control plane | `tool`, `operation_id`, `dry_run`, `outcome` |
-| `mcp.policy` | control plane | `decision`, `reason` |
-| `worker.operation` | worker | `tool`, `attempt`, `session_id` |
-| `worker.navigate` | worker | `surface`, `selector_id` |
-| `worker.act` | worker | `phase=act`, `resource_kind` |
-| `worker.read_back` | worker | `outcome`, `mismatch_fields_count` |
-| `graph.context` | control plane | `available`, `degraded_reason` |
+A drift event does not trigger exploratory browser interaction. The affected path fails closed and
+requires re-attestation.
 
-Span attributes obey the same redaction rules as logs; attribute values are drawn from the metric label enumerations wherever possible. Exemplars link histograms to trace ids for mutating tools only.
+## 7. Policy/approval/lock observability
 
-## 6. Audit trail
+Record bounded governance events:
 
-Separate append-only store (SQLite WAL in single-node deployments), distinct from the log stream, retained longer, and never rotated by the log shipper.
+- `ALLOW`, `DENY`, `REQUIRE_APPROVAL`;
+- policy/rule identifier;
+- approval requested/consumed/expired/replayed;
+- lock acquired/conflict/expired/released;
+- saga/checkpoint state transition;
+- read-back verdict;
+- `UNKNOWN_OUTCOME`.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `audit_id` | ULID | Primary key. |
-| `ts` | RFC 3339 | |
-| `operation_id` | ULID | |
-| `actor` | string | Portal-authenticated principal id (hashed). |
-| `tool` | string | |
-| `intent` | JSON | Normalized, redacted request parameters. |
-| `preconditions` | JSON | Observed state hashes before mutation. |
-| `effect` | JSON | Field-level before/after **hashes**, plus `changed_fields` names. |
-| `read_back` | JSON | Verification result, per [state-model.md](state-model.md). |
-| `evidence_ref` | string | Path/id of isolated-acceptance evidence bundle, if any. |
-| `outcome` | enum | `ok\|noop\|failed\|denied`. |
-| `graph_context` | JSON | Contextual snapshot; nullable. |
+Do not log approval payload values, tenant data or secret material merely to make the audit trail
+more verbose.
 
-Properties: append-only (no UPDATE/DELETE grants), each row hash-chained to its predecessor (`prev_hash`, `row_hash`) so tampering is detectable, and exportable as NDJSON for [reporting.md](reporting.md).
+## 8. Audit trail
 
-## 7. Alerts
+Audit is a separate durable governance record, not a substitute for logs. It is append-oriented and
+must support reconstruction of governed operations using bounded/sanitized data and evidence hashes.
 
-| Alert | Expression (intent) | For | Severity | Action |
-|-------|---------------------|-----|----------|--------|
-| `WorkerSessionNotReady` | `worker_session_state{state="ready"} == 0` | 10m | critical | Session re-auth per authentication-and-mfa. |
-| `MfaBacklog` | `increase(worker_mfa_events_total{outcome="expired"}[30m]) > 0` | 0m | high | HITL notification via Hermes. |
-| `SelectorMissSpike` | `rate(worker_selector_resolution_total{outcome="miss"}[15m]) > 0` | 15m | high | UI drift; freeze mutating tools, run selector attestation. |
-| `ReadBackFailures` | `rate(worker_read_back_total{outcome!="ok"}[15m]) > 0.05` | 10m | critical | Halt mutations, open incident. |
-| `ToolErrorRate` | `sum(rate(plannermcp_tool_invocations_total{outcome="failed"}[10m])) / sum(rate(plannermcp_tool_invocations_total[10m])) > 0.05` | 10m | high | Investigate. |
-| `IdempotencyConflicts` | `increase(plannermcp_idempotency_outcomes_total{outcome="conflict"}[1h]) > 3` | 0m | medium | Inspect duplicate submissions. |
-| `BrowserRestartLoop` | `increase(worker_browser_restarts_total[15m]) > 3` | 0m | high | Check resources / profile corruption. |
-| `QueueSaturation` | `worker_queue_depth > 20` | 10m | medium | Throttle upstream. |
-| `AuditChainBroken` | audit verifier job failure | 0m | critical | Security incident. |
-| `RedactionViolation` | any log record failing the sink-side detector | 0m | critical | Stop shipping logs, rotate salt, incident. |
+Representative fields:
 
-Explicitly **not** alertable: any `graph_*` degradation. Graph unavailability is informational by design.
+```text
+audit_id
+timestamp
+operation_id
+tool
+mutation_class
+policy_decision
+approval_id
+idempotency_fingerprint_hash
+resource_type
+before_hash
+requested_hash
+after_hash
+read_back_verdict
+checkpoint_state
+error_or_blocker_code
+contract_version
+ui_contract_version
+evidence_ref
+```
 
-## 8. Retention and access
+The implementation should provide tamper-evidence (for example hash chaining) and a verifier. The
+audit schema never includes credential/session secrets.
 
-| Stream | Retention | Access |
-|--------|-----------|--------|
-| Logs | 30 days | Operator, loopback/aggregator only. |
-| Metrics | 90 days | Internal network only. |
-| Traces | 14 days | Internal network only. |
-| Audit | 400 days | Operator + governance review, export-only. |
-| Evidence bundles | Per release + 2 | Attached to the release record, see [release-process.md](release-process.md). |
+## 9. Health and readiness
 
-## 9. Backlog mapping
+`planner_health` answers process/liveness health. `planner_readiness` answers whether the service can
+safely accept the relevant class of work.
 
-| Concern | Backlog keys |
-|---------|--------------|
-| Log schema + redaction factory | P-046, P-047 |
-| Metrics registry + cardinality guard | P-048, P-049 |
-| Tracing propagation | P-050 |
-| Audit store + hash chain | P-051, P-052 |
-| Alert rules + runbooks | P-053 |
+Readiness may include non-secret facts such as:
+
+- state DB/migration status;
+- policy validity;
+- browser-worker reachability;
+- UIContract registry load status;
+- configured mode (`read_only`, etc.);
+- circuit-breaker state summary;
+- external blocker code.
+
+Readiness must not expose tokens, cookies, tenant content or personal identity data. In 0.1.0,
+`AUTHENTICATED` is not necessarily a prerequisite for the service itself to be healthy, but live
+Planner read tools may return an auth blocker until the browser session is ready.
+
+## 10. Alerting principles
+
+Alerts are based on conditions requiring operator action, for example:
+
+- worker/browser unavailable or crash loop;
+- repeated auth/session expiry;
+- MFA challenge expiry;
+- UI drift/attestation failure;
+- policy invalid/missing;
+- approval replay attempt;
+- repeated lock conflicts/expired leases;
+- redaction detector violation;
+- audit integrity failure;
+- persistent tool error/latency degradation;
+- supply-chain/release gate failure where operationally monitored.
+
+Hermes/Telegram may receive a sanitized notification copy; it is not the source of truth for
+monitoring state.
+
+## 11. Tracing
+
+Distributed tracing may be added where it preserves the privacy/cardinality boundary. Trace context
+can correlate:
+
+```text
+ChatGPT → Cloudflare → planner-mcp → browser worker
+```
+
+Span attributes follow the same deny-list as logs/metrics. No selector CSS/XPath, credential, task
+content or session secret is placed in span attributes.
+
+## 12. Reporting interface
+
+Reporting consumes the semantic read/state/audit model, not browser selectors directly. Operational
+reports may aggregate:
+
+- tool outcomes/latency;
+- auth/session health;
+- UIContract/drift state;
+- policy/approval/lock outcomes;
+- reconciliation status;
+- security/release gate state.
+
+Business/project reports are separately defined in [`reporting.md`](reporting.md) and may return
+request-scoped project data through semantic tools without making that data part of system telemetry.
+
+## 13. Testing
+
+Required observability tests include:
+
+- adversarial redaction positive/negative cases;
+- recursive/nested redaction;
+- exception sanitization;
+- metric label allow-list/cardinality checks;
+- no prohibited ID/content labels;
+- MFA number absent from general logs;
+- audit integrity verification;
+- UI drift produces bounded blocker telemetry and zero mutation after failure;
+- reporting/telemetry generators do not invoke mutation paths.
+
+## 14. Backlog mapping
+
+Observability is cross-cutting but canonical ownership is primarily:
+
+| Concern | P-key(s) |
+| --- | --- |
+| Structured logging/redaction foundation | P-008 |
+| Prometheus metrics foundation | P-009 |
+| Secret/telemetry hygiene gates | P-063 |
+| Circuit breakers/retry operational state | P-066 |
+| Audit trail completeness | P-067 |
+| CI/release evidence | P-068, P-073, P-074 |
+| Governance reporting | P-060 |
+
+The mapping must not repurpose P-046..P-053; those keys belong to custom fields through
+reconciliation/blueprint work in the canonical backlog.

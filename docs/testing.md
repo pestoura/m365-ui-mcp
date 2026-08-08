@@ -1,167 +1,283 @@
 # Testing Strategy
 
-Scope: the test pyramid for `pestoura/planner-mcp` (control plane) and `planner-browser-worker`. Companions: [acceptance.md](acceptance.md), [ui-contract.md](ui-contract.md), [browser-worker.md](browser-worker.md), [release-process.md](release-process.md), [observability.md](observability.md).
+This document defines the Planner MCP test architecture across control plane, browser worker,
+UIContract, security and acceptance.
 
-## 0. Non-negotiable rule
+Companions: [`acceptance.md`](acceptance.md), [`ui-contract.md`](ui-contract.md),
+[`browser-worker.md`](browser-worker.md), [`release-process.md`](release-process.md) and
+[`observability.md`](observability.md).
 
-**CI never touches a live Microsoft Planner tenant.** No CI job may authenticate to Planner, open a real Planner URL, or mutate real data. All browser-level testing in CI runs against the **mock Planner UI** fixture server. Live verification is a separate, manual, human-initiated procedure, read-only in its initial phase, documented in [acceptance.md](acceptance.md).
+## 1. Non-negotiable CI boundary
 
-Enforcement:
+**CI never authenticates to or mutates a live Microsoft Planner tenant.**
 
-| Control | Mechanism |
-|---------|-----------|
-| Network egress | CI test job runs with egress denied except to `127.0.0.1` and the package proxy. |
-| Env guard | `PLANNER_ENV` is pinned to `ci`; the worker refuses to start with `env=live` when `CI=true`. |
-| Credential absence | No Planner secrets exist in CI secret scope; a repo policy test asserts the secret names are unset. |
-| URL allowlist | Worker navigation allowlist in `ci` mode is `http://127.0.0.1:*` only; any other host raises `WRK_NAV_BLOCKED`. |
-| Static check | Grep gate fails the build on `tasks.office.com`, `planner.cloud.microsoft` or `login.microsoftonline.com` literals outside `docs/` and the allowlist module. |
+All automated browser testing uses deterministic local/mock surfaces. Live Planner verification is
+human-initiated and initially read-only.
 
-## 1. Layers
+CI safety controls include:
 
-| Layer | Runtime | Runs in CI | Touches browser | Touches live Planner | Typical count |
-|-------|---------|-----------|-----------------|----------------------|---------------|
-| L1 Unit | pytest | yes | no | no | ~400 |
-| L2 Schema | pytest + JSON Schema | yes | no | no | ~90 |
-| L3 Contract | pytest + FastMCP/HTTP clients | yes | no | no | ~120 |
-| L4 Mock-UI (Playwright) | pytest-playwright | yes | yes (headless, local mock) | no | ~70 |
-| L5 Selector attestation | pytest | yes (structural) / manual (live) | yes | read-only, manual only | ~1 per selector |
-| L6 Isolated acceptance | scripted, compose-based | nightly + pre-release | yes | no | ~25 scenarios |
-| L7 Live acceptance | manual, human-operated | never | yes | read-only first | checklist |
+- no Planner credentials/secrets in CI scope;
+- CI/live mode separation with fail-closed startup guard;
+- mock/loopback navigation allow-list for browser acceptance;
+- no real Planner mutation endpoint/surface reachable from automated mutation tests;
+- static/config checks that prevent accidental live targets;
+- evidence that mutation scenarios in CI run only against the synthetic mock Planner UI.
 
-## 2. L1 — Unit tests
+## 2. Test layers
 
-Targets: pure logic with no I/O.
+| Layer | Purpose | Browser | Live Planner | CI |
+| --- | --- | --- | --- | --- |
+| L1 Unit | pure models/policy/state/idempotency/redaction logic | no | no | yes |
+| L2 Schema | JSON/model contract validation | no | no | yes |
+| L3 Contract | MCP/control-plane/worker contracts | optional stub | no | yes |
+| L4 Mock UI integration | Playwright against deterministic synthetic Planner UI | yes | no | yes |
+| L5 UIContract validation | registry/semantic/mock attestation; live attestation separately | yes | read-only manual for live | CI + manual |
+| L6 Isolated acceptance | full local stack with mock UI | yes | no | pre-release/CI target |
+| L7 Live read-only acceptance | real tenant capability/UI evidence | yes | read-only | never automated |
+| L8 Live mutation acceptance | dedicated isolated test plan only, later releases | yes | controlled write | never CI |
 
-| Area | Representative assertions |
-|------|---------------------------|
-| Idempotency keys | Key derivation is stable under field reordering; differing intent yields differing key. See [idempotency.md](idempotency.md). |
-| State model | Normalization of Planner Premium fields; unknown field handling is lossless-or-explicit. |
-| Reconciliation | Drift classification (`missing`, `extra`, `divergent`, `equivalent`) is total and mutually exclusive. |
-| Redaction | Every detector class from [observability.md](observability.md) has positive and negative cases. |
-| Policy | Read-only mode denies all mutating tools; dry-run never reaches the worker client. |
-| Retry | Backoff is bounded, jittered, and never retries non-retryable error codes. |
-| Graph contextual client | Any Graph failure degrades to `available=false` and returns success from the caller's perspective. |
+## 3. Unit tests
 
-Rules: no `sleep`, no network, no filesystem outside `tmp_path`, deterministic clock via injected `Clock`, deterministic ULIDs via injected id factory.
+L1 covers at minimum:
 
-## 3. L2 — Schema tests
+- manifest/model validation;
+- product/schema/contract version consistency;
+- policy `ALLOW` / `DENY` / `REQUIRE_APPROVAL` and fail-closed defaults;
+- approval expiry/binding/replay protection;
+- idempotency key/fingerprint stability and conflict handling;
+- operation/saga/checkpoint state transitions;
+- typed lock acquisition/expiry/order;
+- auth-state legal/illegal transitions;
+- normalization and snapshot hashing;
+- reconciliation diff/ordering logic;
+- redaction of nested/adversarial values;
+- metric label allow-list/cardinality rules;
+- capability-state transitions;
+- UIContract fragment/version/attestation rules.
 
-Artifacts under version control: MCP tool input/output schemas, worker HTTP request/response schemas, audit row schema, sanitized MFA event schema, evidence bundle manifest schema.
+Tests use injected clocks/IDs where time/randomness matters and avoid wall-clock sleeps.
 
-| Assertion | Rationale |
-|-----------|-----------|
-| Every tool in [tool-catalog.md](tool-catalog.md) has a registered schema and vice versa. | No undocumented surface. |
-| Schemas validate all recorded fixtures. | Fixtures stay in sync. |
-| Backward-compat check against the previous release's schemas. | Additive-only changes unless a major bump. |
-| Sanitized MFA event schema has `additionalProperties: false` and exactly the permitted fields (`operation_id`, `service`, `description`, `mfa_number`, `expires_at`). | Privacy boundary, see [privacy-boundary.md](privacy-boundary.md). |
-| Audit `effect` never contains raw values, only hashes and field names. | Evidence without leakage. |
+## 4. Schema and contract tests
 
-## 4. L3 — Contract tests
+L2/L3 prove that every public interface is closed and versioned.
 
-Two contracts are exercised in-process with real serialization:
+Required assertions include:
 
-**Control plane ↔ MCP client.** Streamable HTTP transport, tool discovery, argument validation errors, `dry_run` semantics, idempotency replay, error taxonomy mapping, and denial reasons.
+- every public MCP tool has matching input/output contract and manifest metadata;
+- unknown properties are rejected where the contract is closed;
+- the public error taxonomy contains stable sanitized codes, never raw exceptions/DOM;
+- control-plane ↔ browser-worker operation envelope is semantic and closed;
+- no public worker/browser primitive such as generic click/type/navigate is exposed;
+- MFA sanitized event has only its approved fields;
+- capability/tool/AgentCard manifests validate;
+- version incompatibility fails closed.
 
-**Control plane ↔ browser worker.** The worker is replaced by a *contract double* generated from the same schema set; the real worker is separately verified against the same suite (dual-run contract testing), so drift between double and implementation is impossible to hide.
+### 0.1.0 contract gate
 
-| Scenario | Expected |
-|----------|----------|
-| Duplicate `idempotency_key`, identical intent | Single worker call, `outcome=replayed`. |
-| Duplicate key, divergent intent | `outcome=conflict`, no worker call. |
-| Worker returns `read_back` mismatch | Tool returns `failed`, audit row records mismatch fields. |
-| Worker unavailable | Tool returns retryable error; no partial audit `ok`. |
-| Graph unavailable | Tool still returns `ok`; `graph.available=false`. |
-| Unsupported premium capability | `denied` with `reason=unsupported_premium`, referencing [planner-premium-capabilities.md](planner-premium-capabilities.md). |
+For release 0.1.0, an explicit test asserts:
 
-## 5. L4 — Mock Planner UI tests
+- exactly 17 canonical public tools are registered;
+- every one is classified `READ`;
+- no task/bucket/dependency/scheduling/reconciliation mutation tool is registered;
+- no generic browser primitive appears in the public registry.
 
-The mock UI is a self-contained static+API application served on loopback that reproduces the DOM structure, ARIA roles, and interaction timing characteristics of the Planner Premium surfaces described in [ui-contract.md](ui-contract.md): board, grid, timeline, task detail pane, login/MFA interstitial.
+Internal mock-tested mutation/reconciliation framework code does not change this public contract.
 
-| Property | Requirement |
-|----------|-------------|
-| Fidelity source | Every mock DOM node's structural contract is derived from a captured, sanitized snapshot stored under `tests/fixtures/ui/`. |
-| Sanitization | Snapshots contain no tenant data: names, ids and text are replaced by synthetic values at capture time. |
-| Determinism | No animation, fixed timers, seeded data. |
-| Failure modes | Mock can be driven into: slow render, stale element, selector removed, extra modal, session expiry, MFA challenge. |
+## 5. Mock Planner UI
 
-Mock-UI suites cover: navigation across surfaces, create/update/complete task, bucket moves, checklist edits, premium field edits, read-back verification, error recovery, and session-expiry handling.
+The mock UI is synthetic and deterministic. It mirrors only the structural/semantic contracts needed
+for tests and contains no real tenant data.
 
-Explicit boundary: passing L4 proves the worker's *logic* is correct against the contract. It does **not** prove the real Planner UI matches the contract — that is L5/L7's job, and no release note may claim live support on L4 evidence alone.
+Fixture families include:
 
-## 6. L5 — Selector attestation tests
+- login/auth-required;
+- MFA number matching;
+- authenticated Planner landing surface;
+- plan list/detail;
+- task list/detail;
+- bucket/dependency structures;
+- session expiry;
+- UI drift / selector missing / semantic mismatch;
+- Conditional Access blocker;
+- device enrolment/managed-device prompt;
+- slow/timeout/partial-operation behavior for later mutation-framework tests.
 
-Every logical selector in the UI contract registry (`selector_id` → strategy chain) is attested.
+The mock may model writes to prove mutation safety infrastructure in isolation. That does **not**
+make those writes part of the 0.1.0 public MCP surface or prove live Planner support.
 
-| Sub-layer | Where | What it proves |
-|-----------|-------|----------------|
-| A. Registry integrity | CI | Every `selector_id` used in code exists in the registry; no raw selector strings outside the registry; each entry has a primary strategy, ≥1 fallback, and an owner. |
-| B. Mock attestation | CI | Each selector resolves to exactly one node in the mock UI, and each fallback also resolves. |
-| C. Semantic attestation | CI | Resolved node satisfies its declared role/label/interactivity assertion (not merely "exists"). |
-| D. Live attestation | Manual, read-only | A human-run session resolves each selector against the real Planner UI and records hit/fallback/miss into an attestation report. |
+## 6. UIContract tests
 
-Attestation report format (`evidence/selectors/<date>-<env>.json`):
+Automated UIContract tests prove:
 
-```json
-{
-  "captured_at": "2026-08-08T10:00:00Z",
-  "env": "live-readonly",
-  "app_build_hint": "planner-web-<sanitized>",
-  "results": [
-    {"selector_id": "task.detail.due_date", "outcome": "hit", "strategy": "primary", "role_ok": true}
-  ],
-  "summary": {"hit": 118, "fallback": 2, "miss": 0}
-}
+- every selector reference exists in the centralized registry;
+- code does not contain ad-hoc raw selectors outside the approved boundary;
+- preferred strategies use role/accessibility/semantic/stable attributes before structural
+  selectors;
+- each required fragment declares fallback strategy where applicable, semantic role, UI version,
+  evidence, attestation state, last validated, expiry and confidence;
+- mock selectors resolve to the intended semantic element;
+- structural/semantic drift produces `UI_DRIFT` and **zero arbitrary exploratory action**;
+- unattested required fragments refuse execution.
+
+Live attestation is manual/read-only and records sanitized evidence metadata/hashes. Mock attestation
+never upgrades a capability to live-supported state.
+
+## 7. Authentication/MFA tests
+
+Test the formal state machine:
+
+```text
+UNKNOWN
+READY
+AUTH_REQUIRED
+MFA_REQUIRED
+WAITING_FOR_MFA
+AUTHENTICATED
+SESSION_EXPIRED
+AUTH_FAILED
 ```
 
-Release gate: a live attestation report with `miss == 0` is required before any documentation claims live Planner support (see [release-process.md](release-process.md)). Any `miss` freezes mutating tools.
+Required negative cases:
 
-## 7. L6 — Isolated acceptance
+- no password automation path;
+- no password/token/cookie persistence;
+- no successful auth inference from “login form absent” alone;
+- MFA notification can surface the number but offers no approval path;
+- Telegram/Hermes/ChatGPT cannot approve MFA;
+- Conditional Access managed/compliant/enrolled/certificate requirement becomes
+  `BLOCKER_CONDITIONAL_ACCESS` with no retry/bypass;
+- Intune/Company Portal/Identity Broker/Entra registration/MDM/EDR/certificate prompts are refused;
+- session expiry transitions cleanly and requires interactive recovery.
 
-Runs the full compose topology from [deployment.md](deployment.md) — control plane, worker, mock UI — with real transports, real Playwright/Chromium, real persistence, no live tenant. Procedure and evidence formats are specified in [acceptance.md](acceptance.md).
+## 8. Read-model tests
 
-Characteristics: fresh volumes per run, seeded mock dataset, scenario scripts driving MCP tools exactly as ChatGPT would through the Portal, and full evidence capture (logs, audit export, metrics snapshot, read-back diffs, optional screenshots).
+For P-025..P-030, test:
 
-## 8. L7 — Live acceptance
+- plan list determinism/pagination/empty state;
+- plan detail not-found and ambiguity behavior;
+- task normalization and partial/unknown field handling;
+- bucket ordering/membership consistency;
+- dependency edge type parsing for `FS`, `SS`, `SF`, `FF`;
+- project snapshot consistency and deterministic `snapshot_hash`;
+- degraded/unavailable capability sections are explicit, never silently omitted;
+- all UI-dependent reads require the relevant UIContract evidence state.
 
-Manual only. Phase 1 is **read-only**: navigation, listing, reading tasks, selector attestation. Phase 2 (mutating) requires a dedicated non-production plan, explicit human approval per operation, and is never automated in CI. Full protocol in [acceptance.md](acceptance.md).
+## 9. Mutation-framework tests
 
-## 9. Fixtures
+P-031 may be tested against mocks before live mutation tools are released. Tests prove:
 
-| Fixture set | Path | Content | Refresh policy |
-|-------------|------|---------|----------------|
-| UI snapshots | `tests/fixtures/ui/` | Sanitized DOM structure per surface | Manual, on observed UI change; sanitization test must pass |
-| Tool payloads | `tests/fixtures/tools/` | Request/response pairs per tool | Regenerated when schemas change |
-| Worker traces | `tests/fixtures/worker/` | Recorded step sequences | Regenerated with mock UI updates |
-| Audit rows | `tests/fixtures/audit/` | Golden audit exports | Golden-file diff |
-| Log records | `tests/fixtures/logs/` | Records that must be fully redacted | Extended on every redaction bug |
-| Seed dataset | `tests/fixtures/seed/planner_seed.json` | Plans/buckets/tasks/premium fields for the mock | Versioned with the mock UI |
+- policy is evaluated before apply;
+- missing/invalid policy denies;
+- approvals are exact/single-use/non-replayable;
+- idempotency prevents duplicate effect;
+- typed lock covers apply + read-back;
+- timeout triggers read-back before any retry;
+- write response alone is not success;
+- read-back mismatch/partial state is surfaced;
+- unverifiable result becomes `UNKNOWN_OUTCOME`;
+- saga/checkpoint recovery never blindly replays verified steps;
+- UI drift after planning stops the mutation rather than clicking around.
 
-Fixture rules: no real tenant data ever, sanitization asserted by test, every fixture referenced by at least one test (orphan-fixture check in CI), and golden files updated only via an explicit `--update-golden` run reviewed in the PR diff.
+These are mock/isolated safety proofs, not live Planner mutation claims.
 
-## 10. Quality gates
+## 10. Isolated acceptance
 
-| Gate | Threshold |
-|------|-----------|
-| Unit + schema + contract | 100 % pass |
-| Coverage (control plane) | ≥ 90 % lines, ≥ 85 % branches |
-| Coverage (worker logic, excluding Playwright glue) | ≥ 85 % |
-| Mock-UI suite | 100 % pass, zero flakes over 3 consecutive runs |
-| Selector registry integrity | 100 % |
-| Redaction suite | 100 %, no skips permitted |
-| Isolated acceptance | 100 % of pre-release scenarios |
-| Flake budget | Any test failing intermittently is quarantined within 24 h with an owning issue |
+L6 runs the complete local topology required by the candidate release:
 
-## 11. Determinism and flake control
+```text
+MCP client/test driver
+  → planner-mcp
+  → private browser worker
+  → Playwright/Chromium
+  → mock Planner UI
+```
 
-Fixed seeds; injected clock; no wall-clock sleeps (event/poll helpers only); Playwright `expect` auto-waiting with explicit timeouts; each mock-UI test runs in an isolated browser context; retries disabled in CI so flakes surface rather than hide.
+IA-01..IA-16 are the canonical end-to-end acceptance family owned by P-069. The exact scenario list
+is maintained in [`acceptance.md`](acceptance.md) and implementation tests.
 
-## 12. Backlog mapping
+Evidence is bound to the exact git SHA and includes only sanitized logs/audit/metrics/results and
+required environment/version/digest data.
 
-| Layer | Backlog keys |
-|-------|--------------|
-| Unit + schema harness | P-054, P-055 |
-| Contract + dual-run doubles | P-056, P-057 |
-| Mock Planner UI | P-058, P-059 |
-| Selector attestation | P-060, P-069 |
-| Isolated acceptance harness | P-071 |
-| Live read-only protocol | P-073 |
+## 11. Live read-only acceptance
+
+L7 is manual and human-operated:
+
+- real professional Chromium profile;
+- real Planner Premium tenant;
+- `read_only` mode;
+- zero registered mutation tools;
+- UIContract/live capability observation;
+- plan/task/project reads only;
+- sanitized evidence hashes/metadata;
+- explicit blocker recording if Conditional Access or missing tenant capability prevents validation.
+
+Only capabilities actually observed/tested may advance from `UNVERIFIED_LIVE` toward
+`DISCOVERED`/`READ_ATTESTED`/`SUPPORTED` as the capability policy allows.
+
+## 12. Live mutation acceptance — later releases
+
+Never run from CI or on a production plan.
+
+When enabled later, use a dedicated disposable/non-production Planner plan created specifically for
+acceptance. Each operation is governed, approved where required, read back and evidenced. Destructive
+tests stop on the first unexpected divergence.
+
+## 13. Security/supply-chain tests
+
+The CI target includes:
+
+- secret scanning;
+- dependency scanning;
+- Trivy filesystem;
+- control-plane image build + scan;
+- browser-worker image build + scan;
+- HIGH/CRITICAL policy enforcement;
+- Docker/Compose hardening checks;
+- real digest pinning checks;
+- CycloneDX SBOM generation for both production images;
+- SBOM schema/content validation;
+- release evidence publication.
+
+`BLOCKER_IMAGE_DIGEST_PINNING` remains unresolved until the real registry digests are recorded.
+
+## 14. Documentation/traceability tests
+
+`scripts/check_docs.py` is a blocking gate and must end with:
+
+```text
+errors = 0
+warnings = 0
+```
+
+It checks canonical documents/ADRs, requirement references, backlog/EPIC integrity, critical-path
+consistency, relative links and legacy/parallel specification contamination.
+
+P-071/P-072 extend this into full requirement ↔ backlog ↔ test/evidence closure as implementation
+lands.
+
+## 15. Determinism and flake policy
+
+- fixed synthetic fixtures/seeds;
+- injected clock/ID generation;
+- event/condition waits instead of fixed sleeps;
+- explicit Playwright timeouts;
+- isolated browser context/profile for tests where appropriate;
+- retry disabled at test-runner level when it would hide flakes;
+- flaky tests are defects with an owning backlog/issue, not silently ignored gates.
+
+## 16. Backlog mapping
+
+| Test concern | Canonical P-key(s) |
+| --- | --- |
+| Foundation packaging/contracts | P-001..P-010 |
+| Browser worker/UI/mock | P-011..P-017 |
+| Authentication/MFA/CA/enrolment | P-018..P-024 |
+| Read model | P-025..P-030 |
+| Mutation framework mock safety | P-031 |
+| Reconciliation safety | P-049..P-053 |
+| Security/observability/supply chain | P-061..P-067 |
+| Complete CI | P-068 |
+| IA-01..IA-16 isolated acceptance | P-069 |
+| Live read-only protocol | P-070 |
+| Traceability/docs gates | P-071, P-072 |
+| Release gates/0.1.0 | P-073, P-074 |

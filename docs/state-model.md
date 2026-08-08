@@ -1,250 +1,366 @@
-# State model
+# State Model
 
-Persistent state lives in the control plane only (SQLite initially, migration-managed). The
-worker is stateless apart from the browser profile it owns.
+Persistent state belongs to the Planner MCP control plane. The browser worker remains stateless
+apart from its dedicated persistent professional Chromium profile. SQLite is the initial state store,
+with versioned, forward-only migrations.
 
-This document is the storage contract for the control plane. It specifies every persisted entity,
-its columns and invariants, the typed-lock machinery that serialises writers, the snapshot and
-idempotency structures that make reconciliation deterministic, the migration and retention rules
-that keep the store trustworthy, and the privacy boundary that limits what is ever written to disk.
-It is referenced by [reconciliation.md](reconciliation.md), [governance.md](governance.md),
-[idempotency.md](idempotency.md), [security.md](security.md) (SEC-012, SEC-023) and requirement
-R-09 / R-13 in [traceability.md](traceability.md).
+This document is normative with [`reconciliation.md`](reconciliation.md),
+[`idempotency.md`](idempotency.md), [`governance.md`](governance.md),
+[`authentication-and-mfa.md`](authentication-and-mfa.md) and [`security.md`](security.md).
 
-## Entities
+## 1. State-store principles
 
-### auth_state
-`state` (enum, see [authentication-and-mfa.md](authentication-and-mfa.md)), `reason_code`,
-`profile_id`, `last_verified_at`, `expiry_hint`. **No cookies, tokens or session identifiers.**
+- persist only what is required for orchestration, governance, idempotency, locks, evidence pointers
+  and audit;
+- never persist Microsoft passwords, access tokens, refresh tokens or exported browser cookies;
+- keep application state separate from the browser profile volume;
+- every schema change is migration-managed and versioned;
+- invalid/missing schema/configuration fails startup closed;
+- operation/saga state must make partial and uncertain outcomes explicit;
+- identifiers/content used only for telemetry must be minimized or hashed according to the privacy
+  boundary.
 
-Invariants:
-- Exactly one row per `profile_id`; updated in place, never appended.
-- `state` is the single source of truth for the auth gate (SEC-063). Any tenant-touching tool reads
-  `auth_state.state` and refuses unless `AUTHENTICATED`.
-- `expiry_hint` is derived, never authoritative; an expired hint does not auto-invalidate — the
-  engine re-verifies against the live profile before trusting a stale `AUTHENTICATED`.
-- `reason_code` is set on every non-`AUTHENTICATED` transition (e.g. `AUTH_FAILED`,
-  `BLOCKER_CONDITIONAL_ACCESS`, `WAITING_FOR_MFA` timeout).
+## 2. Authentication state
 
-### binding
-`source_id`, `external_id`, `entity_type` (`plan|bucket|task|dependency|assignment|custom_field|
-sprint|goal|portfolio`), `plan_scope`, `first_seen`, `last_verified`, `evidence_hash`,
-`status` (`BOUND|ORPHANED|AMBIGUOUS`).
+`auth_state` stores only non-secret orchestration facts:
 
-Invariants:
-- `(source_id, entity_type)` is unique per `plan_scope`.
-- `external_id` may be null only when `status = ORPHANED` or `AMBIGUOUS`.
-- `evidence_hash` pins the read that produced/confirmed the binding; it changes on every
-  `last_verified` refresh.
-- `status = AMBIGUOUS` is set by the adoption resolver (reconciliation.md §Identity) and blocks any
-  operation on that `source_id` until disambiguated.
+- profile identifier;
+- formal auth state;
+- reason/blocker code;
+- last verified timestamp;
+- non-secret expiry hint where safely derivable.
 
-### operation
-`operation_id`, `tool_name`, `fingerprint`, `mutation_class`, `policy_decision`, `approval_id`,
-`state` (`PLANNED|IN_FLIGHT|APPLIED|READ_BACK_OK|INDETERMINATE|FAILED|COMPENSATED`),
-`started_at`, `ended_at`, `error_code`, `contract_version`, `ui_contract_version`.
-
-Invariants:
-- `fingerprint` is the sha256 from idempotency.md; duplicates are suppressed at insert time.
-- `approval_id` is non-null iff `policy_decision = REQUIRE_APPROVAL`.
-- A row may advance `state` only along the operation transition graph (state-model.md §State
-  transitions — operation); backward transitions are rejected by the store.
-- `contract_version` and `ui_contract_version` are snapshotted at plan time and compared at apply
-  time to detect `BLOCKER_UI_DRIFT` / `SNAPSHOT_STALE`.
-
-### saga / saga_step
-`saga_id`, `blueprint_id`, `state`, plus steps with `seq`, `operation_id`, `checkpoint_state`,
-`compensation_state`.
-
-Invariants:
-- `saga.state` ∈ `PLANNED|IN_FLIGHT|COMPLETED|FAILED|COMPENSATED`.
-- `saga_step.seq` is dense (no gaps) and defines execution order.
-- `checkpoint_state` follows the operation checkpoint graph (reconciliation.md §Sagas);
-  `compensation_state` ∈ `NONE|COMPENSATING|COMPENSATED|FAILED`.
-- A saga is `COMPLETED` only when every step `checkpoint_state = READ_BACK_OK`.
-
-### approval
-As specified in [governance.md](governance.md). Single-use, fingerprint-bound, expiring.
-
-### idempotency_record
-`fingerprint`, `operation_id`, `state`, `result_hash`, `ttl`.
-
-Invariants:
-- `state` ∈ `IN_FLIGHT|COMPLETED|FAILED|INDETERMINATE`.
-- `IN_FLIGHT` with the same `fingerprint` blocks a twin request (`OPERATION_IN_FLIGHT`).
-- `COMPLETED` short-circuits the twin with the stored `result_hash` and performs no tenant action.
-- `INDETERMINATE` requires `planner_reconcile_resume` before any other op touches those
-  `external_id`s.
-- Row is purged when `ttl` (default 7 days) elapses.
-
-### lock
-`resource_type`, `resource_id`, `mode` (`SHARED|EXCLUSIVE`), `holder_operation_id`,
-`acquired_at`, `expires_at`.
-
-Invariants:
-- A `SHARED` lock coexists with other `SHARED` locks on the same resource; an `EXCLUSIVE` lock
-  requires zero other locks of any mode.
-- `expires_at` is a lease; an expired lock is treated as released. An operation whose lease expires
-  mid-apply moves to `INDETERMINATE` (never silently continued).
-- Locks are acquired in the fixed order below to prevent deadlock.
-
-### ui_contract_state
-`contract_version`, `fragment_id`, `attestation_status`, `evidence_hash`, `last_checked`,
-`drift_state`.
-
-Invariants:
-- One row per `fragment_id`; `attestation_status` ∈ `UNATTESTED|ATTESTED|DRIFT`.
-- `drift_state` is set by the drift detector (reconciliation.md §Drift); `DRIFT` downgrades any
-  dependent capability to `UI_DRIFT`.
-- `evidence_hash` anchors the selector proof; changing a selector requires a new attestation row,
-  never an in-place edit of `evidence_hash`.
-
-### capability_state
-`capability_id`, `support_level`, `evidence_hash`, `updated_at`, `blocker_code`.
-
-Invariants:
-- `support_level` follows the capability state machine (planner-premium-capabilities.md).
-- `blocker_code` is non-null only in blocker states; it names the typed blocker
-  (`BLOCKER_CONDITIONAL_ACCESS`, `UNSUPPORTED_TENANT`, …).
-
-## Typed locks
-
-| Resource type | Granularity | Typical mode |
-| --- | --- | --- |
-| `browser_profile` | singleton | EXCLUSIVE for any worker operation touching the profile |
-| `plan` | per plan `external_id` | SHARED for reads, EXCLUSIVE for writes |
-| `bucket_set` | per plan | EXCLUSIVE |
-| `task` | per task `external_id` | EXCLUSIVE |
-| `dependency_graph` | per plan | EXCLUSIVE |
-| `sprint` | per sprint | EXCLUSIVE |
-| `portfolio` | per portfolio | EXCLUSIVE |
-| `auth` | singleton | EXCLUSIVE during an auth flow |
-
-Rules: locks are ordered (profile → plan → sub-resources) to prevent deadlock; every lock has a
-lease with expiry; a write lock is held across apply **and** read-back; expired lease ⇒ the
-operation is `INDETERMINATE`, never silently continued.
-
-### Lock acquisition algorithm
+Canonical auth states are:
 
 ```text
-acquire(resource_set, mode):
-  sort resource_set by (order_rank[resource_type], resource_id)   # fixed order, deadlock-free
-  for r in resource_set:
-    if mode == EXCLUSIVE:
-      if any_lock(r): return BLOCKER_LOCK_CONFLICT   # never wait/spin
-    else:  # SHARED
-      if exclusive_lock(r): return BLOCKER_LOCK_CONFLICT
-    insert lock(r, mode, lease=now+LOCK_LEASE)
-  return OK
-
-release(resource_set): delete locks where holder_operation_id = self
+UNKNOWN
+READY
+AUTH_REQUIRED
+MFA_REQUIRED
+WAITING_FOR_MFA
+AUTHENTICATED
+SESSION_EXPIRED
+AUTH_FAILED
 ```
 
-The engine never blocks waiting for a lock; a conflicting lock returns `BLOCKER_LOCK_CONFLICT`
-immediately and the caller retries after backoff (idempotency.md §Retry policy). `LOCK_LEASE`
-default is 120s; it is refreshed while an apply+read-back window is open. A crashed holder's locks
-auto-expire and are reclaimed by the resume protocol (reconciliation.md §Crash recovery).
+Rules:
 
-## State transitions — operation
+- `AUTHENTICATED` requires positive browser evidence;
+- absence of a login form is not evidence of authentication;
+- no cookie/token value is read into or serialized by the control plane;
+- Conditional Access requiring managed/compliant/enrolled/certificate-backed device records
+  `BLOCKER_CONDITIONAL_ACCESS` and no bypass state.
+
+## 3. Resource binding
+
+A `binding` record supports stable identity and reconciliation:
 
 ```text
-PLANNED -> IN_FLIGHT -> APPLIED -> READ_BACK_OK
-                    \-> INDETERMINATE
-                    \-> FAILED -> COMPENSATED
+source_id
+external_id
+resource_type
+scope
+status
+first_seen_at
+last_verified_at
+evidence_hash
 ```
 
-`READ_BACK_OK` is the only success terminal for a mutation. `INDETERMINATE` blocks further
-operations on the affected `external_id`s until reconciled.
+Binding status is one of `BOUND`, `ORPHANED`, `AMBIGUOUS`, `UNBOUND`.
 
-The store enforces this graph: an `UPDATE operations SET state=?` that would jump
-`PLANNED→READ_BACK_OK` or `COMPENSATED→APPLIED` is rejected. `INDETERMINATE` and `FAILED` are
-terminal for that `operation_id` until a reconcile produces a new `operation_id` (new fingerprint)
-or a compensation closes the saga.
+The store never uses a human-readable title as the unique idempotency identity. An ambiguous match
+is stored/reported explicitly and blocks mutation.
 
-## Snapshots
+## 4. Operation state
 
-`planner_project_snapshot` produces a composite read with a `snapshot_hash` over normalized
-entity data. Blueprint applies pin a snapshot hash; a changed hash mid-run ⇒ `SNAPSHOT_STALE`.
+Every future mutation and governed multi-step action records an operation envelope including:
 
-Snapshot contents (privacy-bounded): for each entity in scope, the normalised field set used by the
-diff (titles as hashes, dates/units as values, ids as opaque `external_id`s). Task bodies and
-conversation text are **excluded** (SEC-072, state-model.md §Retention). `snapshot_hash` is
-`sha256(canonical_json(normalised_entities))`; it is deterministic so two readers of the same
-tenant state compute identical hashes.
+```text
+operation_id
+idempotency_key / fingerprint
+tool_name
+mutation_class
+requested_state_ref
+before_snapshot_ref
+policy_decision
+approval_id
+state
+after_snapshot_ref
+verification_result
+error_code
+contract_version
+ui_contract_version
+started_at
+ended_at
+```
 
-## Migrations
+Canonical operation lifecycle states include:
 
-Idempotent, forward-only, versioned; applied at startup with an advisory lock; schema version
-recorded and exposed via `planner_readiness`. No destructive migration without an ADR.
+```text
+NOT_STARTED
+IN_PROGRESS
+APPLIED
+VERIFIED
+PARTIAL
+UNKNOWN_OUTCOME
+FAILED
+ROLLED_BACK
+```
 
-### Migration framework
+Rules:
 
-- A `schema_migrations` table tracks applied `(version, name, applied_at, checksum)`.
-- At startup the engine takes a PostgreSQL/SQLite advisory lock keyed on a constant, applies every
-  pending migration in `version` order, then releases.
-- Each migration is wrapped so re-running it is a no-op if its `version` is already present
-  (idempotent DDL via `CREATE TABLE IF NOT EXISTS`, additive columns only).
-- A migration whose `checksum` changed after being applied is a hard startup failure (tamper
-  signal), not a silent re-apply.
-- Destructive migrations (drop column, change type in a lossy way) require an ADR reference in the
-  migration name and a maintainer sign-off recorded in the PR (governance.md §Change control).
-- `planner_readiness` reports `schema_version` and `migrations_pending`; it refuses tenant traffic
-  until `migrations_pending = 0`.
+- `APPLIED` means the UI action appears to have been submitted; it is not success evidence;
+- `VERIFIED` requires fresh UI read-back matching requested state;
+- `UNKNOWN_OUTCOME` blocks blind retry;
+- transition validation is enforced by the state layer;
+- operation rows never include raw passwords/tokens/cookies/HTML/screenshot content.
 
-## Retention
+## 5. Idempotency state
 
-Operations, sagas and approvals retained for audit (default 180 days). Idempotency records expire
-by TTL (default 7 days). Evidence artifacts are local files with their own retention, referenced
-by hash. No tenant content is retained beyond what a binding requires (ids and hashes, not task
-text) unless a snapshot is explicitly requested and cached with a short TTL.
+An `idempotency_record` contains at minimum:
 
-Retention specifics:
+```text
+fingerprint
+operation_id
+state
+result_hash
+created_at
+completed_at
+ttl
+```
 
-| Entity | Retention | Basis | Redaction |
-| --- | --- | --- | --- |
-| `operation` | 180 days | audit trail (R-13) | tool name, class, decision, error code; no task text |
-| `saga` / `saga_step` | 180 days | audit trail | ids + hashes only |
-| `approval` | 180 days | audit + replay defence | approver, hash, no credential |
-| `idempotency_record` | 7 days (TTL) | replay suppression | fingerprint + result hash |
-| `binding` | indefinite while entity live | identity resolution | ids + hashes, never body |
-| `auth_state` | rolling (1 row/profile) | auth gate | no secret material |
-| `ui_contract_state` | indefinite | drift detection | fragment id + hash |
-| `capability_state` | indefinite | matrix source of truth | ids + hashes |
-| `lock` | lease-based (≤120s) | concurrency | transient |
+Representative states:
 
-A nightly job deletes rows past retention and compacts; deletion is recorded in the append-only
-audit trail so removal is itself auditable (R-13). Snapshots, when cached, carry a TTL of 300s and
-are never written to the long-term store.
+- `IN_PROGRESS`;
+- `VERIFIED` / completed;
+- `FAILED`;
+- `UNKNOWN_OUTCOME`.
 
-## Privacy boundary (what is never stored)
+Duplicate/uncertain behavior follows [`idempotency.md`](idempotency.md). A verified request may be
+answered from its stored result reference without repeating the tenant action. An uncertain request
+requires read-back/reconciliation before continuation.
 
-- No cookies, tokens, `ESTSAUTH*`, refresh tokens, storage state, or session blobs (SEC-021,
-  SEC-023). Those live only in the profile volume (SEC-012), which is never read into the control
-  plane.
-- No task title, description, conversation body, or assignee display name in persistent state.
-  Titles are retained only as salts/hashes for logging (SEC-072); they are reconstructable only
-  inside the worker's redacted evidence artefacts, which live outside git.
-- No `source_id` value that embeds PII is required; callers are expected to use opaque keys.
-- The profile volume is the only writable persistent surface in the worker (SEC-012) and is never
-  copied, exported, committed, or transmitted.
+## 6. Typed locks
 
-## Isolation and consistency
+Locks are keyed by resource type/id and include:
 
-- The control plane is single-writer for state mutations; the worker never writes state, it only
-  returns reads/apply results over the internal channel.
-- Each operation runs inside a transaction that spans the state writes for its checkpoint; a crash
-  between checkpoint persist and tenant apply leaves the row at `APPLIED`/`IN_FLIGHT` and is resolved
-  by the resume protocol, never by partial commit.
-- Reads for read-back use `READ_BACK_OK`-grade consistency: they read the live tenant via the worker,
-  not a possibly-stale control-plane cache.
+```text
+resource_type
+resource_id
+mode
+holder_operation_id
+acquired_at
+expires_at
+```
 
-## Requirement mapping
+Canonical resource namespaces include:
 
-| Topic | Requirement / control |
+```text
+browser_profile:<id>
+auth:<id>
+plan:<id>
+task:<id>
+dependency:<id>
+portfolio:<id>
+```
+
+A write holds its exclusive resource lock across apply and read-back. Lock acquisition uses a fixed
+order to avoid deadlocks. Expired lease during uncertain work forces re-read before continuation.
+
+The state store does not pretend to lock human edits or third-party automation in Planner; those are
+detected by baseline/read-back drift.
+
+## 7. Saga and checkpoint state
+
+Multi-step work stores a `saga` and ordered `saga_step` records.
+
+A saga records:
+
+- saga/run id;
+- source/blueprint reference;
+- desired-state fingerprint;
+- baseline snapshot hash;
+- contract/UIContract versions;
+- overall state;
+- creation/update timestamps.
+
+Each step records:
+
+- sequence;
+- operation id;
+- resource scope;
+- checkpoint state;
+- verification result;
+- compensation state/evidence.
+
+A saga is complete only when every required mutating step is `VERIFIED` or an explicitly defined
+non-mutating step is complete. Partial/unknown steps keep the saga non-terminal.
+
+## 8. Approval state
+
+Approval storage follows [`governance.md`](governance.md). Records are:
+
+- persistent;
+- bound to an exact operation/diff fingerprint;
+- expiring;
+- single-use;
+- atomically consumed;
+- non-replayable.
+
+A changed request/baseline does not inherit an earlier approval.
+
+## 9. UIContract state
+
+`ui_contract_state` tracks, per fragment:
+
+```text
+fragment_id
+ui_contract_version
+attestation_status
+evidence_hash
+last_validated_at
+expires_at
+confidence
+drift_state
+```
+
+Selectors themselves remain version-controlled in the centralized UIContract/selector registry.
+State records contain attestation/evidence metadata only.
+
+A drift event causes dependent capability state to become `UI_DRIFT` and blocks execution until a
+new validated contract/evidence record exists.
+
+## 10. Capability state
+
+Capability state is evidence-driven and may include:
+
+```text
+capability_id
+tenant_license_observation
+ui_observed
+ui_contract_fragment
+read_evidence
+mutation_evidence
+support_state
+blocker_code
+evidence_hash
+last_validated_at
+```
+
+Canonical support states include:
+
+```text
+UNVERIFIED_LIVE
+DISCOVERED
+READ_ATTESTED
+MUTATION_ATTESTED
+SUPPORTED
+DEGRADED
+UI_DRIFT
+BLOCKED_CONDITIONAL_ACCESS
+```
+
+Microsoft Graph availability is not a decisive field and never gates state promotion.
+
+## 11. Snapshots
+
+`planner_project_snapshot` produces a normalized composite read with a deterministic
+`snapshot_hash`. The snapshot model includes only fields required by the semantic read/reconciliation
+contract.
+
+Rules:
+
+- identical normalized state yields identical hash;
+- degraded/unavailable contributing capabilities are explicit, not silently omitted;
+- snapshots used for mutation/reconciliation are pinned to the operation plan;
+- a changed baseline before apply triggers re-plan rather than overwrite;
+- long-term persistence of tenant/business content is minimized and governed by retention policy.
+
+## 12. Audit state
+
+Audit evidence is append-only at the application contract level and reconstructs governed actions
+without requiring raw log content. It records, as safely representable:
+
+- operation id/tool;
+- policy decision and rule;
+- approval reference;
+- idempotency/lock/checkpoint references;
+- requested/before/after state hashes or bounded field metadata;
+- read-back verdict;
+- stable error/blocker codes;
+- timestamps/versions/evidence references.
+
+No raw credential/session material is part of audit state.
+
+## 13. Retention
+
+Default retention is configuration/policy-driven and documented. Baseline guidance:
+
+| State | Retention principle |
 | --- | --- |
-| Normalised state for comparison | R-09 |
-| Append-only, hash-chained audit | R-13, observability.md §6 |
-| No secret material in state | SEC-012, SEC-021, SEC-023 |
-| Bounded metric/label cardinality | R-12, SEC-073 |
-| Typed locks across apply+read-back | SEC-066, reconciliation.md |
-| Migration safety / fail closed | deployment.md §9, R-30 |
+| auth_state | rolling current state only; no session secret material |
+| locks | lease/TTL only |
+| idempotency records | bounded TTL sufficient for replay protection |
+| operations/sagas/approvals/audit | retained for the approved operational/audit period |
+| bindings | while resource relationship remains relevant, with stale/orphan handling |
+| capability/UIContract evidence metadata | retained across releases as audit history |
+| cached snapshots containing business data | short TTL/minimized; avoid long-term duplication |
+
+Deletion/compaction itself must not make release/audit evidence unverifiable.
+
+## 14. Migrations
+
+Migrations are:
+
+- versioned;
+- forward-only;
+- idempotent where possible;
+- checksummed;
+- serialized by a migration lock;
+- applied before readiness becomes true;
+- non-destructive by default.
+
+A destructive/lossy schema migration requires an ADR and an explicit migration/rollback plan. An
+already-applied migration whose checksum unexpectedly changes causes startup failure.
+
+`planner_readiness` exposes non-secret schema/migration readiness facts.
+
+## 15. Privacy boundary — never stored
+
+The state database must never contain:
+
+- Microsoft password;
+- access/refresh token;
+- raw cookie or exported storage state;
+- authorization header;
+- browser profile/session blob;
+- private keys;
+- raw screenshots/DOM dumps as state rows;
+- full browser HTML containing tenant/business data;
+- personal-home/credential material copied from the host.
+
+Task/user/business content is persisted only when a specific semantic feature requires it and after
+privacy/storage rules are documented; the default is identifiers, normalized bounded fields and
+hash/evidence references rather than duplicate content stores.
+
+## 16. 0.1.0 boundary
+
+State structures for approvals, idempotency, locks, sagas and reconciliation may exist as foundations
+in 0.1.0, but public tools remain the canonical 17 `READ` tools. No state-table presence authorizes a
+live write path.
+
+## 17. Backlog mapping
+
+| Concern | Canonical P-key(s) |
+| --- | --- |
+| State store/migrations | P-006 |
+| Auth lifecycle persisted facts | P-018, P-022 |
+| Stable project snapshot | P-030 |
+| Mutation framework state | P-031 |
+| Binding registry | P-049 |
+| Reconciliation/checkpoint state | P-050, P-053 |
+| Policy/approval state | P-061, P-062 |
+| Audit completeness | P-067 |
+
+Implementation must keep this mapping synchronized with [`backlog.md`](backlog.md) and
+[`traceability.md`](traceability.md).
