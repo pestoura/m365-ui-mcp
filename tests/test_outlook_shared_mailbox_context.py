@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from m365_mcp.apps.outlook.mailbox_context import (
-    PrimaryMailboxContext,
-    PrimaryMailboxContextState,
-)
+from m365_mcp.apps.outlook.mailbox_context import PrimaryMailboxContext, PrimaryMailboxContextState
 from m365_mcp.apps.outlook.shared_mailbox_context import (
     SharedMailboxContextState,
     SharedMailboxObservation,
