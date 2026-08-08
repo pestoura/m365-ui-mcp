@@ -82,7 +82,11 @@ class MetadataPolicyEngine:
                 tier,
             )
 
-        if tier >= SecurityTier.T3 or mutation_requested or definition.approval_requirement != "none":
+        if (
+            tier >= SecurityTier.T3
+            or mutation_requested
+            or definition.approval_requirement != "none"
+        ):
             return self._result(
                 definition,
                 Decision.REQUIRE_APPROVAL,
