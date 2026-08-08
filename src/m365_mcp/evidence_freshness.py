@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 from m365_mcp.capability_evidence import CapabilityEvidenceRecord
 from m365_mcp.contracts import contracts_dir
