@@ -1,20 +1,10 @@
-"""Console entry point for the browser worker."""
+"""Planner compatibility entry point for the canonical M365 browser worker."""
 
 from __future__ import annotations
 
-import os
+from m365_browser_worker.__main__ import main
 
-
-def main() -> None:
-    """Run the worker with uvicorn on the private network only."""
-    import uvicorn
-
-    uvicorn.run(
-        "planner_browser_worker.app:app",
-        host=os.getenv("PLANNER_WORKER_HOST", "127.0.0.1"),
-        port=int(os.getenv("PLANNER_WORKER_PORT", "8090")),
-        log_config=None,
-    )
+__all__ = ["main"]
 
 
 if __name__ == "__main__":  # pragma: no cover

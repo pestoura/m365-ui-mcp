@@ -4,9 +4,7 @@
 
 ## Transition status
 
-The GitHub repository identity has moved from `pestoura/planner-mcp` to `pestoura/m365-ui-mcp` under `CORE-002`.
-
-The current runtime compatibility baseline is still product version **0.1.0** and remains Planner-scoped until the subsequent shared-core extraction blocks complete. Therefore the Python distribution/package names, CLI entry points and `PLANNER_*` configuration documented below are intentionally still valid compatibility interfaces at this point; they are **not** silently renamed by the repository rename.
+The GitHub repository identity is `pestoura/m365-ui-mcp`. Canonical Python/CLI namespaces are now `m365_mcp`, `m365_browser_worker`, `m365-ui-mcp` and `m365-browser-worker`; the Planner package/CLI surfaces remain compatibility interfaces while shared-core extraction continues.
 
 The immutable pre-M365 Planner baseline is `planner-pre-m365-0.1.0`.
 
@@ -35,23 +33,25 @@ The M365 target architecture and transition backlog live under [`docs/m365-trans
 
 ## Runtime configuration
 
-Configuration is typed and fail-closed. `mock` mode uses safe local defaults. `live` mode currently requires both `PLANNER_WORKER_URL` and an absolute `PLANNER_STATE_PATH`; startup exits non-zero with the stable `CONFIG_INVALID` error when required or typed configuration is invalid.
+Configuration is typed and fail-closed. `M365_*` is the canonical namespace. The equivalent `PLANNER_*` names remain bounded compatibility aliases with status `DEPRECATED_ALIAS` and planned removal at major version `2.0.0`.
 
-Only non-secret `PLANNER_*` configuration is accepted in the current compatibility baseline. Planner-prefixed environment variable names that look like credentials — for example names containing `TOKEN`, `PASSWORD`, `SECRET`, `API_KEY`, `COOKIE` or `PRIVATE_KEY` — are rejected. Their values are never included in the configuration error response.
+When canonical and legacy aliases are both present they must contain the same literal value. Divergent definitions fail with `CONFIG_INVALID`; error context contains variable names only and never their values. Credential-shaped variable names under either namespace — for example names containing `TOKEN`, `PASSWORD`, `SECRET`, `API_KEY`, `COOKIE` or `PRIVATE_KEY` — are rejected.
 
-`CORE-004` will introduce `M365_*` as the canonical namespace and retain bounded `PLANNER_*` aliases with explicit deprecation metadata. Until that gate is merged and GREEN, the following current settings remain authoritative:
+`live` mode requires an explicit worker URL and absolute state path through either canonical or legacy aliases. The existing default state location is intentionally unchanged during `CORE-004`; state-path migration is a separate controlled change.
 
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `PLANNER_MODE` | `mock` | `mock` or `live` |
-| `PLANNER_MCP_HOST` | `127.0.0.1` | Control-plane bind host |
-| `PLANNER_MCP_PORT` | `8080` | Port 1–65535 |
-| `PLANNER_WORKER_URL` | `http://127.0.0.1:8090` | Required explicitly in `live`; HTTP(S), no URL userinfo |
-| `PLANNER_STATE_PATH` | `/var/lib/planner-mcp/state.sqlite3` | Required explicitly in `live`; must be absolute |
-| `PLANNER_REQUEST_TIMEOUT_S` | `30` | Positive, maximum 300 seconds |
-| `PLANNER_REQUIRE_UI_ATTESTATION` | `true` | Cannot be disabled in `live` |
-| `PLANNER_ALLOW_MUTATIONS` | `false` | Must remain `false` in 0.1.0 |
-| `PLANNER_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL` |
+| Canonical variable | Legacy alias | Default | Notes |
+| --- | --- | --- | --- |
+| `M365_MODE` | `PLANNER_MODE` | `mock` | `mock` or `live` |
+| `M365_MCP_HOST` | `PLANNER_MCP_HOST` | `127.0.0.1` | Control-plane bind host |
+| `M365_MCP_PORT` | `PLANNER_MCP_PORT` | `8080` | Port 1–65535 |
+| `M365_WORKER_URL` | `PLANNER_WORKER_URL` | `http://127.0.0.1:8090` | Required explicitly in `live`; HTTP(S), no URL userinfo |
+| `M365_STATE_PATH` | `PLANNER_STATE_PATH` | `/var/lib/planner-mcp/state.sqlite3` | Required explicitly in `live`; must be absolute |
+| `M365_REQUEST_TIMEOUT_S` | `PLANNER_REQUEST_TIMEOUT_S` | `30` | Positive, maximum 300 seconds |
+| `M365_REQUIRE_UI_ATTESTATION` | `PLANNER_REQUIRE_UI_ATTESTATION` | `true` | Cannot be disabled in `live` |
+| `M365_ALLOW_MUTATIONS` | `PLANNER_ALLOW_MUTATIONS` | `false` | Must remain `false` in 0.1.0 |
+| `M365_LOG_LEVEL` | `PLANNER_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL` |
+| `M365_WORKER_HOST` | `PLANNER_WORKER_HOST` | `127.0.0.1` | Private worker bind host |
+| `M365_WORKER_PORT` | `PLANNER_WORKER_PORT` | `8090` | Private worker bind port |
 
 Readiness exposes only a sanitized configuration summary: host, worker URL and state path are emitted as `[REDACTED]`. Credentials, tokens, cookies and authentication material are not valid configuration fields.
 
@@ -68,14 +68,23 @@ pytest -q
 python scripts/check_docs.py
 ```
 
-Current compatibility entry points remain:
+Canonical entry points:
+
+```bash
+m365-ui-mcp
+m365-browser-worker
+m365-ui-mcp-healthcheck
+```
+
+Compatibility entry points remain:
 
 ```bash
 planner-mcp
 planner-browser-worker
+planner-mcp-healthcheck
 ```
 
-They will only change through explicit versioned CORE migration work; existing `planner_*` MCP tool names are not coupled to repository/package naming.
+Existing `planner_*` MCP tool names are not coupled to repository/package naming and remain `PRESERVE`.
 
 Container definitions are in [`docker/`](docker/) and [`docker-compose.yml`](docker-compose.yml). Base images are digest-pinned and CI blocks HIGH/CRITICAL Trivy findings, validates two CycloneDX SBOMs, performs secret/dependency scanning and runs isolated acceptance.
 
