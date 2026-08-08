@@ -11,53 +11,36 @@ This file is the execution overlay for the `CORE-*` definitions in `../roadmap-a
 | CORE-003 | PASS | Canonical `m365_mcp` / `m365_browser_worker` namespaces and M365 entry points introduced with Planner compatibility preserved. PR #217 initial Install gate failed because Hatch could not parse an indirect `__version__`; fixed by `cb97921cdd357f66489cd7bd7eac766f6da96ac0`, reran GREEN, merged to `09df4d3f1db9a370256dfd696b73c1a8e732881c`; post-merge docs `31242437571` and CI `31242437576` SUCCESS. |
 | CORE-004 | PASS | `M365_*` canonical configuration and bounded `PLANNER_*` aliases merged through PR #218 to `71d55d7c83f75e15808480081e214659c77dd8a1`; PR docs `31242759766` and CI `31242759775` SUCCESS; post-merge docs `31242924851` and CI `31242924852` SUCCESS. |
 | CORE-005 | PASS | Application-neutral `m365_mcp.control_plane` runtime introduced with injected semantic registrar in PR #219, merged to `d7cd92c48258250248c53e2fd63828835f28c52a`; PR docs `31243188263` and CI `31243188290` SUCCESS; post-merge docs `31243362589` and CI `31243590216` SUCCESS. Generic runtime has no Planner imports; current projection remains exactly 17 Planner tools. |
-| CORE-006 | IMPLEMENTED_AWAITING_GATES | `m365_browser_worker.browser` now owns BrowserConfig/PersistentBrowser and Conditional Access detection; Planner browser lifecycle imports are compatibility shims. Browser profile/headless settings use canonical `M365_*` plus bounded `PLANNER_*` aliases with divergent definitions rejected fail-closed. No lifecycle semantics are promoted beyond the pre-existing implementation. |
-| CORE-007 | NOT_STARTED | Application Registry. |
+| CORE-006 | PASS | Generic browser/profile lifecycle boundary merged through PR #220 to `ccf91b1afa61c7181b48fa43b4acfcb87ff78f9f`. Initial PR Ruff gate rejected hard-coded temporary test paths (`S108`); tests were corrected without suppressing the rule at `89562bb5661df3f6d92ed07e5fac5078587e8cca`. Current PR docs `31254151199` and CI `31254151198` SUCCESS; post-merge docs `31254342686` and CI `31254342688` SUCCESS. |
+| CORE-007 | IMPLEMENTED_AWAITING_GATES | Closed validated Application Registry introduced. `planner` is `ENABLED`; `outlook` is registered as `RESERVED` with no registrar until Planner parity and the ordered Outlook phase. No plugin self-registration. |
 | CORE-008 | NOT_STARTED | Canonical Tool Registry. |
 | CORE-009 | NOT_STARTED | Dynamic semantic MCP registration. |
 | CORE-010 | NOT_STARTED | Tool profiles/projections. |
 
-## CORE-005 boundary decision
-
-The generic control plane owns only application-neutral MCP construction. Domain registration is injected through a closed typed registrar hook.
-
-Current composition deliberately remains:
+## Current composition
 
 ```text
 m365_mcp.server
-    -> m365_mcp.control_plane          # generic; no Planner imports
-    -> planner_mcp.registration        # explicit 17-tool typed projection
-    -> planner_mcp.tools               # Planner domain behavior
+    -> m365_mcp.application_registry  # explicit/closed application identities
+    -> m365_mcp.control_plane         # generic FastMCP runtime
+    -> planner_mcp.registration       # enabled Planner semantic registrar
+    -> planner_mcp.tools              # preserved Planner behavior
 ```
 
-This is a staged boundary, not the final registry design. `CORE-007..010` replace the single Planner registrar with Application/Tool registries and controlled projections.
+`outlook` is present as a stable application identity but has no registrar and cannot project tools or execute UI work in CORE-007.
 
-The 17 wrappers remain explicit because FastMCP input signatures are part of the compatibility surface. A dynamic/generic executor is not introduced.
+## CORE-007 boundary decision
 
-## CORE-006 boundary decision
+Application registration is explicit, immutable after construction and fail-closed:
 
-The canonical browser/session lifecycle primitive is now owned by `m365_browser_worker.browser`.
+- duplicate application keys are rejected;
+- `ENABLED` requires a semantic registrar;
+- `RESERVED` forbids a registrar;
+- no entry-point/plugin/filesystem discovery is used;
+- registration order is deterministic;
+- Outlook cannot become executable accidentally before the parity gate.
 
-Current composition deliberately remains:
-
-```text
-m365-browser-worker entry point
-    -> m365_browser_worker.app         # current Planner-compatible ASGI projection
-    -> planner_browser_worker.app      # Planner semantic HTTP routes
-    -> m365_browser_worker.browser     # generic browser/profile lifecycle
-```
-
-This block does not claim the Phase 3 lifecycle hardening work early. In particular:
-
-- FastAPI lifespan ownership remains `CORE-021`;
-- true browser-backed readiness remains `CORE-022`;
-- Session/Capability Broker remains `CORE-023`;
-- account-context enforcement remains `CORE-024`;
-- controlled Microsoft egress remains `CORE-025`;
-- serialized execution/queueing remains `CORE-026`;
-- typed worker operation protocol remains `CORE-028`.
-
-No generic browser primitive, raw selector/JavaScript/XPath operation, cookie/token/storage-state export or Conditional Access bypass is introduced.
+This preserves the stronger sequencing requirement over an overly literal reading of "enabled planner/outlook" in the original roadmap: both identities are registered, but only phase-authorized adapters may be executable.
 
 ## Current compatibility invariants
 
@@ -65,9 +48,9 @@ No generic browser primitive, raw selector/JavaScript/XPath operation, cookie/to
 - Canonical Python identities are `m365_mcp` and `m365_browser_worker`.
 - `M365_*` is canonical configuration; `PLANNER_*` remains a bounded alias.
 - All 17 current public `planner_*` tools remain `PRESERVE` with unchanged typed signatures.
-- FastMCP server name remains `planner-mcp` during this behavior-preserving extraction; product-wide projection identity changes only through a later explicit compatibility gate.
-- Existing `planner_mcp_*` metric names are not renamed by CORE-006.
-- State schema/path are not migrated by CORE-006.
+- FastMCP server name remains `planner-mcp` during this behavior-preserving extraction.
+- Existing `planner_mcp_*` metric names are not renamed by CORE-007.
+- State schema/path are not migrated by CORE-007.
 - No Outlook capability is implemented or promoted live.
 - No raw browser primitive or session-secret export is introduced.
 - `CORE-025` remains mandatory before any live M365 worker egress claim.
@@ -75,8 +58,8 @@ No generic browser primitive, raw selector/JavaScript/XPath operation, cookie/to
 ## Next gate
 
 ```text
-CORE-006 PR CI/security/images/SBOM GREEN
+CORE-007 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-007
+        -> CORE-008
 ```
