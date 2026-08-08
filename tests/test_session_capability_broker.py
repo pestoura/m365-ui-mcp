@@ -1,4 +1,4 @@
-"""CORE-023 Session/Capability Broker tests."""
+"""CORE-023/024 Session/Capability Broker account-context tests."""
 
 from __future__ import annotations
 
@@ -6,11 +6,12 @@ from pathlib import Path
 
 import pytest
 
+from m365_browser_worker.account_context import AccountContext, AccountContextState
 from m365_browser_worker.browser import BrowserConfig, PersistentBrowser
 from m365_browser_worker.session_broker import SessionCapabilityBroker
 from m365_mcp.capability_registry import default_capability_registry
 from planner_mcp.auth import AuthState
-from planner_mcp.errors import AuthRequired, WorkerUnavailable
+from planner_mcp.errors import AuthRequired, PolicyDenied, WorkerUnavailable
 
 
 class BrokerBrowser(PersistentBrowser):
@@ -27,18 +28,33 @@ class BrokerBrowser(PersistentBrowser):
         self.guarded.append(operation)
 
 
-def broker(browser: BrokerBrowser, state: AuthState) -> SessionCapabilityBroker:
+def verified_context() -> AccountContext:
+    return AccountContext(
+        state=AccountContextState.VERIFIED,
+        professional=True,
+        expected_profile=True,
+    )
+
+
+def broker(
+    browser: BrokerBrowser,
+    state: AuthState,
+    account_context: AccountContext | None = None,
+) -> SessionCapabilityBroker:
     return SessionCapabilityBroker(
         browser=browser,
         registry=default_capability_registry(),
         auth_state_provider=lambda: state,
+        account_context_provider=lambda: account_context or verified_context(),
     )
 
 
-def test_broker_viability_requires_browser_and_authenticated_session() -> None:
+def test_broker_viability_requires_browser_auth_and_verified_context() -> None:
     assert broker(BrokerBrowser(started=False), AuthState.AUTHENTICATED).viable is False
     assert broker(BrokerBrowser(started=True), AuthState.UNKNOWN).viable is False
     assert broker(BrokerBrowser(started=True), AuthState.AUTHENTICATED).viable is True
+    ambiguous = AccountContext(AccountContextState.AMBIGUOUS, True, True)
+    assert broker(BrokerBrowser(started=True), AuthState.AUTHENTICATED, ambiguous).viable is False
 
 
 def test_broker_refuses_authorization_without_owned_browser() -> None:
@@ -55,6 +71,27 @@ def test_broker_refuses_authorization_without_authenticated_session() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "account_context",
+    [
+        AccountContext(AccountContextState.UNVERIFIED, False, False),
+        AccountContext(AccountContextState.AMBIGUOUS, True, True),
+        AccountContext(AccountContextState.WRONG_ACCOUNT, True, True),
+        AccountContext(AccountContextState.WRONG_TENANT, True, True),
+        AccountContext(AccountContextState.VERIFIED, False, True),
+        AccountContext(AccountContextState.VERIFIED, True, False),
+    ],
+)
+def test_broker_refuses_untrusted_account_context(account_context: AccountContext) -> None:
+    with pytest.raises(PolicyDenied) as error:
+        broker(
+            BrokerBrowser(started=True),
+            AuthState.AUTHENTICATED,
+            account_context,
+        ).authorize(application="planner", capability="plans.read")
+    assert error.value.context["account_context_state"] == account_context.state.value
+
+
 def test_broker_refuses_unregistered_semantic_capability() -> None:
     with pytest.raises(WorkerUnavailable):
         broker(BrokerBrowser(started=True), AuthState.AUTHENTICATED).authorize(
@@ -62,7 +99,7 @@ def test_broker_refuses_unregistered_semantic_capability() -> None:
         )
 
 
-def test_broker_grant_is_scoped_and_contains_no_secret_material() -> None:
+def test_broker_grant_is_scoped_and_account_verified() -> None:
     browser = BrokerBrowser(started=True)
     grant = broker(browser, AuthState.AUTHENTICATED).authorize(
         application="planner", capability="tasks.read"
@@ -76,17 +113,23 @@ def test_broker_grant_is_scoped_and_contains_no_secret_material() -> None:
         "container_scope": "plan",
         "capability": "tasks.read",
         "session_bound": True,
+        "account_context_verified": True,
         "secret_material_exported": False,
     }
     assert browser.guarded == ["tasks.read"]
-    assert not ({"cookie", "cookies", "token", "tokens", "storage_state"} & set(payload))
 
 
-def test_broker_snapshot_is_content_free() -> None:
+def test_broker_snapshot_exposes_only_bounded_account_state() -> None:
     payload = broker(BrokerBrowser(started=True), AuthState.AUTHENTICATED).snapshot()
     assert payload == {
         "viable": True,
         "browser_started": True,
         "auth_state": AuthState.AUTHENTICATED.value,
+        "account_context": {
+            "state": AccountContextState.VERIFIED.value,
+            "professional": True,
+            "expected_profile": True,
+            "valid": True,
+        },
         "secret_material_exported": False,
     }
