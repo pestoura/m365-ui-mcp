@@ -9,8 +9,8 @@ navigation primitive.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urlsplit
-
 
 # Deliberately bounded to Microsoft/M365 identity, shell and content domains.
 # New domains require reviewed evidence and a policy change.
@@ -65,10 +65,10 @@ def evaluate_browser_egress(url: str) -> EgressDecision:
     return EgressDecision(False, "HOST_NOT_ALLOWLISTED")
 
 
-async def enforce_route_egress(route: object, request: object) -> None:
+async def enforce_route_egress(route: Any, request: Any) -> None:
     """Playwright route handler that aborts any request outside the closed policy."""
-    decision = evaluate_browser_egress(str(getattr(request, "url", "")))
+    decision = evaluate_browser_egress(str(request.url))
     if decision.allowed:
-        await getattr(route, "continue_")()
+        await route.continue_()
         return
-    await getattr(route, "abort")("blockedbyclient")
+    await route.abort("blockedbyclient")
