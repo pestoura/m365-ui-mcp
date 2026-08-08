@@ -1,6 +1,6 @@
 # CORE-041 — Compensation registry
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_040**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -77,6 +77,6 @@ Tests prove:
 - version/class drift fails closed;
 - orphan compensation declarations are rejected.
 
-## Dependency gate
+## Current integration gate
 
-This work is stacked on CORE-040. It must not merge until CORE-040 is merged and post-merge `main` is GREEN. It will then be retargeted to `main` and revalidated through the full mandatory CI/security/image/Trivy/SBOM/documentation suite.
+CORE-040 is merged and post-merge GREEN on `main` at `2bfa50b2f6c58196f1079e026de0c13b921368fd`. PR #265 is now based directly on that integration point. The CORE-041-specific line-length issue was corrected in advance. This revision deliberately re-triggers the complete mandatory current-base CI/security/image/Trivy/SBOM/documentation suite; stacked evidence is not reused for merge.
