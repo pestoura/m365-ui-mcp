@@ -8,7 +8,7 @@ import re
 import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from m365_mcp.ui_contract_store import UIContractSet
@@ -83,7 +83,7 @@ class CapabilityEvidenceRecord:
         object.__setattr__(self, "lifecycle_state", state)
         if self.recorded_at.tzinfo is None or self.recorded_at.utcoffset() is None:
             raise ValueError("capability evidence timestamp must be timezone-aware")
-        object.__setattr__(self, "recorded_at", self.recorded_at.astimezone(timezone.utc))
+        object.__setattr__(self, "recorded_at", self.recorded_at.astimezone(UTC))
 
     @property
     def evidence_id(self) -> str:
@@ -249,12 +249,12 @@ class CapabilityEvidenceStore:
 
 
 def _format_timestamp(value: datetime) -> str:
-    normalized = value.astimezone(timezone.utc)
+    normalized = value.astimezone(UTC)
     return normalized.isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def _parse_timestamp(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
 
 
 def _record_from_row(row: sqlite3.Row) -> CapabilityEvidenceRecord:
