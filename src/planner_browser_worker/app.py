@@ -7,7 +7,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from m365_browser_worker.account_context import AccountContext, unverified_account_context
@@ -27,9 +28,10 @@ from m365_browser_worker.protocol_negotiation import (
 )
 from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
 from m365_browser_worker.session_broker import SessionCapabilityBroker
+from m365_browser_worker.worker_errors import project_worker_error
 from m365_mcp.capability_registry import default_capability_registry
 from planner_mcp.auth import AuthState
-from planner_mcp.errors import PlannerMcpError
+from planner_mcp.errors import PlannerMcpError, ProtocolIncompatible
 from planner_mcp.logging_setup import configure_logging
 from planner_mcp.ui_contract import load_status
 
@@ -85,6 +87,20 @@ def create_app(
     # Internal ownership only; no generic executor/browser endpoint is exposed.
     app.state.profile_executor = profile_executor
     app.state.protocol_negotiator = worker_protocol
+
+    @app.exception_handler(RequestValidationError)
+    async def sanitized_validation_error(
+        _request: Request,
+        _exc: RequestValidationError,
+    ) -> JSONResponse:
+        """Never echo malformed request values back across the worker boundary."""
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "INVALID_REQUEST",
+                "message": "Request validation failed",
+            },
+        )
 
     def current_readiness() -> WorkerReadiness:
         ui = load_status()
@@ -295,12 +311,28 @@ def create_app(
         raise HTTPException(status_code=422, detail="unsupported worker operation")
 
     @app.post("/operations", response_model=WorkerResponseEnvelope)
-    async def execute_operation(request: WorkerRequestEnvelope) -> WorkerResponseEnvelope:
-        """Execute one closed semantic operation through the serialized profile executor."""
-        result = await profile_executor.execute(
-            request.operation.value,
-            lambda: dispatch_semantic_operation(request),
-        )
+    async def execute_operation(
+        request: WorkerRequestEnvelope,
+    ) -> WorkerResponseEnvelope | JSONResponse:
+        """Execute one negotiated semantic operation with sanitized typed failures."""
+        try:
+            if not worker_protocol.compatible:
+                raise ProtocolIncompatible("typed worker protocol is not negotiated")
+            result = await profile_executor.execute(
+                request.operation.value,
+                lambda: dispatch_semantic_operation(request),
+            )
+        except (PlannerMcpError, HTTPException) as exc:
+            status_code, envelope = project_worker_error(
+                exc,
+                request_id=request.request_id,
+                operation=request.operation,
+            )
+            return JSONResponse(
+                status_code=status_code,
+                content=envelope.model_dump(mode="json"),
+            )
+
         return WorkerResponseEnvelope(
             request_id=request.request_id,
             operation=request.operation,
