@@ -55,5 +55,11 @@ class WorkerBusy(PlannerMcpError):
     code = "WORKER_BUSY"
 
 
+class ProtocolIncompatible(PlannerMcpError):
+    """Typed worker operations require a compatible negotiated protocol."""
+
+    code = "PROTOCOL_INCOMPATIBLE"
+
+
 class AuthRequired(PlannerMcpError):
     code = "AUTH_REQUIRED"
