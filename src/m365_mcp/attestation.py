@@ -174,11 +174,11 @@ class AttestationObservation:
             raise ValueError("attestation observation contains duplicate selectors")
         if self.locale is not None and not _LOCALE_RE.fullmatch(self.locale):
             raise ValueError("attestation locale is invalid")
-        for digest_name, digest in (
+        for digest_name, optional_digest in (
             ("UI surface signal", self.ui_surface_signal_digest),
             ("approval", self.approval_digest),
         ):
-            if digest is not None and not _DIGEST_RE.fullmatch(digest):
+            if optional_digest is not None and not _DIGEST_RE.fullmatch(optional_digest):
                 raise ValueError(f"{digest_name} digest must be sha256")
 
     def canonical_payload(self) -> dict[str, object]:
