@@ -1,6 +1,6 @@
 # PLN-MIG-001 — Planner semantic schemas in the application module
 
-Status: **IMPLEMENTED_AWAITING_GATES**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -35,3 +35,5 @@ This phase extracts schema ownership only. `PLN-MIG-002` moves Planner Tool Regi
 ## Acceptance coverage
 
 Tests prove full 17-tool schema parity, deterministic order, fresh-object isolation and fail-closed rejection of unreviewed identifier schema kinds.
+
+The branch was re-triggered after the CORE-032 and OUT-001 merges so the mandatory PR gates execute against the current `main` integration base rather than relying on an earlier successful merge simulation.
