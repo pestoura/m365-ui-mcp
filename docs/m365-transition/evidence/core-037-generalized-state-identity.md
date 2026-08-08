@@ -1,6 +1,6 @@
 # CORE-037 — Generalized state identity
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_036**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -56,6 +56,6 @@ The model rejects:
 
 No tenant content, mailbox address, account email, browser profile path, cookie, token or storage state is introduced. New persistence consumers can index by `identity_digest` without persisting raw Microsoft resource identifiers.
 
-## Dependency gate
+## Current integration gate
 
-This work is stacked on CORE-036. It must not merge until CORE-036 is merged and post-merge `main` is GREEN. It will then be retargeted to `main` and revalidated through the full mandatory CI/security/image/Trivy/SBOM/documentation suite.
+CORE-036 is merged and post-merge GREEN on `main` at `e9e0dcc6d0a0a1097c82da8b93e3b8d7637016fb`. PR #261 is now based directly on that integration point. This revision deliberately re-triggers all mandatory gates; stacked-branch evidence is not reused for merge.
