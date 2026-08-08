@@ -10,7 +10,11 @@ from m365_mcp.effective_capabilities import (
     EffectiveCapabilityState,
     project_effective_capabilities_by_capability,
 )
-from m365_mcp.ui_contract_store import UIContractFragment, UIContractSet
+from m365_mcp.ui_contract_store import (
+    CapabilityUIAttestation,
+    UIContractFragment,
+    UIContractSet,
+)
 from m365_mcp.ui_drift import (
     UILifecycleEvent,
     UILifecycleState,
@@ -48,19 +52,20 @@ def _contract_set() -> UIContractSet:
     )
 
 
-def _effective_evidence(attestation: object) -> EffectiveCapabilityEvidence:
-    item = attestation
+def _effective_evidence(
+    attestation: CapabilityUIAttestation,
+) -> EffectiveCapabilityEvidence:
     return EffectiveCapabilityEvidence(
         authenticated=True,
         account_context_valid=True,
-        ui_attested=item.attested,
+        ui_attested=attestation.attested,
         runtime_healthy=True,
         policy_allowed=True,
         license_available=True,
         live_evidence=True,
-        ui_drifted=item.drifted,
-        ui_stale=item.stale,
-        ui_reattestation_required=item.reattestation_required,
+        ui_drifted=attestation.drifted,
+        ui_stale=attestation.stale,
+        ui_reattestation_required=attestation.reattestation_required,
     )
 
 
