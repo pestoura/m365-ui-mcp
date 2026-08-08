@@ -34,4 +34,6 @@ Outlook remains `RESERVED`:
 
 Tests prove determinism, synthetic provenance, absence of identity/routing/session material, and continued zero Outlook public-tool/browser-operation exposure.
 
-OUT-001, PLN-MIG-001, PLN-MIG-002, CORE-035, CORE-036 and CORE-037 are merged and post-merge GREEN on current `main` at `1f00e64ca5e7ab03488746d44ca7abc7260a5093`. This revision deliberately re-triggers OUT-002 so the complete mandatory suite executes against that cross-lane integration base; earlier GREEN evidence is not reused for merge.
+## Current integration gate
+
+OUT-001 is merged. The current cross-lane `main` also contains the Planner migrations through PLN-MIG-002 and CORE through CORE-041, and is post-merge GREEN at `5469821deab86505e51b19dfab3905ae35295eee`. This revision deliberately re-triggers OUT-002 so the complete mandatory suite executes against that current integration base; earlier GREEN evidence is not reused for merge.
