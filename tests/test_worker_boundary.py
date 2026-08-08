@@ -33,36 +33,45 @@ def test_canonical_worker_owns_browser_lifecycle_without_reverse_dependency() ->
     assert "xpath" not in source.lower()
 
 
-def test_canonical_browser_profile_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_canonical_browser_profile_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     _clear_browser_env(monkeypatch)
-    monkeypatch.setenv("M365_BROWSER_PROFILE_DIR", "/tmp/m365-profile")
+    profile_dir = tmp_path / "m365-profile"
+    monkeypatch.setenv("M365_BROWSER_PROFILE_DIR", str(profile_dir))
     monkeypatch.setenv("M365_BROWSER_HEADLESS", "0")
     monkeypatch.setenv("M365_MODE", "mock")
 
     config = BrowserConfig.from_env()
-    assert config.profile_dir == Path("/tmp/m365-profile")
+    assert config.profile_dir == profile_dir
     assert config.headless is False
     assert config.mode == "mock"
 
 
 def test_legacy_browser_profile_configuration_remains_supported(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     _clear_browser_env(monkeypatch)
-    monkeypatch.setenv("PLANNER_BROWSER_PROFILE_DIR", "/tmp/planner-profile")
+    profile_dir = tmp_path / "planner-profile"
+    monkeypatch.setenv("PLANNER_BROWSER_PROFILE_DIR", str(profile_dir))
     monkeypatch.setenv("PLANNER_BROWSER_HEADLESS", "1")
 
     config = BrowserConfig.from_env()
-    assert config.profile_dir == Path("/tmp/planner-profile")
+    assert config.profile_dir == profile_dir
     assert config.headless is True
 
 
 def test_divergent_browser_aliases_fail_closed_without_values(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     _clear_browser_env(monkeypatch)
-    monkeypatch.setenv("M365_BROWSER_PROFILE_DIR", "/tmp/canonical-private")
-    monkeypatch.setenv("PLANNER_BROWSER_PROFILE_DIR", "/tmp/legacy-private")
+    canonical_value = str(tmp_path / "canonical-private")
+    legacy_value = str(tmp_path / "legacy-private")
+    monkeypatch.setenv("M365_BROWSER_PROFILE_DIR", canonical_value)
+    monkeypatch.setenv("PLANNER_BROWSER_PROFILE_DIR", legacy_value)
 
     with pytest.raises(ConfigurationError) as caught:
         BrowserConfig.from_env()
@@ -76,5 +85,5 @@ def test_divergent_browser_aliases_fail_closed_without_values(
         ]
     }
     rendered = str(caught.value.to_dict())
-    assert "/tmp/canonical-private" not in rendered
-    assert "/tmp/legacy-private" not in rendered
+    assert canonical_value not in rendered
+    assert legacy_value not in rendered
