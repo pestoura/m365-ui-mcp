@@ -48,13 +48,14 @@ Phase 2 gate: **PASS / GREEN** — CORE-011..020 are merged and all applicable p
 | CORE-026 | PASS | Profile-level serialized executor merged through PR #240 to `80925d16588727585e2e5fc991612a9b3fd9e1cf`; post-merge docs `31270440808` and CI `31270440807` SUCCESS. One active operation per profile, bounded waiting, typed `WORKER_BUSY`, and executor-backed `lock_viable` are proven. |
 | CORE-027 | PASS | Page lifecycle isolation merged through PR #241 to `6466cc53bd583a18405766ff26a2bfcae11a43b4`; post-merge docs `31270948475` and CI `31270948476` SUCCESS. Fresh operation pages close on success, failure and cancellation without exporting persistent-session state. |
 | CORE-028 | PASS | Typed worker operation protocol merged through PR #242 to `8b128075005095fede123896cbfda2ea3a331a7a`; post-merge docs `31271609551` and CI `31271609518` SUCCESS. Closed semantic envelopes reject generic browser-shaped inputs and preserve compatibility routes. |
-| CORE-029 | IMPLEMENTED_AWAITING_GATES | Explicit process-local protocol handshake starts incompatible, negotiates only a supported intersection, revokes stale compatibility on mismatch, and drives the real `protocol_compatible` readiness signal. |
+| CORE-029 | PASS | Worker protocol negotiation merged through PR #243 to `b9afee847737f40db87a6bbc9dc5630784c3b0c7`; post-merge docs `31272558227` and CI `31272558224` SUCCESS. Compatibility is negotiated, revocable and fail closed by default. |
+| CORE-030 | IMPLEMENTED_AWAITING_GATES | Closed sanitized worker error envelopes preserve safe codes, derive app/capability scope from the operation, strip raw exception context/input, and reject typed execution before protocol negotiation. |
 
 ## CORE-017..020 evidence/lifecycle boundary
 
 UI lifecycle, evidence persistence, attestation and freshness remain separate reviewed concerns. Evidence is bound to the exact UIContractSet digest, contains no tenant/session content, and expiration/degradation is capability scoped. Current Planner fragments remain `UNVERIFIED_LIVE` until real controlled evidence is collected; no CI workflow authenticates to the real tenant.
 
-## CORE-021..029 browser/session/network boundary
+## CORE-021..030 browser/session/network boundary
 
 FastAPI lifespan owns Playwright/Chromium. Readiness remains a fail-closed seven-signal AND gate. The Session/Capability Broker binds only registered semantic capabilities to a process-owned authenticated session and returns bounded application/surface/account/container metadata; it exposes no generic browser primitive.
 
@@ -62,7 +63,9 @@ Account correctness is separately fail-closed: authentication alone is insuffici
 
 The profile executor supplies the lock/serialization subsystem: one active operation per professional profile, bounded queueing and explicit `WORKER_BUSY` when admission capacity is exhausted. Each admitted semantic operation can use a fresh page whose page-local state is destroyed at operation completion while the authenticated persistent context remains process-owned.
 
-The typed worker protocol constrains dispatch to a closed semantic enum and exact argument families. Compatibility is now separately established by explicit handshake state; shared source code or matching defaults do not satisfy readiness.
+The typed worker protocol constrains dispatch to a closed semantic enum and exact argument families. Compatibility is separately established by explicit handshake state; shared source code or matching defaults do not satisfy readiness or typed-operation admission.
+
+Worker failures are projected through a closed sanitized taxonomy. Raw exception messages, arbitrary exception context and malformed request values are not returned to the control plane; application/capability labels are derived from the closed operation vocabulary.
 
 ## CORE-024 boundary decision
 
@@ -96,7 +99,13 @@ Page acquisition itself exposes no navigation/selector/script capability through
 
 `CORE-029` makes compatibility an explicit runtime handshake. The worker advertises bounded supported-version metadata, accepts only bounded numeric dotted peer versions, chooses a mutual version, and resets to incompatible when no intersection exists.
 
-`protocol_compatible` is false on process start and follows negotiated state by default. A protocol handshake can never bypass the other readiness signals.
+`protocol_compatible` is false on process start and follows negotiated state by default. CORE-030 additionally enforces the same compatibility requirement at typed-operation admission, so readiness and execution cannot disagree.
+
+## CORE-030 boundary decision
+
+`CORE-030` exposes only allowlisted semantic error codes, curated messages, retryability and operation-derived application/capability scope. Raw exception strings and arbitrary context never cross the typed worker boundary; unknown failures collapse to `WORKER_ERROR`.
+
+FastAPI request-validation errors are also sanitized so rejected values are not echoed. Existing historical compatibility routes remain available; the stricter negotiated/error envelope applies to the typed operation protocol.
 
 ## Current compatibility invariants
 
@@ -110,13 +119,15 @@ Page acquisition itself exposes no navigation/selector/script capability through
 - profile serialization does not expose profile paths or a generic executor endpoint;
 - operation-scoped page isolation does not export pages, URLs, selectors, DOM or storage state;
 - typed worker dispatch accepts only the closed semantic operation vocabulary and exact typed arguments;
-- protocol compatibility is negotiated, revocable and fail closed by default.
+- protocol compatibility is negotiated, revocable and fail closed for readiness and typed execution;
+- typed worker failures do not echo raw internal exception/request content.
 
 ## Next gate
 
 ```text
-CORE-029 PR CI/security/images/SBOM GREEN
+CORE-030 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-030
+        -> Phase 3 PASS/GREEN
+        -> CORE-031
 ```
