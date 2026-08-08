@@ -1,0 +1,23 @@
+{
+  "fragment_id": "planner.plan-surface",
+  "fragment_version": "0.1.0",
+  "scope": "surface",
+  "application": "planner",
+  "surface": "planner-premium-web",
+  "attested": false,
+  "attestation_status": "UNVERIFIED_LIVE",
+  "selectors": {
+    "plan.list_container": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "plan.list_item": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "plan.title": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    }
+  }
+}

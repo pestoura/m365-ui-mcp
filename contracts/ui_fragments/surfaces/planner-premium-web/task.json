@@ -1,0 +1,27 @@
+{
+  "fragment_id": "planner.task-surface",
+  "fragment_version": "0.1.0",
+  "scope": "surface",
+  "application": "planner",
+  "surface": "planner-premium-web",
+  "attested": false,
+  "attestation_status": "UNVERIFIED_LIVE",
+  "selectors": {
+    "task.list_container": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "task.list_item": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "task.title": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "task.bucket": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    }
+  }
+}
