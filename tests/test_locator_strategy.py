@@ -1,6 +1,7 @@
 """CORE-016 locator strategy abstraction acceptance tests."""
 
 import importlib
+
 pytest = importlib.import_module("pytest")
 json = importlib.import_module("json")
 locators = importlib.import_module("m365_mcp.locators")
