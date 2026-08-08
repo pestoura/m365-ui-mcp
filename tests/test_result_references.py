@@ -1,5 +1,6 @@
-import m365_mcp.result_references as result_references
 import pytest
+
+import m365_mcp.result_references as result_references
 
 
 CONTENT_DIGEST = "a" * 64
