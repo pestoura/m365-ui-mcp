@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -343,7 +344,7 @@ def test_stale_fragment_degrades_only_dependent_capability() -> None:
     assert plans.stale is False
     assert tasks.attested is False
     assert tasks.stale is True
-    assert "UI_FRAGMENT_STALE" in tasks.reasons
+    assert tasks.reasons == ("UI_FRAGMENT_STALE:planner.task-surface",)
 
 
 def test_store_latest_records_feed_freshness_without_mutating_history(tmp_path: Path) -> None:
@@ -373,8 +374,6 @@ def test_store_latest_records_feed_freshness_without_mutating_history(tmp_path: 
 
     assert assessments[0].effective_state is UILifecycleState.HEALTHY
     assert assessments[0].evidence_id == new_record.evidence_id
-
-    import sqlite3
 
     with sqlite3.connect(state_path) as conn:
         row_count = conn.execute("SELECT COUNT(*) FROM capability_ui_evidence").fetchone()[0]
