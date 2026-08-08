@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from m365_browser_worker.lifecycle import browser_lifespan
-from m365_browser_worker.readiness import evaluate_worker_readiness
+from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
 from planner_mcp.auth import AuthState
 from planner_mcp.errors import PlannerMcpError
 from planner_mcp.logging_setup import configure_logging
@@ -54,6 +54,18 @@ def create_app(
         lifespan=browser_lifespan(worker_browser),
     )
 
+    def current_readiness() -> WorkerReadiness:
+        ui = load_status()
+        return evaluate_worker_readiness(
+            browser_started=worker_browser.started,
+            profile_usable=profile_usable(),
+            auth_state=current_auth_state(),
+            ui_contract_attested=ui.attested,
+            broker_viable=broker_viable(),
+            protocol_compatible=protocol_compatible(),
+            lock_viable=lock_viable(),
+        )
+
     def live_guard(operation: str) -> None:
         if _is_mock():
             return
@@ -68,16 +80,7 @@ def create_app(
 
     @app.get("/readyz")
     async def readyz() -> JSONResponse:
-        ui = load_status()
-        readiness = evaluate_worker_readiness(
-            browser_started=worker_browser.started,
-            profile_usable=profile_usable(),
-            auth_state=current_auth_state(),
-            ui_contract_attested=ui.attested,
-            broker_viable=broker_viable(),
-            protocol_compatible=protocol_compatible(),
-            lock_viable=lock_viable(),
-        )
+        readiness = current_readiness()
         return JSONResponse(
             status_code=200 if readiness.ready else 503,
             content=readiness.to_dict(),
@@ -86,6 +89,7 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, Any]:
         ui = load_status()
+        readiness = current_readiness()
         return {
             "ok": True,
             "mode": _mode(),
@@ -93,7 +97,7 @@ def create_app(
             "ui_contract_version": ui.version,
             "ui_contract_set_digest": ui.contract_set_digest,
             "ui_contract_attested": ui.attested,
-            "live_ready": (not _is_mock()) and ui.attested,
+            "live_ready": readiness.ready,
         }
 
     @app.get("/auth/status")
