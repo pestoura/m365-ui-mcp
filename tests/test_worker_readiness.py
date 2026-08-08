@@ -84,7 +84,8 @@ def test_liveness_and_legacy_health_do_not_overclaim_default_readiness() -> None
     assert ReadinessReason.PROFILE_UNAVAILABLE.value in reasons
     assert ReadinessReason.BROKER_UNAVAILABLE.value in reasons
     assert ReadinessReason.PROTOCOL_INCOMPATIBLE.value in reasons
-    assert ReadinessReason.LOCK_UNAVAILABLE.value in reasons
+    assert ReadinessReason.LOCK_UNAVAILABLE.value not in reasons
+    assert ready.json()["lock_viable"] is True
 
 
 def test_readyz_and_legacy_health_use_same_proven_state(
