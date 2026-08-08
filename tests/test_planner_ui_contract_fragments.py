@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import json
 
-from m365_mcp.apps.planner import ui_contracts as planner_ui_contracts
-from m365_mcp.contracts import contracts_dir
-from m365_mcp.ui_contract_store import load_ui_contract_set
+import m365_mcp.apps.planner.ui_contracts as planner_ui_contracts
+import m365_mcp.contracts as contracts
+import m365_mcp.ui_contract_store as ui_contract_store
 
 
 COMMON_AUTH_SELECTORS = ("auth.login_email_input", "auth.mfa_number_display")
 
 
 def test_planner_fragment_specs_match_canonical_contract_set() -> None:
-    contract_set = load_ui_contract_set()
+    contract_set = ui_contract_store.load_ui_contract_set()
     planner_fragments = tuple(
         fragment for fragment in contract_set.fragments if fragment.application == "planner"
     )
@@ -27,7 +27,7 @@ def test_planner_fragment_specs_match_canonical_contract_set() -> None:
 
 
 def test_planner_partition_preserves_eight_app_selectors_and_ten_legacy_selectors() -> None:
-    contract_set = load_ui_contract_set()
+    contract_set = ui_contract_store.load_ui_contract_set()
     planner_selectors = planner_ui_contracts.planner_selector_names()
 
     assert len(planner_selectors) == 8
@@ -37,7 +37,7 @@ def test_planner_partition_preserves_eight_app_selectors_and_ten_legacy_selector
 
 
 def test_common_auth_fragment_remains_platform_owned() -> None:
-    contract_set = load_ui_contract_set()
+    contract_set = ui_contract_store.load_ui_contract_set()
     common = tuple(fragment for fragment in contract_set.fragments if fragment.scope == "common")
 
     assert len(common) == 1
@@ -47,8 +47,10 @@ def test_common_auth_fragment_remains_platform_owned() -> None:
 
 
 def test_legacy_contract_selector_order_and_metadata_remain_identical() -> None:
-    legacy = json.loads((contracts_dir() / "ui_contract.json").read_text(encoding="utf-8"))
-    fragmented = load_ui_contract_set()
+    legacy = json.loads(
+        (contracts.contracts_dir() / "ui_contract.json").read_text(encoding="utf-8")
+    )
+    fragmented = ui_contract_store.load_ui_contract_set()
 
     assert legacy["ui_contract_version"] == fragmented.legacy_version
     assert legacy["selectors"] == fragmented.selectors()
