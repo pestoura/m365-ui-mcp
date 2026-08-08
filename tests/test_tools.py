@@ -56,6 +56,11 @@ async def test_readiness(tools: PlannerTools) -> None:
     assert data["ready"] is True
     assert data["sqlite"]["ok"] is True
     assert data["ui_contract"]["attested"] is False
+    assert data["configuration"]["mode"] == "mock"
+    assert data["configuration"]["host"] == "[REDACTED]"
+    assert data["configuration"]["worker_base_url"] == "[REDACTED]"
+    assert data["configuration"]["state_path"] == "[REDACTED]"
+    assert data["configuration"]["allow_mutations"] is False
 
 
 async def test_agent_card_metadata(tools: PlannerTools) -> None:
