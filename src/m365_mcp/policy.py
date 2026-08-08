@@ -1,9 +1,9 @@
 """Application-neutral metadata-driven policy engine.
 
 CORE-031 removes hard-coded semantic tool-name allowlists from policy
-evaluation. Decisions are derived from canonical Tool Registry metadata and
-runtime mutation settings. Security tiers and scope-aware constraints are
-introduced separately by CORE-032/033.
+evaluation. CORE-032 adds a closed T0..T4 security-tier projection derived
+from the same canonical metadata. Scope-aware constraints are introduced
+separately by CORE-033.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from m365_mcp.config import Settings
+from m365_mcp.security_tiers import SecurityTier, classify_security_tier
 from m365_mcp.tool_registry import (
     MutationClass,
     ToolDefinition,
@@ -37,6 +38,7 @@ class PolicyResult:
     tool: str | None = None
     application: str | None = None
     mutation_class: MutationClass | None = None
+    security_tier: SecurityTier | None = None
     capability_keys: tuple[str, ...] = ()
 
     @property
@@ -68,6 +70,7 @@ class MetadataPolicyEngine:
         except KeyError:
             return PolicyResult(Decision.DENY, "TOOL_NOT_REGISTERED", tool=tool)
 
+        tier = classify_security_tier(definition).tier
         metadata_mutation = definition.mutation_class is not MutationClass.READ
         mutation_requested = metadata_mutation or mutation
 
@@ -76,22 +79,30 @@ class MetadataPolicyEngine:
                 definition,
                 Decision.DENY,
                 "MUTATIONS_DISABLED_IN_0_1_0",
+                tier,
             )
 
-        if mutation_requested or definition.approval_requirement != "none":
+        if tier >= SecurityTier.T3 or mutation_requested or definition.approval_requirement != "none":
             return self._result(
                 definition,
                 Decision.REQUIRE_APPROVAL,
                 "MUTATION_REQUIRES_APPROVAL",
+                tier,
             )
 
-        return self._result(definition, Decision.ALLOW, "REGISTERED_READ_TOOL")
+        return self._result(
+            definition,
+            Decision.ALLOW,
+            "REGISTERED_READ_TOOL",
+            tier,
+        )
 
     @staticmethod
     def _result(
         definition: ToolDefinition,
         decision: Decision,
         reason: str,
+        security_tier: SecurityTier,
     ) -> PolicyResult:
         return PolicyResult(
             decision=decision,
@@ -99,6 +110,7 @@ class MetadataPolicyEngine:
             tool=definition.name,
             application=definition.application,
             mutation_class=definition.mutation_class,
+            security_tier=security_tier,
             capability_keys=definition.capability_keys,
         )
 
