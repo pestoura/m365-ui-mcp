@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from m365_browser_worker.account_context import AccountContext, unverified_account_context
+from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
 from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
 from m365_browser_worker.session_broker import SessionCapabilityBroker
@@ -39,6 +40,7 @@ def create_app(
     auth_state_provider: Callable[[], AuthState] | None = None,
     account_context_provider: Callable[[], AccountContext] | None = None,
     broker: SessionCapabilityBroker | None = None,
+    executor: ProfileSerializedExecutor | None = None,
     broker_viability_provider: Callable[[], bool] | None = None,
     protocol_compatibility_provider: Callable[[], bool] | None = None,
     lock_viability_provider: Callable[[], bool] | None = None,
@@ -46,6 +48,7 @@ def create_app(
     """Build the worker app with separate liveness and live-readiness semantics."""
     configure_logging(os.getenv("PLANNER_LOG_LEVEL", "INFO"))
     worker_browser = browser or PersistentBrowser(BrowserConfig.from_env())
+    profile_executor = executor or ProfileSerializedExecutor()
     profile_usable = profile_viability_provider or (lambda: False)
     current_auth_state = auth_state_provider or (
         lambda: AuthState.AUTHENTICATED if _is_mock() else AuthState.UNKNOWN
@@ -59,12 +62,14 @@ def create_app(
     )
     broker_viable = broker_viability_provider or (lambda: session_broker.viable)
     protocol_compatible = protocol_compatibility_provider or (lambda: False)
-    lock_viable = lock_viability_provider or (lambda: False)
+    lock_viable = lock_viability_provider or (lambda: profile_executor.viable)
     app = FastAPI(
         title="planner-browser-worker",
         version=__version__,
         lifespan=browser_lifespan(worker_browser),
     )
+    # Internal ownership only; no generic executor/browser endpoint is exposed.
+    app.state.profile_executor = profile_executor
 
     def current_readiness() -> WorkerReadiness:
         ui = load_status()
