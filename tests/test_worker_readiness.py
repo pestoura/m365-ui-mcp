@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from m365_browser_worker.browser import BrowserConfig, PersistentBrowser
@@ -73,9 +74,11 @@ def test_liveness_does_not_overclaim_default_mock_readiness() -> None:
     assert ReadinessReason.BROKER_UNAVAILABLE.value in ready.json()["reasons"]
 
 
-def test_readyz_returns_200_only_with_proven_signals(monkeypatch: object) -> None:
-    monkeypatch.setenv("PLANNER_MODE", "live")  # type: ignore[attr-defined]
-    monkeypatch.setattr(  # type: ignore[attr-defined]
+def test_readyz_returns_200_only_with_proven_signals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLANNER_MODE", "live")
+    monkeypatch.setattr(
         "planner_browser_worker.app.load_status",
         lambda: SimpleNamespace(attested=True),
     )
