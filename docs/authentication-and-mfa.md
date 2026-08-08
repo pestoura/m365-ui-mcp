@@ -1,0 +1,313 @@
+# Planner MCP — Authentication and MFA
+
+Status: specification (implementation-grade). Nothing here is a claim of existing implementation;
+every requirement is `PLANNED` unless a release note says otherwise (`GOV-090`).
+Canonical upstream: [docs/vision.md](./vision.md)
+Related: [docs/architecture.md](./architecture.md) · [docs/security.md](./security.md) · [docs/privacy-boundary.md](./privacy-boundary.md) · [docs/governance.md](./governance.md) · [docs/browser-worker.md](./browser-worker.md) · [docs/tool-catalog.md](./tool-catalog.md)
+
+Requirement IDs (`AUTH-xxx`) are stable, never reused, never renumbered.
+
+---
+
+## 1. Principles
+
+**AUTH-001 — Interactive Microsoft sign-in only.** The only supported authentication path is a
+human signing in interactively, in the worker's Chromium window, against Microsoft's own login
+surface. There is no programmatic credential flow, no ROPC, no device-code fallback, no cookie
+import, no session transplant (`SEC-003`, `PRIV-071`).
+
+**AUTH-002 — The password does not exist inside the system.** The Microsoft password is never
+typed by automation, never accepted as a tool argument, never present in an environment variable,
+a config file, the repository, the MCP state store, a log line, a metric label, an audit event, a
+Hermes message, or an error string (`SEC-002`, `PRIV-070`).
+
+**AUTH-003 — MFA is approved only in Microsoft Authenticator.** The approval act happens on the
+operator's phone, in Microsoft Authenticator. Telegram, Hermes, the MCP surface and the control
+plane are notification/observation channels only; none of them can approve, relay, forward or
+satisfy an MFA challenge.
+
+**AUTH-004 — No MFA material is stored.** One-time codes, push payloads, number-matching answers
+entered by the human, and any challenge secret are never persisted or logged. The *displayed
+number* of a number-matching challenge is not a secret and is the single exception permitted for
+notification purposes (`AUTH-040`).
+
+**AUTH-005 — Fail closed.** Any unknown, ambiguous, expired or unverifiable authentication state
+is treated as unauthenticated. Absence of evidence is never treated as `AUTHENTICATED`
+(`SEC-001`, `ARCH-130`).
+
+**AUTH-006 — Authentication is a worker-side fact, a control-plane observation.** The session
+lives exclusively in the worker's persistent profile. The control plane holds only the sanitized
+state machine value plus non-identifying metadata.
+
+---
+
+## 2. Persistent professional profile lifecycle
+
+**AUTH-010 — One profile, one professional account, one tenant.** The Chromium user-data
+directory is dedicated, created empty by the worker, and bound to exactly one professional
+account (`PRIV-030`, `PRIV-036`). Personal profiles are never opened, imported or copied
+(`PRIV-031`).
+
+**AUTH-011 — Location and ownership.** The profile lives in the named `browser-profile` volume,
+mounted only in the worker, owned by the worker's non-root user, mode `0700`. No host home
+directory, no bind mount, no Docker socket (`PRIV-050`, `ARCH-122`).
+
+**AUTH-012 — Lifecycle states.** `ABSENT` → `CREATED` (empty, unauthenticated) → `AUTHENTICATED`
+(carries a live Microsoft session) → `STALE` (session expired, profile intact) → `DESTROYED`.
+Transitions are explicit operator actions or observed expiry; never silent recreation.
+
+**AUTH-013 — Re-authentication reuses the profile.** Expiry does not destroy the profile. The
+human re-authenticates in place, preserving device-recognition signals that reduce MFA prompts.
+
+**AUTH-014 — Destruction is explicit and complete.** Destroying the profile removes the whole
+volume; there is no partial cleanup and no export of profile contents anywhere, for any reason,
+including debugging (`PRIV-034`).
+
+**AUTH-015 — No extensions, no saved passwords, no sync.** The profile has no extensions, no
+password manager entries, no Chrome profile sync, and no personal browsing (`PRIV-032`,
+`PRIV-033`).
+
+**AUTH-016 — Profile integrity is not authentication.** A present profile proves nothing about
+session validity. Validity is established only by a live, sanitized read-back probe
+(`AUTH-050`).
+
+---
+
+## 3. Authentication state machine
+
+**AUTH-020** The authentication state is exactly one of these eight values. No other value is
+emitted, stored or accepted:
+
+| State | Meaning |
+| --- | --- |
+| `UNKNOWN` | No probe has been performed since worker/profile start. Treated as unauthenticated. |
+| `READY` | Worker and profile are usable; no authentication attempt in flight; no session asserted. |
+| `AUTH_REQUIRED` | A live probe determined no valid Microsoft session exists. Human sign-in needed. |
+| `MFA_REQUIRED` | Microsoft has presented an MFA challenge; challenge metadata is being sanitized. |
+| `WAITING_FOR_MFA` | Challenge metadata published; the system is waiting for approval in Microsoft Authenticator. |
+| `AUTHENTICATED` | A live probe confirmed a valid session **and** the expected account/tenant context. |
+| `SESSION_EXPIRED` | A previously authenticated session no longer validates. |
+| `AUTH_FAILED` | The attempt terminated without a session (denial, timeout, cancellation, blocker). |
+
+**AUTH-021 — Allowed transitions.** Every other transition is a bug and fails closed:
+
+```
+UNKNOWN          -> READY | AUTH_REQUIRED | AUTHENTICATED | AUTH_FAILED
+READY            -> AUTH_REQUIRED | AUTHENTICATED | AUTH_FAILED
+AUTH_REQUIRED    -> MFA_REQUIRED | AUTHENTICATED | AUTH_FAILED
+MFA_REQUIRED     -> WAITING_FOR_MFA | AUTH_FAILED
+WAITING_FOR_MFA  -> AUTHENTICATED | AUTH_FAILED
+AUTHENTICATED    -> SESSION_EXPIRED | AUTH_REQUIRED | UNKNOWN
+SESSION_EXPIRED  -> AUTH_REQUIRED | AUTH_FAILED
+AUTH_FAILED      -> READY | AUTH_REQUIRED
+```
+
+**AUTH-022 — Terminal-for-the-attempt states.** `AUTH_FAILED` ends the current attempt. Recovery
+requires a new, explicitly started attempt (`planner_auth_start`); there is no automatic retry
+loop against Microsoft.
+
+**AUTH-023 — `AUTHENTICATED` requires two proofs.** A valid session probe **and** a matching
+account/tenant context (`AUTH-030`). One without the other yields `AUTH_FAILED`.
+
+**AUTH-024 — Conditional Access blocker is not a state.** A managed/compliant-device requirement
+produces `AUTH_FAILED` with error class `BLOCKER_CONDITIONAL_ACCESS`, which is terminal for the
+whole capability, not merely for the attempt (`AUTH-070`).
+
+**AUTH-025 — State is not cached across worker restarts.** After a worker restart the state is
+`UNKNOWN` until a probe runs, even though the profile persists.
+
+---
+
+## 4. Account, tenant and session context verification
+
+**AUTH-030 — Context verification is mandatory before any read or mutation.** Before executing a
+Planner operation the worker verifies the signed-in principal and tenant match the configured
+expected context. Mismatch fails closed with `ACCOUNT_CONTEXT_MISMATCH`; the operation is not
+attempted and no automatic account switch occurs.
+
+**AUTH-031 — Configured expectation.** The expected context is configuration (an account
+identifier hint and a tenant identifier hint), never a caller-supplied argument. Callers cannot
+select or influence the account.
+
+**AUTH-032 — Sanitized exposure only.** `planner_account_context` returns only: a stable opaque
+account handle, tenant kind (`professional`), a boolean context match, the licence-signal
+observation state, and the probe timestamp. Never an e-mail address, UPN, object ID, tenant GUID
+or display name (`PRIV-063`).
+
+**AUTH-033 — Multiple accounts in the profile is a defect.** If more than one signed-in principal
+is observed, the state is `AUTH_FAILED` with `ACCOUNT_CONTEXT_AMBIGUOUS`. The system never picks
+one (`PRIV-036`).
+
+**AUTH-034 — Session validity probe.** Validity is established by a minimal authenticated
+navigation whose expected post-condition is described by a UIContract read-back probe
+([docs/ui-contract.md](./ui-contract.md) `UI-060`). Absence of a login redirect is not sufficient
+evidence.
+
+**AUTH-035 — Probe cost and frequency are bounded.** Probes are rate-limited and reuse a cached
+result within a short, configured freshness window. An expired cache yields `UNKNOWN`, never an
+optimistic `AUTHENTICATED`.
+
+---
+
+## 5. MFA detection, number matching and notification
+
+**AUTH-040 — Sanitized authentication event.** The only fields ever published outside the worker
+for an authentication/MFA event are exactly:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `operation_id` | opaque string | Correlates the attempt; not derived from identity |
+| `service` | enum | Constant `microsoft_login` for this flow |
+| `description` | sanitized string | From a fixed vocabulary; never free-form page text |
+| `mfa_number` | integer or null | Number-matching digits shown by Microsoft; not a secret |
+| `expires_at` | timestamp | Challenge/attempt expiry |
+
+No other field is added. No screenshot, no DOM, no URL, no account identifier, no error text from
+the page (`PRIV-064`, `ARCH-112`).
+
+**AUTH-041 — Fixed description vocabulary.** `sign_in_required`, `password_entry_pending`,
+`mfa_challenge_presented`, `mfa_number_matching`, `mfa_approval_pending`, `mfa_timeout`,
+`mfa_denied`, `conditional_access_blocked`, `sign_in_completed`, `sign_in_failed`. Anything not in
+the vocabulary is reported as `sign_in_failed`.
+
+**AUTH-042 — Number-matching detection.** When Microsoft presents a number-matching challenge, the
+worker extracts the displayed number through a UIContract-declared read probe, validates it is a
+short integer, and publishes it in `mfa_number`. If the number cannot be extracted with confidence
+it is published as `null` with description `mfa_approval_pending`; a number is never guessed.
+
+**AUTH-043 — Notification is one-way.** The sanitized event may be delivered to the operator via
+Hermes/Telegram so the human knows which number to select. That channel carries no approval
+capability, accepts no reply that affects the flow, and is never on the critical path
+(`ARCH-004`).
+
+**AUTH-044 — Approval happens only in Microsoft Authenticator.** The system never types a code,
+never auto-selects a number, never interacts with an approval prompt, and never accepts an MFA
+code as a tool argument (`AUTH-003`, `AUTH-004`).
+
+**AUTH-045 — No MFA persistence.** Challenge numbers and payloads are held in memory for the
+lifetime of the attempt only; they are not written to the state store, not logged, and not
+retained after the attempt terminates.
+
+**AUTH-046 — Denied or ignored approvals.** A denial or a lapsed challenge maps to `AUTH_FAILED`
+with `MFA_DENIED` or `MFA_TIMEOUT`. There is no re-prompt loop; a new attempt is an explicit human
+decision.
+
+---
+
+## 6. Resume semantics, expiry and timeouts
+
+**AUTH-050 — Two-phase interactive flow.** `planner_auth_start` opens the interactive sign-in and
+returns `operation_id` plus the current state. `planner_auth_resume` re-observes the same attempt
+and returns the updated state. Neither tool transports credentials.
+
+**AUTH-051 — Resume is idempotent and observational.** Calling `planner_auth_resume` repeatedly
+does not restart sign-in, does not re-trigger MFA, and has no side effect other than an audit
+event and a state refresh.
+
+**AUTH-052 — Resume is bound to `operation_id`.** An unknown, expired or already-terminated
+`operation_id` returns `AUTH_FAILED` with `AUTH_OPERATION_UNKNOWN`. Attempts are single-use and
+non-replayable.
+
+**AUTH-053 — Timeouts.** Three independent, configured bounds: challenge expiry (from Microsoft,
+reflected in `expires_at`), attempt expiry (overall interactive window), and probe timeout (per
+navigation). Any expiry yields `AUTH_FAILED`, never a hung tool call.
+
+**AUTH-054 — Session expiry detection.** A previously `AUTHENTICATED` context that fails a probe
+becomes `SESSION_EXPIRED` and every dependent capability is immediately unavailable until a new
+attempt succeeds. In-flight operations fail closed rather than retrying.
+
+**AUTH-055 — Concurrency.** At most one authentication attempt exists at a time per profile.
+A second `planner_auth_start` while an attempt is live returns the existing `operation_id`, not a
+new attempt (`WORKER-040`).
+
+**AUTH-056 — No background reauthentication.** The system never opens a sign-in flow on its own.
+Reauthentication is always operator-initiated.
+
+---
+
+## 7. Conditional Access
+
+**AUTH-070 — `BLOCKER_CONDITIONAL_ACCESS` is terminal.** If Microsoft requires a managed,
+compliant, enrolled or domain-joined device, the flow stops immediately, reports the blocker, and
+records a sanitized audit event (`PRIV-020`, `PRIV-025`, `ARCH-131`).
+
+**AUTH-071 — No bypass, no spoofing, no relocation.** Prohibited: user-agent or platform spoofing,
+device-attribute forgery, enrolment, MDM/Intune registration, certificate installation, moving the
+sign-in to a managed machine to extract a session, or trying a different browser to evade the
+policy (`PRIV-021`, `PRIV-022`, `PRIV-023`).
+
+**AUTH-072 — Report, do not engineer around it.** The correct output is a clear blocker report to
+the operator, plus capability rows moving to a blocked support state
+([docs/planner-premium-capabilities.md](./planner-premium-capabilities.md) `CAP-030`).
+
+**AUTH-073 — The blocker is not retried.** No retry loop, no backoff schedule, no alternative
+authentication path is attempted after `BLOCKER_CONDITIONAL_ACCESS`.
+
+---
+
+## 8. Error classes
+
+| Error class | Trigger | Terminal |
+| --- | --- | --- |
+| `AUTH_REQUIRED` | No valid session | No |
+| `MFA_PENDING` | Challenge open, awaiting Authenticator | No |
+| `MFA_TIMEOUT` | Challenge expired | Attempt |
+| `MFA_DENIED` | Human denied the push | Attempt |
+| `SESSION_EXPIRED` | Probe failed for a known session | No |
+| `ACCOUNT_CONTEXT_MISMATCH` | Wrong principal/tenant | Attempt |
+| `ACCOUNT_CONTEXT_AMBIGUOUS` | More than one principal observed | Attempt |
+| `AUTH_OPERATION_UNKNOWN` | Unknown/expired `operation_id` | Attempt |
+| `BLOCKER_CONDITIONAL_ACCESS` | Managed/compliant device required | Yes, capability-wide |
+| `WORKER_UNAVAILABLE` | Worker not reachable/ready | No |
+
+**AUTH-080** Error payloads carry the class, `operation_id` and the sanitized description only.
+Raw Microsoft error text, correlation IDs from the page, and URLs are never forwarded.
+
+---
+
+## 9. Evidence and tests
+
+**AUTH-090 — Required evidence per attempt.** Audit record with: `operation_id`, terminal state,
+error class if any, sanitized description sequence, timestamps, UIContract version used by the
+probe. No identity fields.
+
+**AUTH-091 — Required unit tests (mock only, CI never touches a real tenant, `ARCH-084`).**
+
+1. Every allowed transition in `AUTH-021` is accepted; a representative set of disallowed
+   transitions is rejected.
+2. `UNKNOWN` and any unparsable state are treated as unauthenticated by the policy gate.
+3. The sanitized event serializer emits exactly the five fields of `AUTH-040` and drops extras.
+4. Descriptions outside the `AUTH-041` vocabulary are coerced to `sign_in_failed`.
+5. A repository/log/state scan asserts no password, cookie, token, storage-state or MFA code field
+   can be persisted by the auth module.
+6. `planner_auth_resume` called N times produces one attempt and N observations.
+7. Account/tenant mismatch and ambiguity both fail closed and never switch accounts.
+8. A simulated Conditional Access managed-device page yields `BLOCKER_CONDITIONAL_ACCESS`, no
+   retry, and no user-agent mutation.
+9. Challenge and attempt expiry both terminate the call within the configured bound.
+10. Number-matching extraction failure yields `mfa_number: null`, never a fabricated number.
+
+**AUTH-092 — Live attestation evidence** is an operator-run, read-only campaign
+([docs/governance.md](./governance.md) `GOV-042`) recording only sanitized fields.
+
+**AUTH-093 — No test may authenticate non-interactively.** A test that supplies a password, cookie
+or storage state is a governance violation, not a shortcut.
+
+---
+
+## 10. Traceability
+
+| ID range | Area |
+| --- | --- |
+| AUTH-001…006 | Principles |
+| AUTH-010…016 | Profile lifecycle |
+| AUTH-020…025 | State machine |
+| AUTH-030…035 | Account/tenant/session context |
+| AUTH-040…046 | MFA detection and notification |
+| AUTH-050…056 | Resume, expiry, timeouts |
+| AUTH-070…073 | Conditional Access |
+| AUTH-080 | Error classes |
+| AUTH-090…093 | Evidence and tests |
+
+
+
