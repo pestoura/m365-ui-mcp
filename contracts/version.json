@@ -4,7 +4,6 @@
   "contract_version": "0.1.0",
   "ui_contract_version": "0.1.0",
   "tool_catalog_version": "0.1.0",
-  "generated_by": "planner-mcp",
   "mutation_tools": 0,
   "read_tools": 17
 }
