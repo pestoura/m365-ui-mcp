@@ -32,16 +32,22 @@ def _is_mock() -> bool:
 def create_app(
     browser: PersistentBrowser | None = None,
     *,
+    profile_viability_provider: Callable[[], bool] | None = None,
     auth_state_provider: Callable[[], AuthState] | None = None,
     broker_viability_provider: Callable[[], bool] | None = None,
+    protocol_compatibility_provider: Callable[[], bool] | None = None,
+    lock_viability_provider: Callable[[], bool] | None = None,
 ) -> FastAPI:
     """Build the worker app with separate liveness and live-readiness semantics."""
     configure_logging(os.getenv("PLANNER_LOG_LEVEL", "INFO"))
     worker_browser = browser or PersistentBrowser(BrowserConfig.from_env())
+    profile_usable = profile_viability_provider or (lambda: False)
     current_auth_state = auth_state_provider or (
         lambda: AuthState.AUTHENTICATED if _is_mock() else AuthState.UNKNOWN
     )
     broker_viable = broker_viability_provider or (lambda: False)
+    protocol_compatible = protocol_compatibility_provider or (lambda: False)
+    lock_viable = lock_viability_provider or (lambda: False)
     app = FastAPI(
         title="planner-browser-worker",
         version=__version__,
@@ -65,9 +71,12 @@ def create_app(
         ui = load_status()
         readiness = evaluate_worker_readiness(
             browser_started=worker_browser.started,
+            profile_usable=profile_usable(),
             auth_state=current_auth_state(),
             ui_contract_attested=ui.attested,
             broker_viable=broker_viable(),
+            protocol_compatible=protocol_compatible(),
+            lock_viable=lock_viable(),
         )
         return JSONResponse(
             status_code=200 if readiness.ready else 503,
