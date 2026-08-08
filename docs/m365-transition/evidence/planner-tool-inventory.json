@@ -1,0 +1,151 @@
+{
+  "$defs": {
+    "empty_input": {"type": "object", "properties": {}, "required": [], "additionalProperties": false},
+    "plan_input": {"type": "object", "properties": {"plan_id": {"type": "string", "minLength": 1}}, "required": ["plan_id"], "additionalProperties": false},
+    "task_input": {"type": "object", "properties": {"task_id": {"type": "string", "minLength": 1}}, "required": ["task_id"], "additionalProperties": false},
+    "common_read_envelope": {
+      "type": "object",
+      "required": ["tool", "product_version", "contract_version", "schema_version", "read_only", "graph_api_used", "data"],
+      "properties": {
+        "tool": {"type": "string"},
+        "product_version": {"const": "0.1.0"},
+        "contract_version": {"const": "0.1.0"},
+        "schema_version": {"const": "0.1.0"},
+        "read_only": {"const": true},
+        "graph_api_used": {"const": false},
+        "data": {}
+      },
+      "additionalProperties": true
+    }
+  },
+  "contract_version": "0.1.0",
+  "baseline_tag": "planner-pre-m365-0.1.0",
+  "inventory_status": "CANONICAL_PHASE0_COMPATIBILITY_BASELINE",
+  "notes": [
+    "Input schemas reflect the effective public Python MCP signatures. The current ToolManifest does not yet carry canonical per-tool JSON input/output schemas; that metadata gap is intentionally assigned to CORE-008.",
+    "Every current public planner_* tool is PRESERVE by default."
+  ],
+  "tools": [
+    {
+      "name": "planner_health", "version": "0.1.0", "domain": "system",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "READ_ONLY", "implementation_state": "IMPLEMENTED_NOT_ATTESTED",
+      "capability_keys": [], "ui_contract_dependencies": [], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_readiness", "version": "0.1.0", "domain": "system",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "READ_ONLY", "implementation_state": "IMPLEMENTED_NOT_ATTESTED",
+      "capability_keys": [], "ui_contract_dependencies": ["GLOBAL_UI_CONTRACT_ATTESTATION"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_capabilities", "version": "0.1.0", "domain": "capability",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "READ_ONLY", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": ["plans.read", "tasks.read", "buckets.read", "dependencies.read", "scheduling.read", "goals.read", "sprints.read", "resources.read", "custom_fields.read", "portfolios.read", "project_snapshot.read"],
+      "ui_contract_dependencies": ["GLOBAL_UI_CONTRACT_ATTESTATION"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_agent_card", "version": "0.1.0", "domain": "system",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "READ_ONLY", "implementation_state": "IMPLEMENTED_NOT_ATTESTED",
+      "capability_keys": [], "ui_contract_dependencies": [], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_ui_contract_status", "version": "0.1.0", "domain": "ui_contract",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "READ_ONLY", "implementation_state": "IMPLEMENTED_NOT_ATTESTED",
+      "capability_keys": [], "ui_contract_dependencies": ["GLOBAL_UI_CONTRACT_ATTESTATION"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_auth_status", "version": "0.1.0", "domain": "auth",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "SESSION_OBSERVATION", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": [], "ui_contract_dependencies": ["auth.login_email_input", "auth.mfa_number_display"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_auth_start", "version": "0.1.0", "domain": "auth",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "SESSION_INTERACTION", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": [], "ui_contract_dependencies": ["auth.login_email_input", "auth.mfa_number_display"], "read_back_strategy": "AUTH_STATE_RE_READ",
+      "idempotency_semantics": "key_required", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_auth_resume", "version": "0.1.0", "domain": "auth",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "SESSION_INTERACTION", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": [], "ui_contract_dependencies": ["auth.mfa_number_display"], "read_back_strategy": "AUTH_STATE_RE_READ",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_auth_session_info", "version": "0.1.0", "domain": "auth",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "SESSION_METADATA", "implementation_state": "IMPLEMENTED_NOT_ATTESTED",
+      "capability_keys": [], "ui_contract_dependencies": [], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_plan_list", "version": "0.1.0", "domain": "planner",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "M365_CONTENT_READ", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": ["plans.read"], "ui_contract_dependencies": ["plan.list_container", "plan.list_item", "plan.title"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_plan_get", "version": "0.1.0", "domain": "planner",
+      "input_schema": {"$ref": "#/$defs/plan_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "M365_CONTENT_READ", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": ["plans.read"], "ui_contract_dependencies": ["plan.list_item", "plan.title"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_task_list", "version": "0.1.0", "domain": "planner",
+      "input_schema": {"$ref": "#/$defs/plan_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "M365_CONTENT_READ", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": ["tasks.read"], "ui_contract_dependencies": ["task.list_container", "task.list_item", "task.title", "task.bucket"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_task_get", "version": "0.1.0", "domain": "planner",
+      "input_schema": {"$ref": "#/$defs/task_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "M365_CONTENT_READ", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": ["tasks.read"], "ui_contract_dependencies": ["task.list_item", "task.title", "task.bucket"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_project_snapshot", "version": "0.1.0", "domain": "planner",
+      "input_schema": {"$ref": "#/$defs/plan_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "M365_CONTENT_READ", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": ["project_snapshot.read", "plans.read", "tasks.read"], "ui_contract_dependencies": ["plan.title", "task.list_container", "task.list_item", "task.title", "task.bucket"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_account_context", "version": "0.1.0", "domain": "auth",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "ACCOUNT_CONTEXT_READ", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": [], "ui_contract_dependencies": ["account.context_menu"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_license_capabilities", "version": "0.1.0", "domain": "capability",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "ACCOUNT_CONTEXT_READ", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": ["plans.read", "tasks.read", "buckets.read", "dependencies.read", "scheduling.read", "goals.read", "sprints.read", "resources.read", "custom_fields.read", "portfolios.read", "project_snapshot.read"],
+      "ui_contract_dependencies": ["GLOBAL_UI_CONTRACT_ATTESTATION"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    },
+    {
+      "name": "planner_smoke_test", "version": "0.1.0", "domain": "system",
+      "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
+      "mutation_class": "READ", "risk_class": "READ_ONLY", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
+      "capability_keys": [], "ui_contract_dependencies": ["GLOBAL_UI_CONTRACT_ATTESTATION"], "read_back_strategy": "NONE_READ_ONLY",
+      "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
+    }
+  ]
+}

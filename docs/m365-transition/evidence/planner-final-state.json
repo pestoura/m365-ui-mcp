@@ -1,0 +1,97 @@
+{
+  "assessment": {
+    "program": "m365-ui-mcp transition",
+    "phase": "PHASE 0",
+    "captured_at": "2026-08-08T05:50:00+01:00",
+    "status": "ASSESSED",
+    "classification_vocabulary": [
+      "IMPLEMENTED_LIVE",
+      "IMPLEMENTED_MOCK_ONLY",
+      "IMPLEMENTED_NOT_ATTESTED",
+      "SPECIFIED_ONLY",
+      "PLANNED",
+      "DEPRECATED",
+      "BLOCKED"
+    ]
+  },
+  "repository": {
+    "full_name": "pestoura/planner-mcp",
+    "visibility": "public",
+    "default_branch": "main",
+    "final_main_sha": "232c72632ab5c93d0bee70ac588af08422cbc42d",
+    "product_version": "0.1.0",
+    "contract_version": "0.1.0",
+    "schema_version": "0.1.0",
+    "ui_contract_version": "0.1.0",
+    "tool_catalog_version": "0.1.0",
+    "baseline_tag": "planner-pre-m365-0.1.0",
+    "baseline_tag_sha": "232c72632ab5c93d0bee70ac588af08422cbc42d",
+    "releases": [],
+    "branch_protection_observed": false
+  },
+  "planner_delivery_reconciliation": {
+    "in_flight_found": "feat/p004-contract-versioning",
+    "resolution": "PR #214 created, all PR gates GREEN, merged normally; post-merge main gates GREEN",
+    "merged_pr": 214,
+    "stale_open_pr": 1,
+    "transition_pr": 213,
+    "new_planner_ids_after_P074": [],
+    "historical_ids_preserved": "P-001..P-074",
+    "duplicate_issue_records": "observed; preserve history, do not renumber/delete during transition"
+  },
+  "branches": [
+    {"name": "main", "relationship": "CANONICAL_FINAL"},
+    {"name": "docs/m365-ui-mcp-transition-blueprint", "relationship": "ACTIVE_TRANSITION"},
+    {"name": "feat/p004-contract-versioning", "relationship": "MERGED_SUPERSEDED"},
+    {"name": "feat/p003-typed-config", "relationship": "MERGED_SUPERSEDED"},
+    {"name": "feat/p002-python-layout", "relationship": "MERGED_SUPERSEDED"},
+    {"name": "feat/a1-specification-adrs", "relationship": "SUPERSEDED"},
+    {"name": "feat/foundation-0.1.0-reconciled", "relationship": "SUPERSEDED"},
+    {"name": "feat/foundation-0.1.0", "relationship": "STALE_DIVERGED"},
+    {"name": "feat/specification-foundation", "relationship": "STALE_DIVERGED"}
+  ],
+  "open_pull_requests": [
+    {"number": 213, "state": "open", "draft": true, "role": "transition blueprint; being reconciled"},
+    {"number": 1, "state": "open", "draft": false, "role": "stale Foundation PR; superseded by canonical main"}
+  ],
+  "workflows": [
+    {"name": "CI", "path": ".github/workflows/ci.yml"},
+    {"name": "Canonical documentation", "path": ".github/workflows/docs.yml"}
+  ],
+  "post_merge_ci": {
+    "main_sha": "232c72632ab5c93d0bee70ac588af08422cbc42d",
+    "ci_run": 31240137868,
+    "ci_conclusion": "success",
+    "documentation_run": 31240137869,
+    "documentation_conclusion": "success"
+  },
+  "package": {
+    "name": "planner-mcp",
+    "python_packages": ["planner_mcp", "planner_browser_worker"],
+    "entry_points": {
+      "planner-mcp": "planner_mcp.__main__:main",
+      "planner-browser-worker": "planner_browser_worker.__main__:main",
+      "planner-mcp-healthcheck": "planner_mcp.healthcheck:main"
+    }
+  },
+  "contracts": [
+    "contracts/agent_card.json",
+    "contracts/tool_manifest.json",
+    "contracts/extended_tool_manifest.json",
+    "contracts/capability_manifest.json",
+    "contracts/ui_contract.json",
+    "contracts/version.json"
+  ],
+  "topology": {
+    "control_plane_ingress": "loopback published / Cloudflare portal architecture",
+    "worker_ingress": "private Docker internal network; no published worker port",
+    "worker_m365_egress": "BLOCKED_BY_CURRENT_INTERNAL_NETWORK_TOPOLOGY",
+    "transition_disposition": "CORE-025 mandatory; do not carry topology forward unchanged"
+  },
+  "live_attestation": {
+    "planner_ui_contract": "UNVERIFIED_LIVE",
+    "selector_count": 10,
+    "live_planner_capabilities": [],
+    "live_mutations": false
+  }
+}
