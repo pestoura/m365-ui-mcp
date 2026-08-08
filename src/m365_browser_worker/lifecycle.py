@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from fastapi import FastAPI
 
 from m365_browser_worker.browser import PersistentBrowser
 
-BrowserLifespan = Callable[[FastAPI], AsyncIterator[None]]
+BrowserLifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
 
 
 def browser_lifespan(browser: PersistentBrowser) -> BrowserLifespan:
