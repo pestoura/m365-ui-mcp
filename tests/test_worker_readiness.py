@@ -29,29 +29,38 @@ class ReadyBrowser(PersistentBrowser):
         return None
 
 
-def test_readiness_requires_all_four_live_signals() -> None:
+def test_readiness_requires_all_live_subsystems() -> None:
     readiness = evaluate_worker_readiness(
         browser_started=False,
+        profile_usable=False,
         auth_state=AuthState.UNKNOWN,
         ui_contract_attested=False,
         broker_viable=False,
+        protocol_compatible=False,
+        lock_viable=False,
     )
 
     assert readiness.ready is False
     assert readiness.reasons == (
         ReadinessReason.BROWSER_NOT_STARTED,
+        ReadinessReason.PROFILE_UNAVAILABLE,
         ReadinessReason.AUTH_NOT_AUTHENTICATED,
         ReadinessReason.UI_CONTRACT_UNATTESTED,
         ReadinessReason.BROKER_UNAVAILABLE,
+        ReadinessReason.PROTOCOL_INCOMPATIBLE,
+        ReadinessReason.LOCK_UNAVAILABLE,
     )
 
 
 def test_readiness_is_true_only_when_all_signals_are_positive() -> None:
     readiness = evaluate_worker_readiness(
         browser_started=True,
+        profile_usable=True,
         auth_state=AuthState.AUTHENTICATED,
         ui_contract_attested=True,
         broker_viable=True,
+        protocol_compatible=True,
+        lock_viable=True,
     )
 
     assert readiness.ready is True
@@ -70,8 +79,12 @@ def test_liveness_does_not_overclaim_default_mock_readiness() -> None:
     assert "ready" not in live.json()
     assert ready.status_code == 503
     assert ready.json()["ready"] is False
-    assert ReadinessReason.BROWSER_NOT_STARTED.value in ready.json()["reasons"]
-    assert ReadinessReason.BROKER_UNAVAILABLE.value in ready.json()["reasons"]
+    reasons = set(ready.json()["reasons"])
+    assert ReadinessReason.BROWSER_NOT_STARTED.value in reasons
+    assert ReadinessReason.PROFILE_UNAVAILABLE.value in reasons
+    assert ReadinessReason.BROKER_UNAVAILABLE.value in reasons
+    assert ReadinessReason.PROTOCOL_INCOMPATIBLE.value in reasons
+    assert ReadinessReason.LOCK_UNAVAILABLE.value in reasons
 
 
 def test_readyz_returns_200_only_with_proven_signals(
@@ -84,8 +97,11 @@ def test_readyz_returns_200_only_with_proven_signals(
     )
     app = create_app(
         ReadyBrowser(),
+        profile_viability_provider=lambda: True,
         auth_state_provider=lambda: AuthState.AUTHENTICATED,
         broker_viability_provider=lambda: True,
+        protocol_compatibility_provider=lambda: True,
+        lock_viability_provider=lambda: True,
     )
 
     with TestClient(app) as client:
@@ -97,9 +113,12 @@ def test_readyz_returns_200_only_with_proven_signals(
         "ready": True,
         "target": "live_m365",
         "browser_started": True,
+        "profile_usable": True,
         "auth_state": AuthState.AUTHENTICATED.value,
         "ui_contract_attested": True,
         "broker_viable": True,
+        "protocol_compatible": True,
+        "lock_viable": True,
         "reasons": [],
     }
 
@@ -107,10 +126,13 @@ def test_readyz_returns_200_only_with_proven_signals(
 def test_single_negative_signal_keeps_readiness_failed() -> None:
     readiness = evaluate_worker_readiness(
         browser_started=True,
+        profile_usable=True,
         auth_state=AuthState.AUTHENTICATED,
         ui_contract_attested=True,
-        broker_viable=False,
+        broker_viable=True,
+        protocol_compatible=True,
+        lock_viable=False,
     )
 
     assert readiness.ready is False
-    assert readiness.reasons == (ReadinessReason.BROKER_UNAVAILABLE,)
+    assert readiness.reasons == (ReadinessReason.LOCK_UNAVAILABLE,)
