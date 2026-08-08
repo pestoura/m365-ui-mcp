@@ -1,12 +1,8 @@
-"""Effective capability projection from registry definitions plus runtime evidence.
-
-A registry declaration never implies support by itself. CORE-012 requires all
-relevant evidence dimensions to be evaluated before a capability may be
-promoted to READ_SUPPORTED.
-"""
+"""Effective capability projection from scoped definitions plus runtime evidence."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -36,6 +32,7 @@ class EffectiveCapabilityEvidence:
     policy_allowed: bool
     license_available: bool
     live_evidence: bool
+    ui_drifted: bool = False
 
 
 @dataclass(frozen=True)
@@ -72,6 +69,7 @@ class EffectiveCapability:
                 "policy_allowed": self.evidence.policy_allowed,
                 "license_available": self.evidence.license_available,
                 "live_evidence": self.evidence.live_evidence,
+                "ui_drifted": self.evidence.ui_drifted,
             },
         }
 
@@ -100,13 +98,28 @@ def _evaluate(
         missing.append("AUTH_NOT_ATTESTED")
     if not evidence.account_context_valid:
         missing.append("ACCOUNT_CONTEXT_UNVERIFIED")
-    if not evidence.ui_attested:
-        missing.append("UI_NOT_ATTESTED")
     if not evidence.license_available:
         missing.append("LICENSE_UNVERIFIED")
     if not evidence.live_evidence:
         missing.append("LIVE_EVIDENCE_ABSENT")
 
+    if evidence.ui_drifted:
+        if missing:
+            return EffectiveCapability(
+                definition,
+                EffectiveCapabilityState.UNVERIFIED_LIVE,
+                tuple((*missing, "UI_FRAGMENT_DRIFT")),
+                evidence,
+            )
+        return EffectiveCapability(
+            definition,
+            EffectiveCapabilityState.DEGRADED,
+            ("UI_FRAGMENT_DRIFT",),
+            evidence,
+        )
+
+    if not evidence.ui_attested:
+        missing.append("UI_NOT_ATTESTED")
     if missing:
         return EffectiveCapability(
             definition,
@@ -129,6 +142,24 @@ def project_effective_capabilities(
     application: str,
     evidence: EffectiveCapabilityEvidence,
 ) -> tuple[EffectiveCapability, ...]:
-    """Compute deterministic effective state for every scoped app capability."""
+    """Compute one shared evidence state for every scoped app capability."""
     definitions = registry.by_application(application)
     return tuple(_evaluate(definition, evidence) for definition in definitions)
+
+
+def project_effective_capabilities_by_capability(
+    registry: CapabilityRegistry,
+    *,
+    application: str,
+    evidence_by_capability: Mapping[str, EffectiveCapabilityEvidence],
+) -> tuple[EffectiveCapability, ...]:
+    """Compute capability-specific states and reject incomplete evidence maps."""
+    definitions = registry.by_application(application)
+    expected = {definition.capability for definition in definitions}
+    supplied = set(evidence_by_capability)
+    if expected != supplied:
+        raise ValueError("capability-specific evidence must cover the exact registry surface")
+    return tuple(
+        _evaluate(definition, evidence_by_capability[definition.capability])
+        for definition in definitions
+    )

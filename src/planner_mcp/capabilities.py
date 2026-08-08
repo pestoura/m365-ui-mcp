@@ -1,4 +1,4 @@
-"""Planner capability evidence projected from scoped registry and effective evidence."""
+"""Planner capability evidence projected from scoped registry and UI fragments."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from typing import Any
 from m365_mcp.capability_registry import default_capability_registry
 from m365_mcp.effective_capabilities import (
     EffectiveCapabilityEvidence,
-    project_effective_capabilities,
+    project_effective_capabilities_by_capability,
 )
+from m365_mcp.ui_contract_store import load_ui_contract_set
 
 from .auth import AuthState
 from .contracts import load_contract
-from .ui_contract import load_status
 
 
 @dataclass(frozen=True)
@@ -74,34 +74,47 @@ def build_capabilities(
     policy_allowed: bool = True,
     live_evidence: bool = False,
 ) -> dict[str, Any]:
-    """Build capability compatibility output plus effective scoped projection."""
-    ui = load_status()
+    """Build compatibility output plus dependency-aware effective projection."""
     auth_evidence = auth_evidence or {}
     account_context = account_context or {}
     license_evidence = license_evidence or {}
-
-    evidence = EffectiveCapabilityEvidence(
-        authenticated=(
-            str(auth_evidence.get("state", AuthState.UNKNOWN.value))
-            == AuthState.AUTHENTICATED.value
-        ),
-        account_context_valid=_account_context_valid(account_context),
-        ui_attested=ui.attested,
-        runtime_healthy=runtime_ok,
-        policy_allowed=policy_allowed,
-        license_available=bool(license_evidence.get("premium_detected")),
-        live_evidence=_explicit_live_evidence_present(
-            requested=live_evidence,
-            auth_evidence=auth_evidence,
-            account_context=account_context,
-            license_evidence=license_evidence,
-        ),
-    )
     registry = default_capability_registry()
-    effective = project_effective_capabilities(
+    contract_set = load_ui_contract_set()
+
+    authenticated = (
+        str(auth_evidence.get("state", AuthState.UNKNOWN.value))
+        == AuthState.AUTHENTICATED.value
+    )
+    account_valid = _account_context_valid(account_context)
+    license_available = bool(license_evidence.get("premium_detected"))
+    explicit_live = _explicit_live_evidence_present(
+        requested=live_evidence,
+        auth_evidence=auth_evidence,
+        account_context=account_context,
+        license_evidence=license_evidence,
+    )
+
+    ui_attestation = {
+        name: contract_set.attestation_for_capability("planner", name)
+        for name in registry.capability_names("planner")
+    }
+    evidence_by_capability = {
+        name: EffectiveCapabilityEvidence(
+            authenticated=authenticated,
+            account_context_valid=account_valid,
+            ui_attested=attestation.attested,
+            runtime_healthy=runtime_ok,
+            policy_allowed=policy_allowed,
+            license_available=license_available,
+            live_evidence=explicit_live,
+            ui_drifted=attestation.drifted,
+        )
+        for name, attestation in ui_attestation.items()
+    }
+    effective = project_effective_capabilities_by_capability(
         registry,
         application="planner",
-        evidence=evidence,
+        evidence_by_capability=evidence_by_capability,
     )
     effective_by_name = {item.definition.capability: item for item in effective}
 
@@ -109,10 +122,18 @@ def build_capabilities(
         CapabilityEvidence(
             capability=name,
             tenant_license_availability=(
-                "OBSERVED" if evidence.license_available else "UNVERIFIED_LIVE"
+                "OBSERVED" if license_available else "UNVERIFIED_LIVE"
             ),
-            ui_observed="OBSERVED" if ui.attested else "UNVERIFIED_LIVE",
-            ui_contract_status=ui.attestation_status,
+            ui_observed=(
+                "OBSERVED" if ui_attestation[name].attested else "UNVERIFIED_LIVE"
+            ),
+            ui_contract_status=(
+                "DRIFTED"
+                if ui_attestation[name].drifted
+                else "ATTESTED"
+                if ui_attestation[name].attested
+                else "UNVERIFIED_LIVE"
+            ),
             read_attestation=(
                 "YES"
                 if effective_by_name[name].state.value == "READ_SUPPORTED"
@@ -133,4 +154,8 @@ def build_capabilities(
         "support_levels": list(SUPPORT_LEVELS),
         "capabilities": [asdict(row) for row in rows],
         "effective_projection": [item.to_dict() for item in effective],
+        "ui_fragment_attestation": [
+            ui_attestation[name].to_dict()
+            for name in registry.capability_names("planner")
+        ],
     }

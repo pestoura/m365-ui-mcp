@@ -1,4 +1,4 @@
-"""Validated fragmented UIContract storage for Microsoft 365 UI surfaces."""
+"""Validated fragmented UIContract storage and dependency-aware attestation."""
 
 from __future__ import annotations
 
@@ -7,9 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from m365_mcp.capability_registry import default_capability_registry
 from m365_mcp.contracts import contracts_dir
 
 _ALLOWED_SCOPES = frozenset({"common", "application", "surface"})
+_ALLOWED_ATTESTATION = frozenset({"ATTESTED", "UNVERIFIED_LIVE", "DRIFTED"})
 
 
 @dataclass(frozen=True)
@@ -21,9 +23,52 @@ class UIContractFragment:
     scope: str
     application: str | None
     surface: str | None
+    capability_keys: tuple[str, ...]
     attested: bool
     attestation_status: str
     selectors: dict[str, Any]
+
+    @property
+    def drifted(self) -> bool:
+        """Return whether fragment or selector evidence reports UI drift."""
+        return self.attestation_status == "DRIFTED" or any(
+            metadata.get("status") == "DRIFTED" for metadata in self.selectors.values()
+        )
+
+    @property
+    def effectively_attested(self) -> bool:
+        """Require fragment and every selector to be explicitly attested."""
+        return (
+            not self.drifted
+            and self.attested
+            and self.attestation_status == "ATTESTED"
+            and all(
+                metadata.get("status") == "ATTESTED"
+                for metadata in self.selectors.values()
+            )
+        )
+
+
+@dataclass(frozen=True)
+class CapabilityUIAttestation:
+    """Dependency-aware UI attestation for one semantic capability."""
+
+    application: str
+    capability: str
+    dependency_fragments: tuple[str, ...]
+    attested: bool
+    drifted: bool
+    reasons: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "application": self.application,
+            "capability": self.capability,
+            "dependency_fragments": list(self.dependency_fragments),
+            "attested": self.attested,
+            "drifted": self.drifted,
+            "reasons": list(self.reasons),
+        }
 
 
 @dataclass(frozen=True)
@@ -43,6 +88,71 @@ class UIContractSet:
                     raise ValueError(f"duplicate UIContract selector: {name}")
                 merged[name] = metadata
         return merged
+
+    def fragments_for_capability(
+        self, application: str, capability: str
+    ) -> tuple[UIContractFragment, ...]:
+        """Return only fragments explicitly declared as capability dependencies."""
+        return tuple(
+            fragment
+            for fragment in self.fragments
+            if fragment.application == application
+            and capability in fragment.capability_keys
+        )
+
+    def attestation_for_capability(
+        self, application: str, capability: str
+    ) -> CapabilityUIAttestation:
+        """Compute attestation without allowing unrelated fragments to degrade support."""
+        dependencies = self.fragments_for_capability(application, capability)
+        dependency_ids = tuple(fragment.fragment_id for fragment in dependencies)
+        if not dependencies:
+            return CapabilityUIAttestation(
+                application=application,
+                capability=capability,
+                dependency_fragments=(),
+                attested=False,
+                drifted=False,
+                reasons=("UI_DEPENDENCY_UNDECLARED",),
+            )
+
+        drifted = tuple(fragment for fragment in dependencies if fragment.drifted)
+        if drifted:
+            return CapabilityUIAttestation(
+                application=application,
+                capability=capability,
+                dependency_fragments=dependency_ids,
+                attested=False,
+                drifted=True,
+                reasons=tuple(
+                    f"UI_FRAGMENT_DRIFT:{fragment.fragment_id}" for fragment in drifted
+                ),
+            )
+
+        unattested = tuple(
+            fragment for fragment in dependencies if not fragment.effectively_attested
+        )
+        if unattested:
+            return CapabilityUIAttestation(
+                application=application,
+                capability=capability,
+                dependency_fragments=dependency_ids,
+                attested=False,
+                drifted=False,
+                reasons=tuple(
+                    f"UI_FRAGMENT_UNATTESTED:{fragment.fragment_id}"
+                    for fragment in unattested
+                ),
+            )
+
+        return CapabilityUIAttestation(
+            application=application,
+            capability=capability,
+            dependency_fragments=dependency_ids,
+            attested=True,
+            drifted=False,
+            reasons=("UI_DEPENDENCIES_ATTESTED",),
+        )
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -69,6 +179,8 @@ def _load_fragment(root: Path, expected_id: str, relative: str) -> UIContractFra
     scope = str(document.get("scope", "")).strip()
     application = document.get("application")
     surface = document.get("surface")
+    capability_keys = document.get("capability_keys", [])
+    attestation_status = str(document.get("attestation_status", "UNVERIFIED_LIVE"))
     selectors = document.get("selectors")
 
     if not fragment_id or fragment_id != expected_id:
@@ -87,11 +199,37 @@ def _load_fragment(root: Path, expected_id: str, relative: str) -> UIContractFra
         raise ValueError("application UIContract fragment requires app and no surface")
     if scope == "surface" and (not application or not surface):
         raise ValueError("surface UIContract fragment requires app and surface")
+    if not isinstance(capability_keys, list) or any(
+        not isinstance(key, str)
+        or not key
+        or key != key.strip()
+        or any(char.isspace() for char in key)
+        or "." not in key
+        for key in capability_keys
+    ):
+        raise ValueError(f"UIContract fragment {fragment_id} has invalid capability keys")
+    if len(capability_keys) != len(set(capability_keys)):
+        raise ValueError(f"UIContract fragment {fragment_id} has duplicate capability keys")
+    if scope == "common" and capability_keys:
+        raise ValueError("common UIContract fragments cannot own app capability dependencies")
+    if application:
+        registry = default_capability_registry()
+        unknown = [
+            key for key in capability_keys if not registry.has_capability(application, key)
+        ]
+        if unknown:
+            raise ValueError(
+                f"UIContract fragment {fragment_id} references unknown capability"
+            )
+    if attestation_status not in _ALLOWED_ATTESTATION:
+        raise ValueError(f"UIContract fragment {fragment_id} has invalid attestation status")
     if not isinstance(selectors, dict) or not selectors:
         raise ValueError(f"UIContract fragment {fragment_id} must contain selectors")
     for name, metadata in selectors.items():
         if not isinstance(name, str) or not name.strip() or not isinstance(metadata, dict):
             raise ValueError(f"UIContract fragment {fragment_id} contains invalid selector")
+        if metadata.get("status") not in _ALLOWED_ATTESTATION:
+            raise ValueError(f"UIContract fragment {fragment_id} has invalid selector status")
 
     return UIContractFragment(
         fragment_id=fragment_id,
@@ -99,8 +237,9 @@ def _load_fragment(root: Path, expected_id: str, relative: str) -> UIContractFra
         scope=scope,
         application=application,
         surface=surface,
+        capability_keys=tuple(capability_keys),
         attested=bool(document.get("attested", False)),
-        attestation_status=str(document.get("attestation_status", "UNVERIFIED_LIVE")),
+        attestation_status=attestation_status,
         selectors=selectors,
     )
 
@@ -148,4 +287,9 @@ def load_ui_contract_set(root: Path | None = None) -> UIContractSet:
     )
 
 
-__all__ = ["UIContractFragment", "UIContractSet", "load_ui_contract_set"]
+__all__ = [
+    "CapabilityUIAttestation",
+    "UIContractFragment",
+    "UIContractSet",
+    "load_ui_contract_set",
+]
