@@ -64,10 +64,15 @@ async def test_agent_card_metadata(tools: PlannerTools) -> None:
     assert len(extended) == 17
     for entry in extended:
         assert set(entry) >= {
-            "trust_level", "mutation_class", "reversible", "idempotency_class",
-            "approval_requirement", "attestation_status",
+            "trust_level",
+            "mutation_class",
+            "reversible",
+            "idempotency_class",
+            "approval_requirement",
+            "attestation_status",
         }
-        assert entry["mutation_class"] == "none"
+        assert entry["mutation_class"] == "READ"
+        assert entry["attestation_status"] == "UNVERIFIED_LIVE"
 
 
 async def test_reads(tools: PlannerTools) -> None:
@@ -85,6 +90,7 @@ async def test_reads(tools: PlannerTools) -> None:
 async def test_capabilities_and_license(tools: PlannerTools) -> None:
     caps = (await tools.planner_capabilities())["data"]
     assert caps["graph_api_used"] is False
+    assert all(row["support_level"] == "UNVERIFIED_LIVE" for row in caps["capabilities"])
     lic = (await tools.planner_license_capabilities())["data"]
     assert lic["premium_detected"] is True
     assert lic["graph_api_used"] is False
