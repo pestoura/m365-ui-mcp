@@ -12,7 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-PROTOCOL_SCHEMA_VERSION = "1"
+PROTOCOL_SCHEMA_VERSION: Literal["1"] = "1"
 
 
 class WorkerOperation(StrEnum):
