@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib
 
-
 ARCHITECTURAL_PACKAGES = (
     "planner_mcp.control_plane",
     "planner_mcp.worker",
