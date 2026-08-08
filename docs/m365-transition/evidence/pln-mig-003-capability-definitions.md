@@ -40,4 +40,4 @@ Every definition remains bound to `application=planner`, `surface=planner_web` a
 
 ## Current integration gate
 
-PLN-MIG-001, PLN-MIG-002 and CORE-035 are merged and post-merge GREEN on current `main`. This revision deliberately re-triggers every mandatory PR gate against that integrated base; previous stacked or pre-CORE-035 GREEN evidence is not reused for merge.
+PLN-MIG-001, PLN-MIG-002, CORE-035 and CORE-036 are merged and post-merge GREEN on current `main` at `e9e0dcc6d0a0a1097c82da8b93e3b8d7637016fb`. The import-only lint correction is included in this branch. This revision deliberately re-triggers every mandatory PR gate against that current integration base; previous GREEN evidence is not reused for merge.
