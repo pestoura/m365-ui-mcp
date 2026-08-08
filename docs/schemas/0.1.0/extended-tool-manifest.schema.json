@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pestoura/planner-mcp/blob/main/docs/schemas/0.1.0/extended-tool-manifest.schema.json",
+  "title": "planner-mcp ExtendedToolManifest 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "tools"],
+  "properties": {
+    "contract_version": {"const": "0.1.0"},
+    "tools": {
+      "type": "array",
+      "minItems": 17,
+      "maxItems": 17,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "category",
+          "trust_level",
+          "mutation_class",
+          "reversible",
+          "idempotency_class",
+          "approval_requirement",
+          "attestation_status"
+        ],
+        "properties": {
+          "name": {"type": "string", "pattern": "^planner_[a-z0-9_]+$"},
+          "category": {"type": "string", "minLength": 1},
+          "trust_level": {"enum": ["untrusted_ui_derived", "system_derived"]},
+          "mutation_class": {"const": "READ"},
+          "reversible": {"enum": ["yes", "with_compensation", "no"]},
+          "idempotency_class": {
+            "enum": ["naturally_idempotent", "key_required", "non_idempotent"]
+          },
+          "approval_requirement": {"enum": ["none", "configurable", "always"]},
+          "attestation_status": {
+            "enum": [
+              "UNVERIFIED_LIVE",
+              "DISCOVERED",
+              "UI_ATTESTED",
+              "READ_ATTESTED",
+              "MUTATION_ATTESTED",
+              "SUPPORTED",
+              "UI_DRIFT"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pestoura/planner-mcp/blob/main/docs/schemas/0.1.0/capability-manifest.schema.json",
+  "title": "planner-mcp CapabilityManifest 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "evidence_dimensions", "support_levels", "note"],
+  "properties": {
+    "contract_version": {"const": "0.1.0"},
+    "evidence_dimensions": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "support_levels": {
+      "type": "array",
+      "const": [
+        "UNVERIFIED_LIVE",
+        "DISCOVERED",
+        "READ_SUPPORTED",
+        "MUTATION_SUPPORTED",
+        "DEGRADED",
+        "BLOCKED",
+        "OUT_OF_SCOPE"
+      ]
+    },
+    "note": {"type": "string", "minLength": 1}
+  }
+}

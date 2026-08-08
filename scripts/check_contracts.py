@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed structural contract gate for Foundation P-001.
-
-This gate validates the currently published 0.1.0 JSON contracts against the
-canonical A1 invariants. Formal per-tool JSON Schemas remain P-004/P-005 work.
-"""
+"""Fail-closed contract and JSON Schema gate for P-001/P-004."""
 
 from __future__ import annotations
 
@@ -12,18 +8,31 @@ import sys
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-CONTRACTS = ROOT / "contracts"
-VERSION = "0.1.0"
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError, ValidationError
 
-EXPECTED_FILES = (
-    "agent_card.json",
-    "capability_manifest.json",
-    "extended_tool_manifest.json",
-    "tool_manifest.json",
-    "ui_contract.json",
-    "version.json",
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from planner_mcp.version import (  # noqa: E402
+    CONTRACT_VERSION,
+    PRODUCT_VERSION,
+    SCHEMA_VERSION,
+    TOOL_CATALOG_VERSION,
+    UI_CONTRACT_VERSION,
 )
+
+CONTRACTS = ROOT / "contracts"
+SCHEMAS = ROOT / "docs" / "schemas" / SCHEMA_VERSION
+
+CONTRACT_SCHEMA_MAP = {
+    "agent_card.json": "agent-card.schema.json",
+    "capability_manifest.json": "capability-manifest.schema.json",
+    "extended_tool_manifest.json": "extended-tool-manifest.schema.json",
+    "tool_manifest.json": "tool-manifest.schema.json",
+    "ui_contract.json": "ui-contract.schema.json",
+    "version.json": "version.schema.json",
+}
 EXPECTED_TOOLS = (
     "planner_health",
     "planner_readiness",
@@ -70,18 +79,18 @@ ATTESTATION_STATES = {
 errors: list[str] = []
 
 
-def load(name: str) -> dict[str, Any]:
-    path = CONTRACTS / name
+def load_json(path: Path, display: str) -> dict[str, Any]:
+    """Load a JSON object, recording a stable gate error on failure."""
     if not path.is_file():
-        errors.append(f"MISSING CONTRACT: contracts/{name}")
+        errors.append(f"MISSING JSON: {display}")
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        errors.append(f"INVALID JSON: contracts/{name}: {exc}")
+        errors.append(f"INVALID JSON: {display}: {type(exc).__name__}")
         return {}
     if not isinstance(data, dict):
-        errors.append(f"INVALID ROOT: contracts/{name} must be a JSON object")
+        errors.append(f"INVALID ROOT: {display} must be a JSON object")
         return {}
     return data
 
@@ -89,6 +98,32 @@ def load(name: str) -> dict[str, Any]:
 def check_equal(label: str, actual: Any, expected: Any) -> None:
     if actual != expected:
         errors.append(f"{label}: expected {expected!r}, found {actual!r}")
+
+
+def validate_schema(contract_name: str, schema_name: str) -> None:
+    """Validate one contract against a versioned Draft 2020-12 schema."""
+    contract = load_json(CONTRACTS / contract_name, f"contracts/{contract_name}")
+    schema = load_json(SCHEMAS / schema_name, f"docs/schemas/{SCHEMA_VERSION}/{schema_name}")
+    if not contract or not schema:
+        return
+
+    check_equal(
+        f"{schema_name} $schema",
+        schema.get("$schema"),
+        Draft202012Validator.META_SCHEMA["$id"],
+    )
+    schema_id = schema.get("$id")
+    if not isinstance(schema_id, str) or f"/{SCHEMA_VERSION}/" not in schema_id:
+        errors.append(f"{schema_name}: $id must contain /{SCHEMA_VERSION}/")
+
+    try:
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema).validate(contract)
+    except SchemaError as exc:
+        errors.append(f"INVALID SCHEMA: {schema_name}: {exc.validator!r}")
+    except ValidationError as exc:
+        path = ".".join(str(part) for part in exc.absolute_path) or "<root>"
+        errors.append(f"SCHEMA MISMATCH: {contract_name} at {path}: {exc.validator!r}")
 
 
 def check_tool_sets(base: dict[str, Any], extended: dict[str, Any]) -> None:
@@ -158,28 +193,36 @@ def check_tool_sets(base: dict[str, Any], extended: dict[str, Any]) -> None:
     by_name = {entry.get("name"): entry for entry in ext_tools if isinstance(entry, dict)}
     if by_name.get("planner_auth_start", {}).get("idempotency_class") != "key_required":
         errors.append("planner_auth_start must be key_required (TOOL-021/AUTH-055)")
-    if by_name.get("planner_auth_resume", {}).get("idempotency_class") != "naturally_idempotent":
+    resume = by_name.get("planner_auth_resume", {}).get("idempotency_class")
+    if resume != "naturally_idempotent":
         errors.append("planner_auth_resume must be naturally_idempotent (TOOL-021)")
 
 
 def main() -> int:
-    docs = {name: load(name) for name in EXPECTED_FILES}
+    docs = {
+        name: load_json(CONTRACTS / name, f"contracts/{name}")
+        for name in CONTRACT_SCHEMA_MAP
+    }
+
+    for contract_name, schema_name in CONTRACT_SCHEMA_MAP.items():
+        validate_schema(contract_name, schema_name)
 
     version = docs["version.json"]
-    for key in (
-        "product_version",
-        "schema_version",
-        "contract_version",
-        "ui_contract_version",
-        "tool_catalog_version",
-    ):
-        check_equal(f"version.json {key}", version.get(key), VERSION)
+    version_expectations = {
+        "product_version": PRODUCT_VERSION,
+        "schema_version": SCHEMA_VERSION,
+        "contract_version": CONTRACT_VERSION,
+        "ui_contract_version": UI_CONTRACT_VERSION,
+        "tool_catalog_version": TOOL_CATALOG_VERSION,
+    }
+    for key, expected in version_expectations.items():
+        check_equal(f"version.json {key}", version.get(key), expected)
     check_equal("version.json read_tools", version.get("read_tools"), 17)
     check_equal("version.json mutation_tools", version.get("mutation_tools"), 0)
 
     agent = docs["agent_card.json"]
-    check_equal("AgentCard version", agent.get("version"), VERSION)
-    check_equal("AgentCard contract_version", agent.get("contract_version"), VERSION)
+    check_equal("AgentCard version", agent.get("version"), PRODUCT_VERSION)
+    check_equal("AgentCard contract_version", agent.get("contract_version"), CONTRACT_VERSION)
     check_equal("AgentCard graph_api_backend", agent.get("graph_api_backend"), False)
     check_equal("AgentCard mutations_supported", agent.get("mutations_supported"), False)
     safety = agent.get("safety")
@@ -187,7 +230,11 @@ def main() -> int:
         errors.append("AgentCard safety.fail_closed must be true")
 
     capability = docs["capability_manifest.json"]
-    check_equal("CapabilityManifest contract_version", capability.get("contract_version"), VERSION)
+    check_equal(
+        "CapabilityManifest contract_version",
+        capability.get("contract_version"),
+        CONTRACT_VERSION,
+    )
     check_equal(
         "CapabilityManifest CAP-030 states",
         capability.get("support_levels"),
@@ -196,12 +243,21 @@ def main() -> int:
 
     base = docs["tool_manifest.json"]
     extended = docs["extended_tool_manifest.json"]
-    check_equal("ToolManifest contract_version", base.get("contract_version"), VERSION)
-    check_equal("ExtendedToolManifest contract_version", extended.get("contract_version"), VERSION)
+    check_equal("ToolManifest contract_version", base.get("contract_version"), CONTRACT_VERSION)
+    check_equal(
+        "ToolManifest tool_catalog_version",
+        base.get("tool_catalog_version"),
+        TOOL_CATALOG_VERSION,
+    )
+    check_equal(
+        "ExtendedToolManifest contract_version",
+        extended.get("contract_version"),
+        CONTRACT_VERSION,
+    )
     check_tool_sets(base, extended)
 
     ui = docs["ui_contract.json"]
-    check_equal("UIContract version", ui.get("ui_contract_version"), VERSION)
+    check_equal("UIContract version", ui.get("ui_contract_version"), UI_CONTRACT_VERSION)
     if ui.get("attested") is not False:
         errors.append("Foundation UIContract must remain unattested until live evidence exists")
     check_equal("UIContract attestation_status", ui.get("attestation_status"), "UNVERIFIED_LIVE")
@@ -218,7 +274,8 @@ def main() -> int:
             if selector.get("status") != "UNVERIFIED_LIVE":
                 errors.append(f"UIContract selector {key!r} must be UNVERIFIED_LIVE")
 
-    print(f"contracts checked : {len(EXPECTED_FILES)}")
+    print(f"contracts checked : {len(CONTRACT_SCHEMA_MAP)}")
+    print(f"schemas checked   : {len(CONTRACT_SCHEMA_MAP)} @ {SCHEMA_VERSION}")
     print(f"tools checked     : {len(EXPECTED_TOOLS)}")
     print(f"errors            : {len(errors)}")
     for error in errors:

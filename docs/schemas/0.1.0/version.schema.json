@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pestoura/planner-mcp/blob/main/docs/schemas/0.1.0/version.schema.json",
+  "title": "planner-mcp Version Contract 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "product_version",
+    "schema_version",
+    "contract_version",
+    "ui_contract_version",
+    "tool_catalog_version",
+    "read_tools",
+    "mutation_tools"
+  ],
+  "properties": {
+    "product_version": {"const": "0.1.0"},
+    "schema_version": {"const": "0.1.0"},
+    "contract_version": {"const": "0.1.0"},
+    "ui_contract_version": {"const": "0.1.0"},
+    "tool_catalog_version": {"const": "0.1.0"},
+    "read_tools": {"const": 17},
+    "mutation_tools": {"const": 0}
+  }
+}

@@ -11,6 +11,7 @@ import pytest
 from planner_browser_worker.app import create_app
 from planner_mcp.config import Settings
 from planner_mcp.tools import TOOL_NAMES, PlannerTools
+from planner_mcp.version import CONTRACT_VERSION
 from planner_mcp.worker_client import WorkerClient
 
 
@@ -48,6 +49,37 @@ async def test_health_and_versions(tools: PlannerTools) -> None:
     assert out["schema_version"] == "0.1.0"
     assert out["contract_version"] == "0.1.0"
     assert out["graph_api_used"] is False
+
+
+async def test_every_tool_response_contains_contract_version(tools: PlannerTools) -> None:
+    plans = (await tools.planner_plan_list())["data"]["plans"]
+    plan_id = str(plans[0]["id"])
+    tasks = (await tools.planner_task_list(plan_id))["data"]["tasks"]
+    task_id = str(tasks[0]["id"])
+
+    responses = [
+        await tools.planner_health(),
+        await tools.planner_readiness(),
+        await tools.planner_capabilities(),
+        await tools.planner_agent_card(),
+        await tools.planner_ui_contract_status(),
+        await tools.planner_auth_status(),
+        await tools.planner_auth_start(),
+        await tools.planner_auth_resume(),
+        await tools.planner_auth_session_info(),
+        await tools.planner_plan_list(),
+        await tools.planner_plan_get(plan_id),
+        await tools.planner_task_list(plan_id),
+        await tools.planner_task_get(task_id),
+        await tools.planner_project_snapshot(plan_id),
+        await tools.planner_account_context(),
+        await tools.planner_license_capabilities(),
+        await tools.planner_smoke_test(),
+    ]
+
+    assert len(responses) == len(TOOL_NAMES) == 17
+    assert {str(response["tool"]) for response in responses} == set(TOOL_NAMES)
+    assert all(response["contract_version"] == CONTRACT_VERSION for response in responses)
 
 
 async def test_readiness(tools: PlannerTools) -> None:

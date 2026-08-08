@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pestoura/planner-mcp/blob/main/docs/schemas/0.1.0/agent-card.schema.json",
+  "title": "planner-mcp AgentCard 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "name",
+    "version",
+    "description",
+    "transport",
+    "execution_backend",
+    "graph_api_backend",
+    "mutations_supported",
+    "exposure",
+    "safety"
+  ],
+  "properties": {
+    "contract_version": {"const": "0.1.0"},
+    "name": {"const": "planner-mcp"},
+    "version": {"const": "0.1.0"},
+    "description": {"type": "string", "minLength": 1},
+    "transport": {"const": "streamable-http"},
+    "execution_backend": {"const": "playwright-chromium-browser-worker"},
+    "graph_api_backend": {"const": false},
+    "mutations_supported": {"const": false},
+    "exposure": {"type": "string", "minLength": 1},
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fail_closed", "live_mutations", "selector_fabrication"],
+      "properties": {
+        "fail_closed": {"const": true},
+        "live_mutations": {"const": false},
+        "selector_fabrication": {"const": false}
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pestoura/planner-mcp/blob/main/docs/schemas/0.1.0/tool-manifest.schema.json",
+  "title": "planner-mcp ToolManifest 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "tool_catalog_version", "tools"],
+  "properties": {
+    "contract_version": {"const": "0.1.0"},
+    "tool_catalog_version": {"const": "0.1.0"},
+    "tools": {
+      "type": "array",
+      "minItems": 17,
+      "maxItems": 17,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "description", "category", "read_only"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^planner_[a-z0-9_]+$"},
+          "description": {"type": "string", "minLength": 1},
+          "category": {"type": "string", "minLength": 1},
+          "read_only": {"const": true}
+        }
+      }
+    }
+  }
+}
