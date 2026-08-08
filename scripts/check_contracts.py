@@ -107,7 +107,11 @@ def validate_schema(contract_name: str, schema_name: str) -> None:
     if not contract or not schema:
         return
 
-    check_equal(f"{schema_name} $schema", schema.get("$schema"), Draft202012Validator.META_SCHEMA["$id"])
+    check_equal(
+        f"{schema_name} $schema",
+        schema.get("$schema"),
+        Draft202012Validator.META_SCHEMA["$id"],
+    )
     schema_id = schema.get("$id")
     if not isinstance(schema_id, str) or f"/{SCHEMA_VERSION}/" not in schema_id:
         errors.append(f"{schema_name}: $id must contain /{SCHEMA_VERSION}/")
