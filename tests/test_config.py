@@ -75,15 +75,15 @@ def test_credential_shaped_planner_env_is_rejected_without_value_leak(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _clear_planner_env(monkeypatch)
-    secret_value = "super-sensitive-test-value"
-    monkeypatch.setenv("PLANNER_API_TOKEN", secret_value)
+    test_marker = "not-a-real-credential-value"
+    monkeypatch.setenv("PLANNER_API_TOKEN", test_marker)
 
     with pytest.raises(ConfigurationError) as caught:
         load_settings()
 
     rendered = json.dumps(caught.value.to_dict(), sort_keys=True)
     assert "PLANNER_API_TOKEN" in rendered
-    assert secret_value not in rendered
+    assert test_marker not in rendered
 
 
 def test_invalid_environment_value_is_not_echoed(
@@ -124,7 +124,11 @@ def test_settings_display_redacts_paths_and_urls(
 
 
 def test_startup_exits_nonzero_with_typed_sanitized_error() -> None:
-    env = {key: value for key, value in os.environ.items() if not key.upper().startswith("PLANNER_")}
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith("PLANNER_")
+    }
     env["PLANNER_MODE"] = "live"
 
     completed = subprocess.run(
