@@ -1,10 +1,11 @@
 # ADR-M365-001 — Evolve planner-mcp into m365-ui-mcp
 
-- Status: **Accepted**
+- Status: **Accepted / CORE-002 rename executed**
 - Date: 2026-08-08
 - Accepted after Phase 0: 2026-08-08
-- Current repository: `pestoura/planner-mcp`
-- Target repository: `pestoura/m365-ui-mcp`
+- Former repository: `pestoura/planner-mcp`
+- Current canonical repository: `pestoura/m365-ui-mcp`
+- GitHub repository ID: `1327254732`
 - Planner compatibility baseline: `planner-pre-m365-0.1.0`
 
 ## Context
@@ -38,14 +39,23 @@ The product will:
 
 ## Repository rename
 
-The approved rename is:
+The approved rename has been executed:
 
 ```text
 pestoura/planner-mcp
 -> pestoura/m365-ui-mcp
 ```
 
-Phase 0 has completed successfully. The rename may proceed under `CORE-002` after this ADR status change passes its own PR and post-merge gates.
+`CORE-002` read-back verified:
+
+- GitHub repository ID remained `1327254732`;
+- default branch remained `main`;
+- rename-point `main` remained `24da6de7a88e18e7cc6f11b0216d91d602136816`;
+- `planner-pre-m365-0.1.0` remained at `232c72632ab5c93d0bee70ac588af08422cbc42d`;
+- the former GitHub route resolves to the same renamed repository;
+- no repository recreation, force-ref update or content deletion occurred.
+
+The rename operation initially returned a bridge timeout. In accordance with the mutation-reconciliation rule, it was **not retried blindly**. Independent GitHub read-back proved the mutation had landed before any further change was made.
 
 ## Public compatibility
 
@@ -57,7 +67,7 @@ outlook_* -> new
 m365_*    -> new platform/cross-app surface
 ```
 
-Configuration and package names may migrate with versioned compatibility aliases according to the transition plan.
+Configuration and package names migrate only through subsequent versioned compatibility work.
 
 ## Core execution model
 
@@ -177,10 +187,10 @@ Costs:
 
 Phase 0 completed on `main` after PR #213 was reconciled and merged.
 
-The post-merge state is `17819e0a804753712f6eef3ac1e02e27249c1e00`, with both canonical documentation and full CI/security/image/SBOM workflows completed successfully. The pre-transition Planner implementation remains anchored by `planner-pre-m365-0.1.0` at `232c72632ab5c93d0bee70ac588af08422cbc42d`.
+The post-Phase-0 state was `17819e0a804753712f6eef3ac1e02e27249c1e00`, with both canonical documentation and full CI/security/image/SBOM workflows completed successfully. The pre-transition Planner implementation remains anchored by `planner-pre-m365-0.1.0` at `232c72632ab5c93d0bee70ac588af08422cbc42d`.
 
-The assessment confirmed that the current worker is mock-first and not live-attested; therefore this ADR authorizes the controlled core/product transition, not unsupported claims of live Planner or Outlook capability.
+The assessment confirmed that the worker is mock-first and not live-attested; therefore this ADR authorizes the controlled core/product transition, not unsupported claims of live Planner or Outlook capability.
 
 ## Implementation gate
 
-**Gate satisfied.** `M365-SETUP-001..010` are complete. Phase 1 may proceed in roadmap order, beginning with this accepted product identity decision and `CORE-002` repository rename. Every subsequent block remains gated by its own executed CI/security evidence and Planner compatibility invariants.
+`CORE-001` is merged and its post-merge gates are GREEN. `CORE-002` repository identity mutation has landed and is independently read-back verified. Completion of `CORE-002` requires this evidence/documentation PR and its own post-merge gates to remain GREEN before `CORE-003` begins.
