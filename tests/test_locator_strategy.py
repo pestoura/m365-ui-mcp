@@ -1,7 +1,5 @@
 """CORE-016 locator strategy abstraction acceptance tests."""
 
-from __future__ import annotations
-
 import importlib
 
 
