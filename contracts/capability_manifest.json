@@ -1,0 +1,20 @@
+{
+  "contract_version": "0.1.0",
+  "evidence_dimensions": [
+    "tenant",
+    "license",
+    "ui_observed",
+    "ui_contract",
+    "runtime"
+  ],
+  "support_levels": [
+    "UNVERIFIED_LIVE",
+    "DISCOVERED",
+    "READ_SUPPORTED",
+    "MUTATION_SUPPORTED",
+    "DEGRADED",
+    "BLOCKED",
+    "OUT_OF_SCOPE"
+  ],
+  "note": "Microsoft Graph availability is not an input to support state."
+}

@@ -1,0 +1,16 @@
+{
+  "contract_version": "0.1.0",
+  "name": "planner-mcp",
+  "version": "0.1.0",
+  "description": "Read-only Foundation 0.1.0 MCP for Microsoft Planner Premium via private browser worker.",
+  "transport": "streamable-http",
+  "execution_backend": "playwright-chromium-browser-worker",
+  "graph_api_backend": false,
+  "mutations_supported": false,
+  "exposure": "ChatGPT -> Cloudflare MCP Server Portal -> planner-mcp control plane -> planner-browser-worker",
+  "safety": {
+    "fail_closed": true,
+    "live_mutations": false,
+    "selector_fabrication": false
+  }
+}

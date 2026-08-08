@@ -1,0 +1,200 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  PLANNER_MODE: mock
+
+jobs:
+  quality:
+    name: compile / lint / type / contracts / tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Compile
+        run: python -m compileall -q src tests scripts
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Mypy
+        run: mypy
+
+      - name: Canonical documentation gate (P-001)
+        run: python scripts/check_docs.py
+
+      - name: Contract/schema validation gate (P-001)
+        run: python scripts/check_contracts.py
+
+      - name: Pytest (mock UI only, never touches real Planner)
+        run: pytest -q
+
+      - name: Release contract validation
+        run: pytest -q tests/test_release_contract.py
+
+      - name: Build wheel and sdist
+        run: |
+          pip install build==1.2.2.post1
+          python -m build
+
+      - name: Isolated acceptance
+        run: python scripts/isolated_acceptance.py
+
+      - name: Base image digest pinning gate (P-065)
+        run: python scripts/check_base_image_pinning.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-artifacts
+          path: |
+            artifacts/
+            dist/
+          if-no-files-found: warn
+
+  images:
+    name: build images / trivy / sbom
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build control plane image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.control-plane
+          tags: planner-mcp:ci
+          load: true
+          push: false
+
+      - name: Build browser worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.browser-worker
+          tags: planner-browser-worker:ci
+          load: true
+          push: false
+
+      - name: Prepare artifact directory
+        run: mkdir -p artifacts
+
+      - name: Trivy image scan - control plane (CRITICAL,HIGH)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: planner-mcp:ci
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Trivy image scan - browser worker (CRITICAL,HIGH)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: planner-browser-worker:ci
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: CycloneDX SBOM - control plane (written to workspace)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: planner-mcp:ci
+          format: cyclonedx
+          output: artifacts/sbom-control-plane.cdx.json
+
+      - name: CycloneDX SBOM - browser worker (written to workspace)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: planner-browser-worker:ci
+          format: cyclonedx
+          output: artifacts/sbom-browser-worker.cdx.json
+
+      - name: Validate SBOMs exist in the workspace and are valid CycloneDX
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          ok = True
+          for name in ("sbom-control-plane.cdx.json", "sbom-browser-worker.cdx.json"):
+              path = pathlib.Path("artifacts") / name
+              if not path.is_file() or path.stat().st_size == 0:
+                  print(f"MISSING_OR_EMPTY {path}")
+                  ok = False
+                  continue
+              doc = json.loads(path.read_text())
+              if doc.get("bomFormat") != "CycloneDX" or not doc.get("specVersion"):
+                  print(f"INVALID_CYCLONEDX {path}")
+                  ok = False
+              else:
+                  print(f"OK {path} specVersion={doc['specVersion']} "
+                        f"components={len(doc.get('components', []))}")
+          sys.exit(0 if ok else 1)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sbom-and-scan-artifacts
+          path: artifacts/
+          if-no-files-found: error
+
+  security:
+    name: filesystem / dependency / secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Trivy filesystem scan - dependencies (CRITICAL,HIGH)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Trivy secret scanning (blocking)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "1"
+
+      - name: Trivy misconfiguration scan (advisory)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: misconfig
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+      - name: Repository secret invariant check
+        run: python scripts/check_no_secrets.py

@@ -1,0 +1,40 @@
+name: Defect or gate failure
+description: Report a reproducible defect, regression, drift or CI/security gate failure.
+title: "[BUG] "
+labels:
+  - type:bug
+body:
+  - type:textarea
+    id: observed
+    attributes:
+      label: Observed behaviour
+      description: Include the exact failure, stable error code or failing gate.
+    validations:
+      required: true
+  - type:textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type:textarea
+    id: reproduce
+    attributes:
+      label: Reproduction and environment
+      description: Provide minimal reproducible steps using mock/synthetic data where possible.
+    validations:
+      required: true
+  - type:textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: CI run, logs, hashes or screenshots with secrets/tenant content removed.
+  - type:checkboxes
+    id: safety
+    attributes:
+      label: Safety checks
+      options:
+        - label: Evidence is sanitized and contains no credentials, tokens or tenant-sensitive content.
+          required: true
+        - label: The report does not propose bypassing Conditional Access, enrolment policy or UI attestation.
+          required: true

@@ -1,0 +1,49 @@
+{
+  "ui_contract_version": "0.1.0",
+  "attested": false,
+  "attestation_status": "UNVERIFIED_LIVE",
+  "surface": "planner-premium-web",
+  "note": "Selectors are placeholders and MUST NOT be used in live mode until attested against the real UI.",
+  "selectors": {
+    "auth.login_email_input": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "auth.mfa_number_display": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "plan.list_container": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "plan.list_item": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "plan.title": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "task.list_container": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "task.list_item": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "task.title": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "task.bucket": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "account.context_menu": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    }
+  }
+}

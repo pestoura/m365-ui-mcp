@@ -1,0 +1,60 @@
+name: planner-mcp
+
+services:
+  browser-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.browser-worker
+    image: planner-browser-worker:0.1.0
+    environment:
+      PLANNER_MODE: ${PLANNER_MODE:-mock}
+      PLANNER_WORKER_HOST: 0.0.0.0
+      PLANNER_WORKER_PORT: "8090"
+    networks: [browser-internal]
+    # No published ports: the worker is reachable only from the control plane.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: false          # Chromium requires a writable profile directory
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+      - /dev/shm:rw,nosuid,size=256m
+    volumes:
+      - browser-profile:/var/lib/planner-worker/profile
+    restart: unless-stopped
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.control-plane
+    image: planner-mcp:0.1.0
+    depends_on:
+      browser-worker:
+        condition: service_healthy
+    environment:
+      PLANNER_MODE: ${PLANNER_MODE:-mock}
+      PLANNER_MCP_HOST: 0.0.0.0
+      PLANNER_MCP_PORT: "8080"
+      PLANNER_WORKER_URL: http://browser-worker:8090
+      PLANNER_STATE_PATH: /var/lib/planner-mcp/state.sqlite3
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks: [browser-internal, edge]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - mcp-state:/var/lib/planner-mcp
+    restart: unless-stopped
+
+networks:
+  browser-internal:
+    internal: true
+  edge: {}
+
+volumes:
+  browser-profile: {}
+  mcp-state: {}

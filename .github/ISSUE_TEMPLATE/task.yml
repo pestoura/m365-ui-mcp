@@ -1,0 +1,58 @@
+name: Backlog task
+description: Implement or change a canonical Planner MCP backlog item.
+title: "[P-XXX] "
+labels:
+  - type:task
+body:
+  - type:input
+    id: backlog_key
+    attributes:
+      label: Backlog key
+      description: Canonical key from docs/backlog.md, for example P-025.
+      placeholder: P-XXX
+    validations:
+      required: true
+  - type:textarea
+    id: objective
+    attributes:
+      label: Objective and scope
+      description: State the concrete outcome and boundaries of this change.
+    validations:
+      required: true
+  - type:textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that must be true before closure.
+    validations:
+      required: true
+  - type:textarea
+    id: gates
+    attributes:
+      label: Tests and gates
+      description: Identify the required automated/manual gates and expected evidence.
+    validations:
+      required: true
+  - type:textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and blockers
+      description: Use canonical P-XXX keys and identify any real blocker.
+  - type:textarea
+    id: evidence
+    attributes:
+      label: Evidence required for closure
+      description: PR, CI run, test output, attestation or other evidence that proves Done.
+    validations:
+      required: true
+  - type:checkboxes
+    id: invariants
+    attributes:
+      label: Invariants
+      options:
+        - label: No live Planner capability will be claimed without the required browser evidence/attestation.
+          required: true
+        - label: No secrets, credentials, tokens or tenant content will be committed.
+          required: true
+        - label: Any write/mutation remains outside the 0.1.0 public tool surface.
+          required: true
