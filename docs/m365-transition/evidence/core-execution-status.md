@@ -46,19 +46,22 @@ Phase 2 gate: **PASS / GREEN** — CORE-011..020 are merged and all applicable p
 | CORE-024 | PASS | Account-context enforcement merged through PR #238 to `14a81643ba727ecd542a8cb31c2f7089161883a6`; post-merge docs `31268882024` and CI `31268882046` SUCCESS. Broker viability requires an explicitly verified professional expected-profile context. |
 | CORE-025 | PASS | Controlled worker egress merged through PR #239 to `ec4780bf4614647afa39f88c5aa37d5a9e4e2b9c`; post-merge docs `31269569744` and CI `31269569738` SUCCESS, including both image Trivy HIGH/CRITICAL scans and both CycloneDX SBOMs. |
 | CORE-026 | PASS | Profile-level serialized executor merged through PR #240 to `80925d16588727585e2e5fc991612a9b3fd9e1cf`; post-merge docs `31270440808` and CI `31270440807` SUCCESS. One active operation per profile, bounded waiting, typed `WORKER_BUSY`, and executor-backed `lock_viable` are proven. |
-| CORE-027 | IMPLEMENTED_AWAITING_GATES | Fresh operation-scoped pages isolate page-local navigation/DOM/runtime state; pages close on success, failure or cancellation; unavailable browser ownership fails closed with `WORKER_UNAVAILABLE`. |
+| CORE-027 | PASS | Page lifecycle isolation merged through PR #241 to `6466cc53bd583a18405766ff26a2bfcae11a43b4`; post-merge docs `31270948475` and CI `31270948476` SUCCESS. Fresh operation pages close on success, failure and cancellation without exporting persistent-session state. |
+| CORE-028 | IMPLEMENTED_AWAITING_GATES | Closed typed worker operation enum and discriminated request/response envelopes; extra/browser-shaped fields fail validation; private semantic dispatch is serialized and preserves compatibility routes. |
 
 ## CORE-017..020 evidence/lifecycle boundary
 
 UI lifecycle, evidence persistence, attestation and freshness remain separate reviewed concerns. Evidence is bound to the exact UIContractSet digest, contains no tenant/session content, and expiration/degradation is capability scoped. Current Planner fragments remain `UNVERIFIED_LIVE` until real controlled evidence is collected; no CI workflow authenticates to the real tenant.
 
-## CORE-021..027 browser/session/network boundary
+## CORE-021..028 browser/session/network boundary
 
 FastAPI lifespan owns Playwright/Chromium. Readiness remains a fail-closed seven-signal AND gate. The Session/Capability Broker binds only registered semantic capabilities to a process-owned authenticated session and returns bounded application/surface/account/container metadata; it exposes no generic browser primitive.
 
 Account correctness is separately fail-closed: authentication alone is insufficient unless the sanitized professional expected-profile context is VERIFIED. Controlled egress preserves the private control-plane/worker network, adds a worker-only outbound path, and applies a closed Playwright request policy so an outbound route does not become arbitrary Internet access.
 
-The profile executor supplies the lock/serialization subsystem: one active operation per professional profile, bounded queueing and explicit `WORKER_BUSY` when admission capacity is exhausted. Each admitted semantic operation can now use a fresh page whose page-local state is destroyed at operation completion while the authenticated persistent context remains process-owned.
+The profile executor supplies the lock/serialization subsystem: one active operation per professional profile, bounded queueing and explicit `WORKER_BUSY` when admission capacity is exhausted. Each admitted semantic operation can use a fresh page whose page-local state is destroyed at operation completion while the authenticated persistent context remains process-owned.
+
+The typed worker protocol now constrains dispatch to a closed semantic enum and exact argument families. It is an application-neutral semantic transport boundary, not a generic browser API. Protocol compatibility remains independently fail-closed until CORE-029 establishes version negotiation.
 
 ## CORE-024 boundary decision
 
@@ -82,7 +85,13 @@ A configured executor makes `lock_viable=true`, but that signal alone cannot pro
 
 `CORE-027` isolates page-local state without isolating away the authenticated professional session. The persistent browser context remains the intended authentication boundary; every semantic operation gets a fresh internal page and that page is closed deterministically afterward.
 
-Page acquisition itself exposes no navigation/selector/script capability through MCP or HTTP. Typed operation envelopes remain CORE-028 and protocol compatibility remains CORE-029.
+Page acquisition itself exposes no navigation/selector/script capability through MCP or HTTP.
+
+## CORE-028 boundary decision
+
+`CORE-028` introduces a single private semantic dispatch surface backed by a closed operation enum, discriminated typed arguments and `extra=forbid` validation. It deliberately contains no URL, selector, XPath, JavaScript, headers, cookies, token or storage-state command field.
+
+The fixed envelope schema makes the wire representation deterministic, but does not make peers compatible by assertion. `protocol_compatible` remains false by default until CORE-029 performs explicit control-plane/worker negotiation.
 
 ## Current compatibility invariants
 
@@ -94,13 +103,14 @@ Page acquisition itself exposes no navigation/selector/script capability through
 - no raw browser primitive/session-secret export is introduced;
 - controlled worker egress does not expose an inbound worker route or generic Internet primitive;
 - profile serialization does not expose profile paths or a generic executor endpoint;
-- operation-scoped page isolation does not export pages, URLs, selectors, DOM or storage state.
+- operation-scoped page isolation does not export pages, URLs, selectors, DOM or storage state;
+- typed worker dispatch accepts only the closed semantic operation vocabulary and exact typed arguments.
 
 ## Next gate
 
 ```text
-CORE-027 PR CI/security/images/SBOM GREEN
+CORE-028 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-028
+        -> CORE-029
 ```
