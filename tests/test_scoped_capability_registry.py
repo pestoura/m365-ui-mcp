@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from m365_mcp.capability_registry import (
     CapabilityRegistry,
     ScopedCapability,
     default_capability_registry,
 )
-from m365_mcp.tool_registry import default_tool_registry
-from planner_mcp.capabilities import build_capabilities
 
 
 EXPECTED_PLANNER_CAPABILITIES = (
@@ -73,6 +69,8 @@ def test_same_semantic_capability_can_exist_in_distinct_container_scopes() -> No
 
 
 def test_duplicate_exact_scope_fails_closed() -> None:
+    import pytest
+
     definition = ScopedCapability(
         "planner", "planner_web", "professional_session", "plan", "tasks.read"
     )
@@ -81,6 +79,8 @@ def test_duplicate_exact_scope_fails_closed() -> None:
 
 
 def test_tool_registry_capability_keys_are_backed_by_capability_registry() -> None:
+    from m365_mcp.tool_registry import default_tool_registry
+
     capabilities = default_capability_registry()
     for tool in default_tool_registry().by_application("planner"):
         for key in tool.capability_keys:
@@ -88,6 +88,8 @@ def test_tool_registry_capability_keys_are_backed_by_capability_registry() -> No
 
 
 def test_existing_planner_capability_output_names_are_preserved() -> None:
+    from planner_mcp.capabilities import build_capabilities
+
     result = build_capabilities(runtime_ok=True)
     assert tuple(item["capability"] for item in result["capabilities"]) == (
         EXPECTED_PLANNER_CAPABILITIES
