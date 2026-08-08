@@ -98,3 +98,22 @@ def test_planner_compatibility_output_keeps_keys_and_mock_not_supported() -> Non
     assert all(item["support_level"] == "UNVERIFIED_LIVE" for item in result["capabilities"])
     assert all(item["read_attestation"] == "NO" for item in result["capabilities"])
     assert all(not item["supported"] for item in result["effective_projection"])
+
+
+def test_live_mode_flag_without_explicit_live_ui_provenance_is_not_support() -> None:
+    result = build_capabilities(
+        auth_evidence={"state": AuthState.AUTHENTICATED.value},
+        account_context={
+            "account_kind": "work_or_school",
+            "profile": "professional-isolated",
+        },
+        license_evidence={"premium_detected": True},
+        runtime_ok=True,
+        policy_allowed=True,
+        live_evidence=True,
+    )
+    assert all(item["support_level"] == "UNVERIFIED_LIVE" for item in result["capabilities"])
+    assert all(
+        "LIVE_EVIDENCE_ABSENT" in item["reasons"]
+        for item in result["effective_projection"]
+    )
