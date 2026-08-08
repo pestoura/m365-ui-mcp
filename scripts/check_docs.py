@@ -60,9 +60,32 @@ CANONICAL_CRITICAL_PATH = (
 
 # Original A1 namespaces plus namespaces that A1.3 may define explicitly.
 DEF_PREFIXES = (
-    "ARCH", "SEC", "PRIV", "GOV", "THR", "AUTH", "UI", "WORKER", "CAP", "TOOL",
-    "REC", "RECON", "IDEM", "STATE", "OBS", "TEST", "ACC", "DEPLOY", "CF",
-    "HERMES", "REPORT", "ROADMAP", "BACKLOG", "REL", "TRACE", "DOD",
+    "ARCH",
+    "SEC",
+    "PRIV",
+    "GOV",
+    "THR",
+    "AUTH",
+    "UI",
+    "WORKER",
+    "CAP",
+    "TOOL",
+    "REC",
+    "RECON",
+    "IDEM",
+    "STATE",
+    "OBS",
+    "TEST",
+    "ACC",
+    "DEPLOY",
+    "CF",
+    "HERMES",
+    "REPORT",
+    "ROADMAP",
+    "BACKLOG",
+    "REL",
+    "TRACE",
+    "DOD",
 )
 PREFIX_ALT = "|".join(sorted(DEF_PREFIXES, key=len, reverse=True))
 ID_RE = re.compile(rf"\b({PREFIX_ALT})-(\d{{3}})\b")
@@ -136,14 +159,27 @@ def validate_text(path: Path, display: str, *, require_vision: bool = False) -> 
             continue
         low = line.lower()
         if "adr-006" in low and "graph" in low:
-            errors.append(f"LEGACY ADR MAPPING: {display}:{lineno} maps Graph to ADR-006; use ADR-008")
-        if "adr-007" in low and ("ui contract" in low or "uicontract" in low or "ui-contract" in low):
-            errors.append(f"LEGACY ADR MAPPING: {display}:{lineno} maps UIContract to ADR-007; use ADR-006")
-        if "adr-008" in low and any(
-            term in low
-            for term in ("personal device", "privacy boundary", "enrolment", "enrollment", "managed device")
+            errors.append(
+                f"LEGACY ADR MAPPING: {display}:{lineno} maps Graph to ADR-006; use ADR-008"
+            )
+        if "adr-007" in low and (
+            "ui contract" in low or "uicontract" in low or "ui-contract" in low
         ):
-            errors.append(f"LEGACY ADR MAPPING: {display}:{lineno} maps profile/privacy to ADR-008; use ADR-007")
+            errors.append(
+                f"LEGACY ADR MAPPING: {display}:{lineno} maps UIContract to ADR-007; use ADR-006"
+            )
+        privacy_terms = (
+            "personal device",
+            "privacy boundary",
+            "enrolment",
+            "enrollment",
+            "managed device",
+        )
+        if "adr-008" in low and any(term in low for term in privacy_terms):
+            errors.append(
+                f"LEGACY ADR MAPPING: {display}:{lineno} maps profile/privacy to ADR-008; "
+                "use ADR-007"
+            )
 
 
 for name in TARGETS:
