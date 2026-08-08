@@ -1,6 +1,6 @@
 # OUT-002 — Outlook mock UI/test fixture foundation
 
-Status: **IMPLEMENTED_AWAITING_GATES**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -33,3 +33,5 @@ Outlook remains `RESERVED`:
 ## Acceptance coverage
 
 Tests prove determinism, synthetic provenance, absence of identity/routing/session material, and continued zero Outlook public-tool/browser-operation exposure.
+
+OUT-001 is now merged and post-merge GREEN. This branch has been retargeted to `main` and re-triggered so OUT-002 is accepted only with fresh gates against the current integration base.
