@@ -145,7 +145,8 @@ def build_body(item: dict[str, str]) -> str:
         f"{item['body']}\n\n"
         "---\n"
         "Canonical source: [`docs/backlog.md`](../blob/main/docs/backlog.md). "
-        "Definition of Done: [`docs/definition-of-done.md`](../blob/main/docs/definition-of-done.md).\n"
+        "Definition of Done: "
+        "[`docs/definition-of-done.md`](../blob/main/docs/definition-of-done.md).\n"
         "This item must not be closed without code, tests, docs, security checks and CI GREEN."
     )
 
@@ -172,7 +173,17 @@ def main() -> int:
             print(f"skip {item['key']} (already exists)")
             continue
         title = f"[{item['key']}] {item['title']}"
-        cmd = ["gh", "issue", "create", "--repo", args.repo, "--title", title, "--body", build_body(item)]
+        cmd = [
+            "gh",
+            "issue",
+            "create",
+            "--repo",
+            args.repo,
+            "--title",
+            title,
+            "--body",
+            build_body(item),
+        ]
         for label in labels_for(item):
             cmd += ["--label", label]
         if args.dry_run:
