@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -55,7 +55,7 @@ def _record(
         contract_set_digest=contract_set.digest(),
         evidence_digest=evidence_digest or _digest("sanitized-attestation-evidence"),
         lifecycle_state=state,
-        recorded_at=recorded_at or datetime(2026, 8, 8, 15, 30, tzinfo=timezone.utc),
+        recorded_at=recorded_at or datetime(2026, 8, 8, 15, 30, tzinfo=UTC),
     )
 
 
@@ -84,7 +84,7 @@ def test_latest_record_uses_evidence_timestamp_not_append_order(state_path: Path
     newer = _record(
         contract_set,
         state=UILifecycleState.DRIFTED,
-        recorded_at=datetime(2026, 8, 8, 16, 0, tzinfo=timezone.utc),
+        recorded_at=datetime(2026, 8, 8, 16, 0, tzinfo=UTC),
         evidence_digest=_digest("newer"),
     )
     older = _record(
