@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,6 +49,20 @@ class UIContractFragment:
             )
         )
 
+    def canonical_payload(self) -> dict[str, object]:
+        """Return contract content only; never filesystem or runtime/session metadata."""
+        return {
+            "fragment_id": self.fragment_id,
+            "fragment_version": self.fragment_version,
+            "scope": self.scope,
+            "application": self.application,
+            "surface": self.surface,
+            "capability_keys": list(self.capability_keys),
+            "attested": self.attested,
+            "attestation_status": self.attestation_status,
+            "selectors": self.selectors,
+        }
+
 
 @dataclass(frozen=True)
 class CapabilityUIAttestation:
@@ -88,6 +103,24 @@ class UIContractSet:
                     raise ValueError(f"duplicate UIContract selector: {name}")
                 merged[name] = metadata
         return merged
+
+    def canonical_payload(self) -> dict[str, object]:
+        """Return the exact semantic contract set used to derive a digest."""
+        return {
+            "ui_contract_set_version": self.set_version,
+            "legacy_ui_contract_version": self.legacy_version,
+            "fragments": [fragment.canonical_payload() for fragment in self.fragments],
+        }
+
+    def digest(self) -> str:
+        """Return deterministic SHA-256 identity for this exact contract set."""
+        encoded = json.dumps(
+            self.canonical_payload(),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
     def fragments_for_capability(
         self, application: str, capability: str

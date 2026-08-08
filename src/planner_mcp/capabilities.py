@@ -148,6 +148,7 @@ def build_capabilities(
     manifest = load_contract("capability_manifest")
     return {
         "contract_version": manifest.get("contract_version", "0.1.0"),
+        "ui_contract_set_digest": contract_set.digest(),
         "evidence_dimensions": manifest.get("evidence_dimensions", []),
         "runtime_ok": runtime_ok,
         "graph_api_used": False,

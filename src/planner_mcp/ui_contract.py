@@ -18,6 +18,7 @@ class UiContractStatus:
     """Compatibility snapshot of the current UIContract set state."""
 
     version: str
+    contract_set_digest: str
     attested: bool
     attestation_status: str
     selector_count: int
@@ -26,6 +27,7 @@ class UiContractStatus:
     def to_dict(self) -> dict[str, Any]:
         return {
             "ui_contract_version": self.version,
+            "ui_contract_set_digest": self.contract_set_digest,
             "attested": self.attested,
             "attestation_status": self.attestation_status,
             "selector_count": self.selector_count,
@@ -45,6 +47,7 @@ def load_status() -> UiContractStatus:
     attested = fragments_attested and not unverified
     return UiContractStatus(
         version=contract_set.legacy_version,
+        contract_set_digest=contract_set.digest(),
         attested=attested,
         attestation_status=ATTESTED if attested else UNVERIFIED,
         selector_count=len(selectors),
@@ -59,6 +62,7 @@ def require_attested(operation: str) -> None:
         raise UiContractUnattested(
             f"live operation '{operation}' blocked: UIContract not attested",
             ui_contract_version=status.version,
+            ui_contract_set_digest=status.contract_set_digest,
             unverified_selectors=list(status.unverified_selectors),
         )
 

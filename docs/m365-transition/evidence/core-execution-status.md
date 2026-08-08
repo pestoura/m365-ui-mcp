@@ -26,19 +26,19 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 | CORE-011 | PASS | Scoped Capability Registry merged through PR #225 to `3a53d44a77254810c701a04535b1ef2065302ab6`; PR docs `31257236487` and CI `31257236512` SUCCESS; post-merge docs `31257452439` and CI `31257452441` SUCCESS. Eleven Planner capability keys retain order and semantics with explicit app/surface/account/container scope. |
 | CORE-012 | PASS | Effective capability projection merged through PR #226 to `608bc854863c9e9fa756c20503c7c7d27d83d61a`; PR docs `31258209123` and CI `31258209104` SUCCESS; post-merge docs `31258381298` and CI `31258381284` SUCCESS. Mock or mode flags cannot promote live support without explicit live-UI evidence provenance. |
 | CORE-013 | PASS | Fragmented UIContract storage merged through PR #227 to `9b1a8aeb3a9ab536d8b26eeaf45717e95fd34d86`; PR docs `31258776662` and CI `31258776663` SUCCESS; post-merge docs `31258954098` and CI `31258954095` SUCCESS. Ten legacy selectors remain exactly preserved and globally compatible. |
-| CORE-014 | IMPLEMENTED_AWAITING_GATES | Capability dependencies are explicit per UI fragment; unattested/drifted evidence now affects only dependent capabilities, with undeclared dependencies remaining fail-closed. |
-| CORE-015 | NOT_STARTED | Contract-set digest. |
+| CORE-014 | PASS | Per-fragment attestation merged through PR #228 to `66d03890492f072364c270b9a9c6b42958da086e`; PR docs `31259317512` and CI `31259317510` SUCCESS; post-merge docs `31259491871` and CI `31259491856` SUCCESS. Drift affects only capabilities with explicit fragment dependencies. |
+| CORE-015 | IMPLEMENTED_AWAITING_GATES | Deterministic SHA-256 identity covers the exact semantic UI contract set and is exposed in UI status, capability evidence and browser-worker health without including runtime/session identity. |
 | CORE-016 | NOT_STARTED | Locator strategy abstraction. |
 | CORE-017 | NOT_STARTED | UI drift lifecycle. |
 | CORE-018 | NOT_STARTED | Capability evidence persistence. |
 | CORE-019 | NOT_STARTED | Attestation tooling/runbook. |
 | CORE-020 | NOT_STARTED | Capability expiration/revalidation. |
 
-## CORE-014 boundary decision
+## CORE-015 boundary decision
 
-Fragment-to-capability dependencies are explicit metadata, never inferred from selector names. A drifted task fragment can therefore degrade `tasks.read`, `buckets.read` and `project_snapshot.read` without degrading `plans.read`. Capabilities with no evidence-bearing fragment remain `UNVERIFIED_LIVE` rather than inheriting support from a nearby UI surface.
+The contract-set digest is a correlation identity, not an authorization or attestation decision. It binds semantic contract content and manifest fragment order using canonical JSON plus SHA-256. It excludes filesystem location, timestamps, tenant/account/user/session identifiers and credential material.
 
-The global Planner UIContract status remains as a compatibility view. CORE-015 will add the exact contract-set digest used by an execution; no digest is introduced by CORE-014.
+Mapping-key ordering is normalized, while fragment list ordering remains significant. The digest is exposed as metadata only; raw selector documents are not exported through MCP tool output as part of this block.
 
 ## Current compatibility invariants
 
@@ -53,8 +53,8 @@ The global Planner UIContract status remains as a compatibility view. CORE-015 w
 ## Next gate
 
 ```text
-CORE-014 PR CI/security/images/SBOM GREEN
+CORE-015 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-015
+        -> CORE-016
 ```
