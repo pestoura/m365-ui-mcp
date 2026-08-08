@@ -88,6 +88,7 @@ class PersistentBrowser:
         from playwright.async_api import async_playwright  # noqa: PLC0415
 
         playwright = await async_playwright().start()
+        context: Any = None
         try:
             self.config.profile_dir.mkdir(parents=True, exist_ok=True)
             context = await playwright.chromium.launch_persistent_context(
@@ -95,9 +96,9 @@ class PersistentBrowser:
                 headless=self.config.headless,
                 args=["--no-first-run", "--no-default-browser-check"],
             )
-        except BaseException:
-            await playwright.stop()
-            raise
+        finally:
+            if context is None:
+                await playwright.stop()
 
         self._playwright = playwright
         self._context = context
