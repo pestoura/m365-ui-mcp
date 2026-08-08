@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Base image digest pinning gate (P-020).
+"""Base image digest pinning gate (P-065).
 
 All Docker base images must be pinned by digest. The gate is blocking by default and can
 only be relaxed with an explicit, auditable waiver (PLANNER_ENFORCE_DIGEST_PINNING=0).
@@ -36,7 +36,7 @@ def main() -> None:
     report = {
         "control": "base-image-digest-pinning",
         "status": "COMPLETE" if not unpinned else "INCOMPLETE",
-        "backlog_id": "P-020",
+        "backlog_id": "P-065",
         "enforced": os.getenv("PLANNER_ENFORCE_DIGEST_PINNING", "1") != "0",
         "findings": findings,
     }
