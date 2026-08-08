@@ -1,6 +1,6 @@
 # CORE-042 — `INDETERMINATE` terminal state
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_041**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -61,6 +61,6 @@ Tests prove:
 - success result digests are prohibited on indeterminate checkpoints;
 - valid checkpoint chains can end in `INDETERMINATE` after ACTIVE/CHECKPOINTED.
 
-## Dependency gate
+## Current integration gate
 
-This work is stacked on CORE-041. It must not merge until CORE-041 is merged and post-merge `main` is GREEN. It will then be retargeted to `main` and revalidated through the full mandatory CI/security/image/Trivy/SBOM/documentation suite.
+CORE-041 is merged and post-merge GREEN on `main` at `5469821deab86505e51b19dfab3905ae35295eee`. PR #266 now targets that current integration base. This revision deliberately re-triggers the complete mandatory CI/security/image/Trivy/SBOM/documentation suite; stacked evidence is not reused for merge.
