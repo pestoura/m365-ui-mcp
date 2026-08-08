@@ -3,7 +3,6 @@ from __future__ import annotations
 import m365_mcp.apps.outlook.mailbox_context as mailbox_context
 import m365_mcp.apps.outlook.shared_mailbox_context as shared_mailbox_context
 
-
 DIGEST_A = "a" * 64
 DIGEST_B = "b" * 64
 
