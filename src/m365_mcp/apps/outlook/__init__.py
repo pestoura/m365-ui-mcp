@@ -3,9 +3,10 @@
 OUT-001 creates an application-owned package boundary, OUT-002 adds synthetic
 isolated fixtures, OUT-003 adds semantic shell/navigation requirements,
 OUT-004 adds evidence-neutral capability discovery, OUT-005 adds sanitized
-primary-mailbox context verification, and OUT-006 adds scoped shared-mailbox
-context verification. Outlook remains RESERVED and exposes no public MCP
-registrar or browser operation surface.
+primary-mailbox context verification, OUT-006 adds scoped shared-mailbox
+context verification, and OUT-007 adds bounded readiness/smoke projection.
+Outlook remains RESERVED and exposes no public MCP registrar or browser
+operation surface.
 """
 
 from m365_mcp.apps.outlook.discovery import (
@@ -25,6 +26,11 @@ from m365_mcp.apps.outlook.mock_ui import (
     OutlookMockFixture,
     default_outlook_fixture,
 )
+from m365_mcp.apps.outlook.readiness import (
+    OutlookReadinessReport,
+    OutlookReadinessState,
+    evaluate_outlook_readiness,
+)
 from m365_mcp.apps.outlook.shared_mailbox_context import (
     SharedMailboxContext,
     SharedMailboxContextState,
@@ -43,6 +49,8 @@ __all__ = [
     "OutlookCapabilityCandidate",
     "OutlookFoundationManifest",
     "OutlookMockFixture",
+    "OutlookReadinessReport",
+    "OutlookReadinessState",
     "OutlookShellContract",
     "OutlookShellTarget",
     "PrimaryMailboxContext",
@@ -53,6 +61,7 @@ __all__ = [
     "SharedMailboxObservation",
     "default_outlook_discovery_candidates",
     "default_outlook_fixture",
+    "evaluate_outlook_readiness",
     "foundation_manifest",
     "outlook_shell_contracts",
     "verify_primary_mailbox_context",
