@@ -50,7 +50,7 @@ A digest is not an approval. CORE-036 owns persistent, single-use and replay-saf
 
 ## Current integration gate
 
-CORE-034 and PLN-MIG-001 are both merged and post-merge GREEN. This revision re-triggers the full mandatory PR suite against the current integrated `main`; previous branch GREEN evidence is not reused for merge.
+CORE-034, PLN-MIG-001 and PLN-MIG-002 are merged and post-merge GREEN. This revision re-triggers the full mandatory PR suite against the current integrated `main`; previous branch GREEN evidence is not reused for merge.
 
 ## Acceptance coverage
 
