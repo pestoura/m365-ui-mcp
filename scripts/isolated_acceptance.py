@@ -74,16 +74,23 @@ async def run() -> dict[str, Any]:
         )
 
         card = (await tools.planner_agent_card())["data"]
+        extended_tools = card["extended_tool_manifest"]["tools"]
         record(
             "extended_manifest_complete",
-            len(card["extended_tool_manifest"]["tools"]) == 17
-            and all(t["mutation_class"] == "none"
-                    for t in card["extended_tool_manifest"]["tools"]),
+            len(extended_tools) == 17
+            and all(tool["mutation_class"] == "READ" for tool in extended_tools)
+            and all(tool["attestation_status"] == "UNVERIFIED_LIVE" for tool in extended_tools),
         )
 
         caps = (await tools.planner_capabilities())["data"]
-        record("capabilities_evidence_based",
-               caps["graph_api_used"] is False and bool(caps["capabilities"]))
+        record(
+            "capabilities_evidence_based",
+            caps["graph_api_used"] is False
+            and bool(caps["capabilities"])
+            and all(
+                row["support_level"] == "UNVERIFIED_LIVE" for row in caps["capabilities"]
+            ),
+        )
 
         auth = (await tools.planner_auth_start())["data"]
         mfa = auth.get("mfa", {})
@@ -101,21 +108,28 @@ async def run() -> dict[str, Any]:
         plans = (await tools.planner_plan_list())["data"]["plans"]
         record("plan_list_ok", bool(plans), len(plans))
         plan_id = plans[0]["id"]
-        record("plan_get_ok",
-               (await tools.planner_plan_get(plan_id))["data"]["plan"]["id"] == plan_id)
+        record(
+            "plan_get_ok",
+            (await tools.planner_plan_get(plan_id))["data"]["plan"]["id"] == plan_id,
+        )
         tasks = (await tools.planner_task_list(plan_id))["data"]["tasks"]
         record("task_list_ok", bool(tasks), len(tasks))
-        record("task_get_ok",
-               (await tools.planner_task_get(tasks[0]["id"]))["data"]["task"]["id"]
-               == tasks[0]["id"])
+        record(
+            "task_get_ok",
+            (await tools.planner_task_get(tasks[0]["id"]))["data"]["task"]["id"]
+            == tasks[0]["id"],
+        )
         snapshot = (await tools.planner_project_snapshot(plan_id))["data"]
         record("snapshot_ok", snapshot["plan"]["id"] == plan_id)
-        record("account_context_ok",
-               bool((await tools.planner_account_context())["data"]))
-        record("license_evidence_ok",
-               (await tools.planner_license_capabilities())["data"]["graph_api_used"] is False)
-        record("ui_contract_status_ok",
-               (await tools.planner_ui_contract_status())["data"]["attested"] is False)
+        record("account_context_ok", bool((await tools.planner_account_context())["data"]))
+        record(
+            "license_evidence_ok",
+            (await tools.planner_license_capabilities())["data"]["graph_api_used"] is False,
+        )
+        record(
+            "ui_contract_status_ok",
+            (await tools.planner_ui_contract_status())["data"]["attested"] is False,
+        )
         record("auth_status_ok", bool((await tools.planner_auth_status())["data"]["state"]))
         record("auth_resume_ok", bool((await tools.planner_auth_resume())["data"]))
 
