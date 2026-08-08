@@ -1,8 +1,8 @@
 """Planner semantic tool registration for the generic M365 control plane.
 
-CORE-009 makes exposure metadata-driven while retaining explicit, closed,
-typed handlers. The registry selects/order handlers; it never dispatches
-arbitrary names/arguments and does not create a generic executor.
+Registry metadata controls exposure order and CORE-010 profiles may narrow that
+exposure. Handlers remain explicit, closed and typed; profiles never alter tool
+governance metadata or introduce a generic executor.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from m365_mcp.config import Settings
+from m365_mcp.tool_profiles import project_tool_definitions
 from m365_mcp.tool_registry import default_tool_registry
 
 from .tools import PlannerTools
@@ -111,16 +112,12 @@ def _planner_bindings(tools: PlannerTools) -> dict[str, ToolHandler]:
 
 
 def register_planner_tools(mcp: Any, settings: Settings) -> None:
-    """Register the validated Planner projection from canonical Tool Registry metadata.
-
-    Every exposed tool must have both a registry definition and an explicit
-    typed handler. Missing/extra bindings fail closed before registration.
-    """
+    """Register the bounded Planner projection from validated registry metadata."""
     tools = PlannerTools(settings)
     registry = default_tool_registry()
-    definitions = registry.by_application("planner")
+    all_planner_definitions = registry.by_application("planner")
     bindings = _planner_bindings(tools)
-    expected_names = tuple(definition.name for definition in definitions)
+    expected_names = tuple(definition.name for definition in all_planner_definitions)
 
     if set(bindings) != set(expected_names):
         missing = sorted(set(expected_names) - set(bindings))
@@ -129,6 +126,16 @@ def register_planner_tools(mcp: Any, settings: Settings) -> None:
             "Planner registry/binding mismatch: "
             f"missing={missing!r} unexpected={unexpected!r}"
         )
+
+    exposed_names = {
+        definition.name
+        for definition in project_tool_definitions(registry, settings.tool_profile)
+    }
+    definitions = tuple(
+        definition
+        for definition in all_planner_definitions
+        if definition.name in exposed_names
+    )
 
     for definition in definitions:
         mcp.tool()(bindings[definition.name])

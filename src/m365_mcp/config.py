@@ -198,6 +198,10 @@ class Settings(BaseSettings):
         default="INFO",
         validation_alias=AliasChoices("M365_LOG_LEVEL", "PLANNER_LOG_LEVEL"),
     )
+    tool_profile: Literal["full", "planner", "outlook", "read-only"] = Field(
+        default="full",
+        validation_alias="M365_TOOL_PROFILE",
+    )
 
     def __init__(self, **data: Any) -> None:
         _validate_environment(os.environ)
@@ -265,6 +269,7 @@ class Settings(BaseSettings):
             "allow_mutations": self.allow_mutations,
             "require_ui_contract_attestation": self.require_ui_contract_attestation,
             "log_level": self.log_level,
+            "tool_profile": self.tool_profile,
         }
 
     def __repr__(self) -> str:
