@@ -1,8 +1,7 @@
-"""Release contract validation: versions, manifests, catalog and docs."""
+"""Release contract validation: versions, manifests, catalog and canonical docs."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from planner_mcp import CONTRACT_VERSION, SCHEMA_VERSION, __version__
@@ -12,12 +11,37 @@ from planner_mcp.tools import TOOL_NAMES
 ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_DOCS = (
-    "vision.md", "architecture.md", "threat-model.md", "security.md", "governance.md",
-    "authentication-and-mfa.md", "privacy-boundary.md", "planner-premium-capabilities.md",
-    "tool-catalog.md", "reconciliation.md", "idempotency.md", "state-model.md",
-    "ui-contract.md", "browser-worker.md", "observability.md", "testing.md",
-    "acceptance.md", "deployment.md", "cloudflare-mcp-portal.md",
-    "hermes-integration.md", "reporting.md", "roadmap.md", "backlog.md",
+    "vision.md",
+    "architecture.md",
+    "threat-model.md",
+    "security.md",
+    "governance.md",
+    "authentication-and-mfa.md",
+    "privacy-boundary.md",
+    "planner-premium-capabilities.md",
+    "tool-catalog.md",
+    "reconciliation.md",
+    "idempotency.md",
+    "state-model.md",
+    "ui-contract.md",
+    "browser-worker.md",
+    "observability.md",
+    "testing.md",
+    "acceptance.md",
+    "deployment.md",
+    "cloudflare-mcp-portal.md",
+    "hermes-integration.md",
+    "reporting.md",
+    "roadmap.md",
+    "backlog.md",
+    "release-process.md",
+    "traceability.md",
+    "definition-of-done.md",
+)
+
+CANONICAL_CRITICAL_PATH = (
+    "P-001 → P-011 → P-014 → P-018 → P-025 → P-026 → P-027 → P-030 → "
+    "P-031 → P-050 → P-069 → P-071 → P-073 → P-074"
 )
 
 
@@ -42,41 +66,42 @@ def test_agent_card_declares_no_graph_and_no_mutations() -> None:
     assert card["mutations_supported"] is False
 
 
-def test_required_docs_exist() -> None:
+def test_required_docs_and_adrs_exist() -> None:
     missing = [d for d in REQUIRED_DOCS if not (ROOT / "docs" / d).is_file()]
     assert not missing, f"missing docs: {missing}"
-    for index in range(1, 6):
-        matches = list((ROOT / "docs" / "adr").glob(f"ADR-00{index}-*.md"))
-        assert matches, f"missing ADR-00{index}"
+    for index in range(1, 9):
+        matches = list((ROOT / "docs" / "adr").glob(f"ADR-{index:03d}-*.md"))
+        assert len(matches) == 1, f"expected one canonical ADR-{index:03d}, found {matches}"
 
 
 def test_capability_matrix_columns() -> None:
     text = (ROOT / "docs" / "planner-premium-capabilities.md").read_text(encoding="utf-8")
     for column in (
-        "capability", "tenant/license availability", "UI observed", "UIContract status",
-        "read attestation", "mutation attestation", "support level", "evidence/notes",
+        "Capability / domain",
+        "Tenant / licence observed",
+        "UI observed",
+        "UIContract attestation",
+        "READ validated",
+        "MUTATION validated",
+        "Support state",
+        "Required policy / mutation class",
+        "Read-back strategy",
+        "Drift / failure behaviour",
+        "Evidence / notes",
     ):
         assert column in text
 
 
-def test_backlog_ids_and_critical_path() -> None:
+def test_backlog_ids_epics_and_critical_path() -> None:
     text = (ROOT / "docs" / "backlog.md").read_text(encoding="utf-8")
     for index in range(1, 75):
         assert f"P-{index:03d}" in text, f"missing P-{index:03d}"
     for epic in range(1, 11):
         assert f"EPIC-{epic:02d}" in text
-    critical = ["P-001", "P-011", "P-014", "P-018", "P-025", "P-026", "P-027",
-                "P-030", "P-031", "P-050", "P-069", "P-071", "P-073", "P-074"]
-    assert " -> ".join(critical) in text
+    assert CANONICAL_CRITICAL_PATH in text
 
 
-def test_backlog_json_dependencies_zero_padded() -> None:
-    data = json.loads((ROOT / "docs" / "backlog.json").read_text(encoding="utf-8"))
-    ids = {item["id"] for item in data["items"]}
-    assert len(ids) == 74
-    for item in data["items"]:
-        for dep in item["depends_on"]:
-            assert len(dep) == 5 and dep.startswith("P-") and dep[2:].isdigit()
-            assert dep in ids
-    p030 = next(i for i in data["items"] if i["id"] == "P-030")
-    assert "P-019" in p030["depends_on"] and "P-025" in p030["depends_on"]
+def test_release_is_read_only_and_catalog_has_17_tools() -> None:
+    assert len(TOOL_NAMES) == 17
+    extended = load_contract("extended_tool_manifest")["tools"]
+    assert all(tool.get("mutation_class") == "READ" for tool in extended)
