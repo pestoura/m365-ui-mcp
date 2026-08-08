@@ -78,16 +78,22 @@ async def _guarded(
 class PlannerTools:
     """Callable implementations shared by the MCP server and the tests."""
 
-    def __init__(self, settings: Settings | None = None,
-                 worker: WorkerClient | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        worker: WorkerClient | None = None,
+    ) -> None:
         self.settings = settings or load_settings()
         self.worker = worker or WorkerClient(self.settings)
 
     # ---- system -------------------------------------------------------
     async def planner_health(self) -> dict[str, Any]:
         async def body() -> dict[str, Any]:
-            return {"status": "ok", "mode": self.settings.mode,
-                    "versions": version_metadata()}
+            return {
+                "status": "ok",
+                "mode": self.settings.mode,
+                "versions": version_metadata(),
+            }
 
         return await _guarded("planner_health", self.settings, body)
 
@@ -106,6 +112,7 @@ class PlannerTools:
             ready = bool(db.get("ok")) and worker_ok
             return {
                 "ready": ready,
+                "configuration": self.settings.public_summary(),
                 "sqlite": db,
                 "worker": worker,
                 "ui_contract": ui.to_dict(),
@@ -214,24 +221,35 @@ class PlannerTools:
         async def body() -> dict[str, Any]:
             steps: list[dict[str, Any]] = []
             readiness = await self.planner_readiness()
-            steps.append({"step": "readiness", "ok": bool(
-                readiness["data"].get("ready"))})
+            steps.append(
+                {"step": "readiness", "ok": bool(readiness["data"].get("ready"))}
+            )
             plans = await self.planner_plan_list()
-            plan_items = plans["data"].get("plans", []) if isinstance(
-                plans["data"], dict) else []
-            steps.append({"step": "plan_list", "ok": bool(plan_items),
-                          "count": len(plan_items)})
+            plan_items = (
+                plans["data"].get("plans", []) if isinstance(plans["data"], dict) else []
+            )
+            steps.append(
+                {"step": "plan_list", "ok": bool(plan_items), "count": len(plan_items)}
+            )
             if plan_items:
                 plan_id = str(plan_items[0].get("id"))
                 tasks = await self.planner_task_list(plan_id)
-                task_items = tasks["data"].get("tasks", []) if isinstance(
-                    tasks["data"], dict) else []
-                steps.append({"step": "task_list", "ok": bool(task_items),
-                              "count": len(task_items)})
+                task_items = (
+                    tasks["data"].get("tasks", [])
+                    if isinstance(tasks["data"], dict)
+                    else []
+                )
+                steps.append(
+                    {"step": "task_list", "ok": bool(task_items), "count": len(task_items)}
+                )
                 snapshot = await self.planner_project_snapshot(plan_id)
-                steps.append({"step": "project_snapshot",
-                              "ok": "plan" in snapshot["data"]})
-            return {"passed": all(s["ok"] for s in steps), "steps": steps,
-                    "mutations_performed": 0}
+                steps.append(
+                    {"step": "project_snapshot", "ok": "plan" in snapshot["data"]}
+                )
+            return {
+                "passed": all(step["ok"] for step in steps),
+                "steps": steps,
+                "mutations_performed": 0,
+            }
 
         return await _guarded("planner_smoke_test", self.settings, body)
