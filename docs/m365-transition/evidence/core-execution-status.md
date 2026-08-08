@@ -32,9 +32,15 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 | CORE-017 | PASS | Closed UI drift lifecycle merged through PR #231 to `b9322f676eddb06a22fe98ead9292f05f6fdc5ef`; post-merge docs `31264131559` and CI `31264131570` SUCCESS. Capability-scoped degradation remains fail closed, and successful re-attestation cannot bypass the required drift lifecycle. |
 | CORE-018 | PASS | Sanitized capability evidence persistence merged through PR #232 to `99f32929ab13c5068ac00410e8418abc9b8a7ef2`; post-merge docs `31264839172` and CI `31264839203` SUCCESS. Evidence is append-only/idempotent, contract-digest bound and contains no tenant/session content. |
 | CORE-019 | PASS | Deterministic attestation workflow merged through PR #233 to `f7b89a4eb740fa561189bc1e62c4869d5242a644`; PR CI `31265403348` and push CI `31265401773` SUCCESS; post-merge docs `31265582918` and CI `31265582939` SUCCESS. No browser execution or real-tenant CI path was introduced. |
-| CORE-020 | IMPLEMENTED_AWAITING_GATES | Versioned evidence lifetime policy plus capability-scoped freshness/revalidation projection implemented. Current reviewable baseline is 7 days; expiry is `STALE`, missing/future evidence requires re-attestation, and degraded source evidence is never promoted. |
+| CORE-020 | PASS | Versioned evidence lifetime/revalidation merged through PR #234 to `b60f9b80c22cba841265962d0308518b57667fd6`; post-merge docs `31266326587` and CI `31266326601` SUCCESS. Current reviewable baseline is 7 days; expiry is `STALE`, missing/future evidence requires re-attestation, and degraded source evidence is never promoted. |
 
-Phase 2 gate: **PENDING CORE-020 PR + post-merge gates**.
+Phase 2 gate: **PASS / GREEN** — CORE-011..020 are merged and all applicable post-merge gates completed successfully.
+
+## Phase 3 — Browser, session and network hardening
+
+| Key | Status | Evidence / decision |
+|---|---|---|
+| CORE-021 | IMPLEMENTED_AWAITING_GATES | FastAPI lifespan now explicitly owns the canonical browser process. `PersistentBrowser` owns both Playwright and the Chromium persistent context, startup is idempotent, partial startup is cleaned up, and shutdown stops Playwright even when context closure fails. No generic browser primitive or new tenant/Outlook capability is introduced. |
 
 ## CORE-017 boundary decision
 
@@ -68,6 +74,14 @@ Freshness is evaluated dynamically from the latest exact-contract CORE-018 recor
 
 The resulting fragment lifecycle overlay is consumed by the existing dependency-aware UIContract projection, so expiration degrades only capabilities that depend on the expired fragment. Recovery requires fresh CORE-019 attestation evidence; automatic live revalidation remains dependent on later browser/session/network gates and especially `CORE-025` controlled egress.
 
+## CORE-021 boundary decision
+
+`CORE-021` makes the FastAPI lifespan the explicit owner of the canonical browser object. Mock startup performs no Playwright work. Live lifecycle ownership covers both Playwright and the persistent Chromium context, with deterministic cleanup on shutdown and startup failure.
+
+Browser process lifecycle is not capability authorization: semantic live operations retain their fail-closed UIContract guard, current Planner fragments remain `UNVERIFIED_LIVE`, and no live-support claim is created by launching infrastructure. `CORE-021` does not enable an automated real-tenant campaign; `CORE-025` remains mandatory before controlled live Microsoft 365 egress is enabled.
+
+Readiness semantics are intentionally unchanged in this block and remain `CORE-022`.
+
 ## Current compatibility invariants
 
 - all 17 public `planner_*` tools remain `PRESERVE` under default profile;
@@ -81,9 +95,8 @@ The resulting fragment lifecycle overlay is consumed by the existing dependency-
 ## Next gate
 
 ```text
-CORE-020 PR CI/security/images/SBOM GREEN
+CORE-021 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> Phase 2 PASS/GREEN
-        -> CORE-021
+        -> CORE-022
 ```

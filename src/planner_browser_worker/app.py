@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
+from m365_browser_worker.lifecycle import browser_lifespan
 from planner_mcp.auth import AuthState
 from planner_mcp.errors import PlannerMcpError
 from planner_mcp.logging_setup import configure_logging
@@ -25,17 +26,21 @@ def _is_mock() -> bool:
     return _mode() != "live"
 
 
-def create_app() -> FastAPI:
-    """Build the worker application."""
+def create_app(browser: PersistentBrowser | None = None) -> FastAPI:
+    """Build the worker application with explicit ASGI browser ownership."""
     configure_logging(os.getenv("PLANNER_LOG_LEVEL", "INFO"))
-    app = FastAPI(title="planner-browser-worker", version=__version__)
-    browser = PersistentBrowser(BrowserConfig.from_env())
+    worker_browser = browser or PersistentBrowser(BrowserConfig.from_env())
+    app = FastAPI(
+        title="planner-browser-worker",
+        version=__version__,
+        lifespan=browser_lifespan(worker_browser),
+    )
 
     def live_guard(operation: str) -> None:
         if _is_mock():
             return
         try:
-            browser.ensure_live_allowed(operation)
+            worker_browser.ensure_live_allowed(operation)
         except PlannerMcpError as exc:
             raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
 

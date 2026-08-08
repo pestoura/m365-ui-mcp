@@ -59,10 +59,16 @@ class PersistentBrowser:
 
     def __init__(self, config: BrowserConfig | None = None) -> None:
         self.config = config or BrowserConfig.from_env()
+        self._playwright: Any = None
         self._context: Any = None
 
+    @property
+    def started(self) -> bool:
+        """Return whether this process currently owns a live Chromium context."""
+        return self._context is not None and self._playwright is not None
+
     def ensure_live_allowed(self, operation: str) -> None:
-        """Fail closed for live operations without an attested UIContract."""
+        """Fail closed for semantic live operations without an attested UIContract."""
         status = load_status()
         if not status.attested:
             raise UiContractUnattested(
@@ -71,25 +77,45 @@ class PersistentBrowser:
             )
 
     async def start(self) -> None:
-        """Launch the persistent Chromium context (live mode only)."""
+        """Launch and own Playwright plus the persistent Chromium context."""
         if self.config.is_mock:
             return
-        self.ensure_live_allowed("start")
+        if self.started:
+            return
+        if self._context is not None or self._playwright is not None:
+            await self.stop()
+
         from playwright.async_api import async_playwright  # noqa: PLC0415
 
         playwright = await async_playwright().start()
-        self.config.profile_dir.mkdir(parents=True, exist_ok=True)
-        self._context = await playwright.chromium.launch_persistent_context(
-            user_data_dir=str(self.config.profile_dir),
-            headless=self.config.headless,
-            args=["--no-first-run", "--no-default-browser-check"],
-        )
+        context: Any = None
+        try:
+            self.config.profile_dir.mkdir(parents=True, exist_ok=True)
+            context = await playwright.chromium.launch_persistent_context(
+                user_data_dir=str(self.config.profile_dir),
+                headless=self.config.headless,
+                args=["--no-first-run", "--no-default-browser-check"],
+            )
+        finally:
+            if context is None:
+                await playwright.stop()
+
+        self._playwright = playwright
+        self._context = context
 
     async def stop(self) -> None:
-        """Close the persistent context if open."""
-        if self._context is not None:
-            await self._context.close()
-            self._context = None
+        """Close Chromium and Playwright deterministically, even after partial failure."""
+        context = self._context
+        playwright = self._playwright
+        self._context = None
+        self._playwright = None
+
+        try:
+            if context is not None:
+                await context.close()
+        finally:
+            if playwright is not None:
+                await playwright.stop()
 
     def guard_conditional_access(self, page_text: str) -> None:
         """Raise the fail-closed blocker when Conditional Access demands enrolment."""
