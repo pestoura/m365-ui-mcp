@@ -7,9 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
 
-
+pytest: Any = importlib.import_module("pytest")
 locators: Any = importlib.import_module("m365_mcp.locators")
 worker_locators: Any = importlib.import_module("m365_browser_worker.locators")
 ui_contract_store: Any = importlib.import_module("m365_mcp.ui_contract_store")
