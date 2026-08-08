@@ -21,15 +21,15 @@ def _schema() -> result_fields.ResultFieldSchema:
 
 
 def test_secret_field_is_never_projected_in_clear_text() -> None:
-    raw_secret = "opaque-token-value"
+    synthetic_value = "opaque-token-value"
     result = result_fields.project_secret_aware_fields(
-        {"status": "ok", "access_token": raw_secret},
+        {"status": "ok", "access_token": synthetic_value},
         _schema(),
     )
 
     assert result.fields["status"] == "ok"
     assert result.fields["access_token"] == {"redacted": True, "present": True}
-    assert raw_secret not in repr(result)
+    assert synthetic_value not in repr(result)
     assert result.redacted_fields == ("access_token",)
     assert result.contains_clear_secret is False
 
