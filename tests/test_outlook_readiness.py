@@ -7,14 +7,8 @@ from m365_mcp.apps.outlook.discovery import (
     OutlookCapabilityCandidate,
     default_outlook_discovery_candidates,
 )
-from m365_mcp.apps.outlook.mailbox_context import (
-    PrimaryMailboxContext,
-    PrimaryMailboxContextState,
-)
-from m365_mcp.apps.outlook.readiness import (
-    OutlookReadinessState,
-    evaluate_outlook_readiness,
-)
+from m365_mcp.apps.outlook.mailbox_context import PrimaryMailboxContext, PrimaryMailboxContextState
+from m365_mcp.apps.outlook.readiness import OutlookReadinessState, evaluate_outlook_readiness
 from m365_mcp.apps.outlook.shared_mailbox_context import (
     SharedMailboxContext,
     SharedMailboxContextState,
