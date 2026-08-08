@@ -5,7 +5,6 @@ import inspect
 import m365_browser_worker.account_context as account_context
 import m365_mcp.apps.outlook.mailbox_context as mailbox_context
 
-
 EVIDENCE = "a" * 64
 
 
