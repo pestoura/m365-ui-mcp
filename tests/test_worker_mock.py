@@ -41,11 +41,14 @@ async def test_plans_tasks_snapshot(client: httpx.AsyncClient) -> None:
         assert missing.status_code == 404
 
 
-async def test_no_mutating_routes() -> None:
+async def test_no_unapproved_mutating_routes() -> None:
     app = create_app()
     for route in app.routes:
         methods = getattr(route, "methods", set()) or set()
-        assert not ({"POST", "PUT", "PATCH", "DELETE"} & methods)
+        path = getattr(route, "path", "")
+        assert not ({"PUT", "PATCH", "DELETE"} & methods)
+        if "POST" in methods:
+            assert path == "/operations"
 
 
 async def test_session_never_exposes_secrets(client: httpx.AsyncClient) -> None:

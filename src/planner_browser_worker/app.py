@@ -13,6 +13,14 @@ from fastapi.responses import JSONResponse
 from m365_browser_worker.account_context import AccountContext, unverified_account_context
 from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
+from m365_browser_worker.protocol import (
+    NoArguments,
+    PlanArguments,
+    TaskArguments,
+    WorkerOperation,
+    WorkerRequestEnvelope,
+    WorkerResponseEnvelope,
+)
 from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
 from m365_browser_worker.session_broker import SessionCapabilityBroker
 from m365_mcp.capability_registry import default_capability_registry
@@ -231,6 +239,61 @@ def create_app(
             "counts": {"tasks": len(tasks)},
             "read_only": True,
         }
+
+    async def dispatch_semantic_operation(request: WorkerRequestEnvelope) -> dict[str, Any]:
+        operation = request.operation
+        arguments = request.arguments
+
+        if operation is WorkerOperation.AUTH_STATUS:
+            return await auth_status()
+        if operation is WorkerOperation.AUTH_START:
+            return await auth_start()
+        if operation is WorkerOperation.AUTH_RESUME:
+            return await auth_resume()
+        if operation is WorkerOperation.AUTH_SESSION:
+            return await auth_session()
+        if operation is WorkerOperation.ACCOUNT_CONTEXT:
+            return await account_context()
+        if operation is WorkerOperation.ACCOUNT_LICENSE:
+            return await account_license()
+        if operation is WorkerOperation.PLANNER_PLAN_LIST:
+            return await plans()
+        if operation is WorkerOperation.PLANNER_PLAN_GET:
+            if not isinstance(arguments, PlanArguments):
+                raise HTTPException(status_code=422, detail="plan arguments required")
+            return await plan_get(arguments.plan_id)
+        if operation is WorkerOperation.PLANNER_TASK_LIST:
+            if not isinstance(arguments, PlanArguments):
+                raise HTTPException(status_code=422, detail="plan arguments required")
+            return await task_list(arguments.plan_id)
+        if operation is WorkerOperation.PLANNER_TASK_GET:
+            if not isinstance(arguments, TaskArguments):
+                raise HTTPException(status_code=422, detail="task arguments required")
+            return await task_get(arguments.task_id)
+        if operation is WorkerOperation.PLANNER_PROJECT_SNAPSHOT:
+            if not isinstance(arguments, PlanArguments):
+                raise HTTPException(status_code=422, detail="plan arguments required")
+            return await snapshot(arguments.plan_id)
+
+        raise HTTPException(status_code=422, detail="unsupported worker operation")
+
+    @app.post("/operations", response_model=WorkerResponseEnvelope)
+    async def execute_operation(request: WorkerRequestEnvelope) -> WorkerResponseEnvelope:
+        """Execute one closed semantic operation through the serialized profile executor."""
+        # Pydantic has already rejected unknown operations, extra fields and
+        # operation/argument mismatches before admission to the executor.
+        if isinstance(request.arguments, NoArguments):
+            pass
+
+        result = await profile_executor.execute(
+            request.operation.value,
+            lambda: dispatch_semantic_operation(request),
+        )
+        return WorkerResponseEnvelope(
+            request_id=request.request_id,
+            operation=request.operation,
+            result=result,
+        )
 
     return app
 
