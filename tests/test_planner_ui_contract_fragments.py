@@ -5,7 +5,6 @@ import json
 from m365_mcp import contracts, ui_contract_store
 from m365_mcp.apps.planner import ui_contracts as planner_ui_contracts
 
-
 COMMON_AUTH_SELECTORS = ("auth.login_email_input", "auth.mfa_number_display")
 
 
