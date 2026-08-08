@@ -113,8 +113,9 @@ class CompensationRegistry:
         Orphan definitions are rejected as well so removed/renamed mutations
         cannot leave stale compensation declarations that appear supported.
         """
-        registered = {(tool.name, tool.version): tool for tool in tools.definitions()}
-        for tool in tools.definitions():
+        tool_definitions = tuple(tools.get(name) for name in tools.names())
+        registered = {(tool.name, tool.version): tool for tool in tool_definitions}
+        for tool in tool_definitions:
             if tool.mutation_class is not MutationClass.READ:
                 self.for_tool(tool)
         for identity, definition in self._definitions.items():
