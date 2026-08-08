@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import pytest
 
 from m365_mcp.capability_registry import (
@@ -65,7 +63,9 @@ def test_same_semantic_capability_can_exist_in_distinct_container_scopes() -> No
     first = ScopedCapability(
         "planner", "planner_web", "professional_session", "plan", "tasks.read"
     )
-    second = replace(first, container_scope="account")
+    second = ScopedCapability(
+        "planner", "planner_web", "professional_session", "account", "tasks.read"
+    )
     registry = CapabilityRegistry((first, second))
 
     assert registry.capability_names("planner") == ("tasks.read",)
