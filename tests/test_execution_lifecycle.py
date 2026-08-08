@@ -3,7 +3,6 @@ import m365_mcp.execution_lifecycle as execution_lifecycle
 import m365_mcp.state_identity as state_identity
 import m365_mcp.typed_locks as typed_locks
 
-
 IDEMPOTENCY_KEY = "a" * 64
 RESULT_DIGEST = "b" * 64
 
