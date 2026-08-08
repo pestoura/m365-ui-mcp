@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from m365_mcp import capability_registry, config, policy, tool_registry
 from m365_mcp.apps.planner import planner_capability_definitions
+from m365_mcp.capability_registry import default_capability_registry
+from m365_mcp.config import Settings
+from m365_mcp.policy import Decision, MetadataPolicyEngine
+from m365_mcp.tool_registry import default_tool_registry
 
 
 EXPECTED_CAPABILITIES = (
@@ -35,7 +38,7 @@ def test_planner_app_owns_all_11_canonical_capability_definitions() -> None:
 
 def test_default_capability_registry_is_composed_from_planner_app_definitions() -> None:
     app_definitions = planner_capability_definitions()
-    registry = capability_registry.default_capability_registry()
+    registry = default_capability_registry()
 
     assert registry.definitions() == app_definitions
     assert registry.by_application("planner") == app_definitions
@@ -43,13 +46,13 @@ def test_default_capability_registry_is_composed_from_planner_app_definitions() 
 
 
 def test_capability_migration_preserves_scope_aware_policy_for_all_planner_tools() -> None:
-    engine = policy.MetadataPolicyEngine()
-    tools = tool_registry.default_tool_registry().by_application("planner")
+    engine = MetadataPolicyEngine()
+    tools = default_tool_registry().by_application("planner")
 
     assert len(tools) == 17
     for definition in tools:
-        result = engine.evaluate(definition.name, config.Settings())
-        assert result.decision is policy.Decision.ALLOW
+        result = engine.evaluate(definition.name, Settings())
+        assert result.decision is Decision.ALLOW
         assert result.scope is not None
         assert result.scope.application == "planner"
         assert result.scope.surface == definition.surface
