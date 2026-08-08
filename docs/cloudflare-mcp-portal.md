@@ -1,163 +1,177 @@
 # Cloudflare MCP Server Portal
 
-Scope: how ChatGPT reaches the Planner MCP control plane through the Cloudflare MCP Server Portal and a Cloudflare Tunnel, and what the control plane assumes (and refuses to assume) about that path. Companions: [architecture.md](architecture.md), [security.md](security.md), [deployment.md](deployment.md), [threat-model.md](threat-model.md), [tool-catalog.md](tool-catalog.md).
+This document defines the intended external exposure boundary for Planner MCP:
 
-## 1. Position in the chain
+```text
+ChatGPT
+   ↓
+Cloudflare MCP Server Portal / protected Cloudflare ingress
+   ↓
+Planner MCP Control Plane
+```
 
-| Hop | Component | Responsibility | Trust granted |
-|-----|-----------|----------------|---------------|
-| 1 | ChatGPT | MCP client; issues tool calls | none |
-| 2 | Cloudflare MCP Server Portal | Client-facing MCP aggregation, OAuth, per-server policy | transport + identity assertion |
-| 3 | Cloudflare Tunnel (`cloudflared`) | Outbound-only connector from the host to the edge | transport only |
-| 4 | `planner-mcp` control plane | Authentication, authorization, policy, idempotency, audit | authoritative |
-| 5 | `planner-browser-worker` | Execution | internal only |
+The private browser worker remains outside the public ingress path.
 
-Design rule: the control plane treats hops 1–3 as an **untrusted transport**. Portal authentication is a necessary precondition, never a sufficient one. Every request is independently authenticated and authorized at hop 4, and every mutation is independently audited there.
+Companions: [`architecture.md`](architecture.md), [`security.md`](security.md),
+[`deployment.md`](deployment.md), [`tool-catalog.md`](tool-catalog.md) and
+[`release-process.md`](release-process.md).
 
-## 2. Why the Portal
+## 1. Trust boundary
 
-| Alternative | Why rejected |
-|-------------|--------------|
-| Publish the MCP endpoint directly | Requires inbound ports, public TLS termination on the host, and self-managed OAuth. |
-| VPN to the host | Not usable from ChatGPT. |
-| Reverse proxy on a VPS | Adds a second trusted machine and secret store without removing any risk. |
-| Portal + Tunnel | No inbound ports, edge-terminated TLS, centralized client OAuth, per-server enable/disable, and a clean audit boundary. |
+Cloudflare provides transport/edge controls. It is not the Planner MCP authorization authority.
+The control plane independently validates the request/identity/context required by its policy before
+dispatching any semantic tool.
 
-## 3. Transport
+Principles:
 
-| Property | Value |
-|----------|-------|
-| MCP transport | Streamable HTTP (FastMCP) |
-| TLS | Terminated at the Cloudflare edge; tunnel leg is Cloudflare-encrypted; host leg is loopback/`edge` bridge only |
-| Inbound ports on host | **zero** |
-| Connector | `cloudflared` container, egress-only, digest-pinned |
-| Session semantics | Stateless per request at the transport layer; correlation is via `operation_id`, not connection identity |
-| Timeouts | Client-visible tool timeout is shorter than the edge timeout so callers get a structured error rather than a connection reset |
-| Streaming | Progress notifications used for long browser operations to avoid idle-timeout kills |
+- no direct public browser-worker endpoint;
+- no direct public Chromium/DevTools endpoint;
+- no public admin/metrics/state/evidence endpoint;
+- origin access restricted to the approved Cloudflare path where the deployment supports it;
+- TLS required;
+- authorization/policy enforced again at the control plane;
+- request limits/rate limits/backpressure are explicit;
+- transport retries must not create duplicate effects in later mutation releases.
 
-## 4. Identity and authorization
+## 2. MCP transport
 
-Two independent layers:
+The control plane uses FastMCP Streamable HTTP as its client-facing MCP transport.
 
-**Layer 1 — Portal.** Handles client OAuth, presents the Planner MCP server to authorized ChatGPT users, and can disable the server centrally. It establishes *who is calling*.
+Requirements:
 
-**Layer 2 — control plane.** Validates a service credential presented by the tunnel path, maps the asserted principal to an internal role, and enforces the tool policy. It establishes *what may be done*.
+- stable MCP endpoint;
+- bounded request/response sizes;
+- explicit timeouts compatible with browser operations;
+- structured public error taxonomy;
+- health/readiness kept separate from the MCP tool endpoint as appropriate to deployment;
+- no raw worker/browser URL or selector exposure in public errors;
+- tool descriptions reflect evidence state truthfully.
 
-| Role | Tools permitted | Notes |
-|------|-----------------|-------|
-| `reader` | read/list/describe tools | Default role. |
-| `operator` | reader + mutating tools | Requires `PLANNER_MODE=full`. |
-| `maintainer` | operator + reconciliation and diagnostics | Not exposed to ChatGPT by default. |
+For 0.1.0, the exposed MCP registry contains exactly the canonical 17 `READ` tools.
 
-Authorization failures return `denied` with a stable `reason` (`scope`, `readonly_mode`, `unsupported_premium`, `rate_limit`) and increment `plannermcp_tool_denied_total`. Denials are audited exactly like successes.
+## 3. Authentication and authorization
 
-## 5. Portal configuration checklist
+The final Cloudflare client-auth mechanism may be environment-specific, but the product boundary is
+stable:
 
-| Item | Setting | Rationale |
-|------|---------|-----------|
-| Server name | `planner-mcp` | Stable identifier in the Portal catalogue. |
-| Endpoint | Tunnel hostname, HTTPS only | No IP literals. |
-| Access policy | Explicit allowlist of principals | No "everyone in the org". |
-| Session lifetime | Short, refresh required | Limits stolen-token windows. |
-| Tool exposure | Only the catalogue's public subset | Diagnostics stay internal. |
-| Logging | Portal-side access logs retained | Cross-checked against control-plane audit. |
-| Disable switch | Documented and tested | Fast kill path. |
+1. Cloudflare/Portal authenticates or constrains the client according to the configured edge policy;
+2. the origin receives only the minimum trusted identity/service assertion required by the design;
+3. Planner MCP maps that assertion to internal authorization context;
+4. policy evaluates the exact tool/operation;
+5. denied/ambiguous/invalid context fails closed before worker dispatch.
 
-Tunnel configuration: single ingress rule mapping the hostname to `http://planner-mcp:8790`; a catch-all rule returning 404; no `originRequest.noTLSVerify` relaxations; connector credentials mounted read-only from a 0600 host file; connector runs non-root with `cap_drop: ALL`.
+No edge setting can automatically grant a mutation the control plane policy would deny.
 
-## 6. Failure modes
+In 0.1.0, read-only mode means no mutation tool exists in the public registry, regardless of the
+caller role.
 
-| Failure | Client-visible behaviour | Control-plane behaviour |
-|---------|--------------------------|-------------------------|
-| Portal unavailable | Tool unavailable in ChatGPT | Idle; no state change |
-| Tunnel down | Connection error | Health endpoint still green on loopback; alert on connector restarts |
-| Edge timeout during a long browser op | Structured timeout error | Operation continues to a terminal state, is audited, and is replay-safe via the idempotency key |
-| Duplicate delivery / client retry | Same result returned | `outcome=replayed`, single mutation |
-| Unauthorized principal | `denied` | Audited, metric incremented |
-| Worker unreachable | Retryable error | No `ok` audit row is ever written |
+## 4. Origin protection
 
-The idempotency contract in [idempotency.md](idempotency.md) is what makes the untrusted transport safe: any hop may retry, and only one effect occurs.
+The deployment should ensure, as supported by the chosen Cloudflare product/configuration:
 
-## 7. What the Portal must never carry
+- origin not generally reachable from the public internet;
+- tunnel/connector outbound from the host rather than opening unnecessary inbound ports;
+- explicit hostname/ingress mapping;
+- default-deny/catch-all behavior for unmatched ingress;
+- connector credentials stored as infrastructure secrets, not repository config;
+- connector container/service hardened consistently with the deployment baseline;
+- origin authentication/validation is not disabled for convenience.
 
-| Prohibited | Reason |
-|------------|--------|
-| Planner credentials | Interactive login only, in the worker profile. |
-| MFA approval affordances | Approval happens solely in Microsoft Authenticator. |
-| Raw task content in error messages | Redaction boundary, see [privacy-boundary.md](privacy-boundary.md). |
-| Worker endpoints | Worker is internal-only and never proxied. |
-| Admin/metrics endpoints | Loopback only. |
-| Evidence bundles | Retrieved by the operator on the host. |
+The exact operational configuration is evidence-bearing deployment state and must be documented when
+implemented; this specification does not invent tenant-specific Cloudflare values.
 
-## 8. Verification
+## 5. Rate limiting and backpressure
 
-| Check | Level | Expected |
-|-------|-------|----------|
-| No inbound host port other than loopback admin | isolated acceptance | pass |
-| Unauthenticated request to the MCP endpoint | manual | rejected before any tool dispatch |
-| Role enforcement matrix | contract tests | every tool × role combination asserted |
-| Replay through the Portal | manual (read-only tool) | single audit row, `replayed` |
-| Worker reachability from the edge network | isolated acceptance | unreachable |
-| Portal disable switch | manual, per release | tool disappears from the client |
+Browser automation is capacity-constrained by design. Protect the origin using:
 
-## 9. Operational notes
+- bounded concurrent MCP calls;
+- bounded queue depth;
+- per-client/per-server rate controls where available;
+- response on overload rather than unbounded queueing;
+- operation deadlines shorter than infrastructure hard timeouts where practical;
+- progress semantics for legitimately long operations when supported by the MCP/runtime contract.
 
-Rotating the tunnel token: create the new token, update the host secret file, restart only `cloudflared`, confirm connectivity with a read-only tool call, revoke the old token. The control plane is unaffected.
+A client timeout does not prove that a later mutation failed. Later write releases rely on
+idempotency + read-back to resolve that uncertainty.
 
-Changing the hostname: update the tunnel ingress and the Portal server record together; the control plane holds no hostname configuration by design, so no application redeploy is required.
+## 6. Public data boundary
 
-Incident response: disable the server at the Portal first (fastest, client-visible), then stop `cloudflared`, then investigate. Because the worker is internal-only, cutting hop 3 fully isolates the system while leaving audit and metrics inspectable on loopback.
+The public MCP path may carry semantic request/response data required by the tool contract, but never:
 
-## 10. Backlog mapping
+- Microsoft password;
+- access/refresh token;
+- exported cookies/browser storage;
+- browser profile content;
+- internal worker endpoint;
+- raw CSS/XPath/DOM debugging material;
+- private keys/HMAC secret values;
+- unrestricted audit/state database content.
 
-| Item | Backlog keys |
-|------|--------------|
-| Streamable HTTP endpoint + transport hardening | P-031, P-032 |
-| Portal registration + access policy | P-033, P-034 |
-| Role model + policy enforcement | P-035 |
-| Tunnel deployment + rotation runbook | P-036, P-050 |
+Errors are sanitized and expose stable codes, not internal stack traces or browser HTML.
 
-## 11. Client experience contract
+## 7. MFA
 
-| Aspect | Behaviour presented to ChatGPT |
-|--------|-------------------------------|
-| Tool names | Stable, catalogue-defined; renames are breaking changes requiring a major version |
-| Descriptions | State whether a capability is mock-verified or live-verified; never overstate |
-| Long operations | Progress notifications every few seconds; a final structured result |
-| Errors | Public taxonomy only: `invalid_input`, `denied`, `not_found`, `conflict`, `unavailable`, `timeout`, `failed` |
-| Retries | Client retries are safe; the idempotency key makes them no-ops |
-| Dry run | Every mutating tool accepts `dry_run`; the response contains the computed diff summary |
-| Provenance | Every response carries `operation_id`; mutations carry the read-back verdict |
+When the browser detects number-matching MFA, the service may emit a separate sanitized notification
+through Hermes according to its contract. Cloudflare/ChatGPT must not expose an MFA-approval action.
 
-## 12. Capacity and limits
+Approval occurs only in Microsoft Authenticator.
 
-| Limit | Value | Rationale |
-|-------|-------|-----------|
-| Concurrent tool calls | bounded by `MAX_CONCURRENCY` | One browser profile serializes UI work |
-| Queue depth | alerting above 20 | Backpressure is visible rather than silent |
-| Per-tool timeout | shorter than the edge timeout | Structured errors instead of resets |
-| Notification rate | coalesced | Prevents alert storms via Hermes |
-| Payload size | bounded request and response | Protects the worker from pathological inputs |
+## 8. Failure modes
 
-Because a single persistent browser profile executes all UI work, throughput is intentionally low and predictable. Scaling horizontally would require sharing the authenticated profile, which is out of scope for v1 (see [roadmap.md](roadmap.md) §12).
+| Failure | Required behavior |
+| --- | --- |
+| Cloudflare/Portal unavailable | MCP unavailable; no state change inferred |
+| tunnel/connector down | external calls unavailable; local service may remain healthy |
+| unauthorized/invalid client context | deny before tool dispatch |
+| origin policy invalid | fail closed |
+| browser worker unavailable | return bounded `unavailable`/typed error; no fake success |
+| client timeout | preserve operation state; later writes resolve outcome via read-back/idempotency |
+| rate limit | bounded retryable response according to policy; no unbounded queue |
 
-## 13. Change management
+## 9. Verification
 
-| Change | Required steps |
-|--------|----------------|
-| New tool exposed through the Portal | Catalogue entry, schema, policy rule, contract tests, Portal exposure review |
-| Tool removal | Deprecation note in release notes, major version if externally referenced |
-| Access policy change | Governance record naming the principals added or removed |
-| Tunnel hostname change | Update the ingress and the Portal record together; no application redeploy |
-| Connector upgrade | Digest bump, restart `cloudflared` only, verify with a read-only call |
+Required verification when Cloudflare exposure is implemented:
 
-## 14. Verification matrix
+- MCP endpoint is reachable through the intended Cloudflare path;
+- direct/unapproved origin path is rejected/unavailable according to deployment design;
+- unauthenticated/unauthorized request is rejected before worker dispatch;
+- worker/admin/metrics endpoints are not exposed through the ingress;
+- exact 0.1.0 public tool registry remains read-only;
+- request size/rate/backpressure controls behave as documented;
+- sanitized public errors contain no secrets/internal browser material;
+- read-only smoke call works end-to-end after deployment.
 
-| Property | Test layer | Artifact |
-|----------|-----------|----------|
-| Transport hardening | contract (L3) | ci |
-| Role enforcement | contract (L3) | ci |
-| Replay safety over the transport | isolated acceptance (L6) | bundle A2 |
-| No inbound host ports | isolated acceptance (L6) | bundle A2 |
-| Worker unreachable from `edge` | isolated acceptance (L6) | bundle A2 |
-| Portal disable switch | manual, per release | release record |
+These checks become release evidence, not merely setup instructions.
+
+## 10. Operational actions
+
+Documented runbooks should include:
+
+- connector credential rotation;
+- hostname/ingress change;
+- disable/kill switch;
+- connector upgrade by exact digest;
+- origin connectivity troubleshooting;
+- rate-limit/backpressure tuning;
+- read-only post-deploy smoke verification.
+
+Changes to Cloudflare settings that alter trust/identity/origin exposure require security review and,
+if architectural, an ADR.
+
+## 11. Backlog/traceability ownership
+
+There is no separate Cloudflare EPIC in the canonical P-001..P-074 backlog. Cloudflare exposure is a
+cross-cutting deployment requirement linked to existing owners:
+
+| Concern | Canonical P-key(s) |
+| --- | --- |
+| FastMCP Streamable HTTP foundation | P-007 |
+| error taxonomy / safe public errors | P-010 |
+| policy/default-deny | P-061 |
+| container/deployment posture | P-064 |
+| complete CI | P-068 |
+| isolated/end-to-end acceptance | P-069 |
+| release process/deployment smoke | P-073, P-074 |
+
+A future requirement that needs substantial new Cloudflare-specific implementation must be added to
+the backlog explicitly rather than silently repurposing P-031..P-036.

@@ -1,182 +1,279 @@
 # Reporting
 
-Scope: the reports `pestoura/planner-mcp` produces — operational, governance, evidence and portfolio — their formats, generation paths, redaction constraints and consumers. Companions: [observability.md](observability.md), [acceptance.md](acceptance.md), [governance.md](governance.md), [privacy-boundary.md](privacy-boundary.md), [reconciliation.md](reconciliation.md).
+Reporting is produced from the semantic Planner read/state/audit models. It must never query browser
+selectors directly as a reporting API and must never become a side channel for secrets/session data.
 
-Rule inherited from the privacy boundary: **reports are derived artifacts, not new data channels.** A report may never contain a value that could not appear in a redacted log record, unless the report is explicitly classified `internal-detailed` and stays on the host.
+Companions: [`observability.md`](observability.md), [`state-model.md`](state-model.md),
+[`planner-premium-capabilities.md`](planner-premium-capabilities.md),
+[`reconciliation.md`](reconciliation.md), [`privacy-boundary.md`](privacy-boundary.md) and
+[`release-process.md`](release-process.md).
 
-## 1. Report classes
+## 1. Reporting principles
 
-| Class | Audience | Contains | Leaves the host |
-|-------|----------|----------|-----------------|
-| `operational` | operator | metrics rollups, error taxonomy, session health | yes (redacted) |
-| `governance` | project governance | capability matrix, backlog burn-up, gate status | yes (redacted) |
-| `evidence` | release record | acceptance bundles, attestation reports | yes, attached to a release |
-| `internal-detailed` | operator, on-host only | full drift detail with resolved titles | **no** |
-| `client-facing` | ChatGPT/user, via a tool response | task-level answers scoped to the request | yes, request-scoped |
+- consume normalized semantic data, not DOM/selectors;
+- return only data authorized by the tool/report scope;
+- include freshness/evidence/capability-state context;
+- mark provisional/degraded sections explicitly;
+- no secret, cookie, token, browser profile/session or internal selector material;
+- system telemetry reports use minimized/redacted data;
+- project/business reports may contain the project data legitimately requested by the user, but do
+  not copy that content into system logs/metrics as a side effect;
+- no report generator may invoke a mutation path.
 
-## 2. Operational reports
+## 2. Future project-report models
 
-### 2.1 Daily operations digest
+The product roadmap includes semantic reports for:
 
-Generated from Prometheus and the audit store; emitted as Markdown and NDJSON.
+- project status;
+- milestones;
+- schedule variance;
+- overdue tasks;
+- workload/people allocation;
+- dependencies/blockers;
+- critical path;
+- sprint/backlog status;
+- portfolio status;
+- executive summary.
 
-| Section | Content |
-|---------|---------|
-| Availability | Uptime, worker session state timeline, browser restarts by reason |
-| Throughput | Tool invocations by tool and outcome |
-| Latency | p50/p90/p99 per tool and per phase |
-| Reliability | Failure rate, retry rate, read-back mismatch count |
-| UI health | Selector hit/fallback/miss counts by `selector_id` |
-| MFA | Challenges raised/approved/expired |
-| HITL | Requests, approvals, rejections, median wait |
-| Graph context | Availability percentage, clearly labelled non-gating |
-| Anomalies | Alerts fired, with links to runbooks |
+These reports are enabled only as their contributing Planner capabilities become evidenced and
+supported.
 
-### 2.2 Incident report
+## 3. Common report envelope
 
-Produced per incident, structured for post-mortem: timeline by `operation_id`, affected operations from the audit export, root cause, blast radius (counts of resources touched, never their content), remediation, and the prevention item filed against the backlog.
+Machine-readable reports should use a versioned envelope including as appropriate:
 
-### 2.3 Selector drift report
+```text
+report_type
+schema_version
+generated_at
+source_snapshot_hash
+source_freshness
+capability_states
+provisional_sections
+warnings/blockers
+data
+```
 
-Generated whenever `worker_selector_resolution_total{outcome!="hit"}` is non-zero over a window.
+The report must identify when a contributing capability is unavailable, degraded, unverified or
+stale rather than silently omitting that part of the analysis.
 
-| Column | Notes |
-|--------|-------|
-| `selector_id` | Logical name. |
-| `surface` | Board/grid/timeline/task detail. |
-| `hits`, `fallbacks`, `misses` | Counts over the window. |
-| `first_seen`, `last_seen` | Timestamps. |
-| `owner` | From the selector registry. |
-| `action` | `monitor`, `patch`, `freeze`. |
+## 4. Project status report
 
-A report containing any miss automatically proposes freezing mutating tools and re-running attestation per [testing.md](testing.md).
+Candidate sections:
 
-## 3. Governance reports
+- project/plan summary;
+- task counts by state;
+- overdue/near-due tasks;
+- milestone status;
+- blocker/dependency summary;
+- schedule/effort variance where the relevant baseline/capability exists;
+- open risks/unknowns inferred only from supported semantic fields;
+- freshness/evidence state.
 
-### 3.1 Capability matrix report
+Do not invent a schedule baseline if Planner/the desired-state model does not provide one.
 
-The single authoritative statement of what this project can do. One row per Planner Premium capability from [planner-premium-capabilities.md](planner-premium-capabilities.md).
+## 5. Milestone and schedule reporting
 
-| Column | Source |
-|--------|--------|
-| Capability | Capabilities doc |
-| Tool(s) | [tool-catalog.md](tool-catalog.md) |
-| Status | `unsupported` / `mock-verified` / `live-read-verified` / `live-verified` |
-| Evidence ref | Acceptance bundle id |
-| Last verified | Bundle timestamp |
-| Backlog keys | P-keys |
+Milestone/schedule reports depend on evidenced support for the relevant Planner Premium semantics.
+They may include:
 
-Generation is automated from evidence manifests; a status may never be hand-edited upward. A CI check fails if any status in the published docs exceeds what the referenced evidence supports — this is the mechanism that enforces "never claim live support without browser evidence".
+- milestone list/status;
+- planned/current dates;
+- schedule variance;
+- critical/near-critical indicators if directly supported/evidenced;
+- dependency blockers;
+- unresolved schedule fields.
 
-### 3.2 Backlog and roadmap status
+A locally calculated critical path must not be presented as “Planner critical path” unless that
+calculation is an explicitly separate product feature and clearly labelled. If the product reads
+Planner's own critical-path indicator, report it as observed Planner state.
 
-Derived from the backlog (P-001..P-074) and [roadmap.md](roadmap.md): per-epic completion, critical-path position, blocked items with reasons, and gate status per phase. Rendered as a table plus a compact burn-up.
+## 6. Workload reporting
 
-### 3.3 Security posture report
+Workload/people reports are privacy-sensitive and require minimization. They may aggregate:
 
-| Item | Source |
-|------|--------|
-| Image digests in use | `environment.json` / running stack |
-| SBOM diff since last release | CI artifact |
-| Known vulnerabilities by severity | Scanner output |
-| Hardening assertions | Compose-lint results |
-| Secret age / rotation due | Operator register |
-| Open threat-model gaps | [threat-model.md](threat-model.md) |
+- assignment counts;
+- capacity/load measures exposed by supported Planner semantics;
+- overloaded/unassigned work;
+- plan/portfolio aggregate status.
 
-## 4. Evidence reports
+User identity/display data is returned only when required by the requested semantic report and
+allowed by policy; it is not copied into metrics labels/system logs.
 
-Evidence reports are the acceptance bundles described in [acceptance.md](acceptance.md) plus two rollups:
+## 7. Sprint/backlog reporting
 
-| Rollup | Content |
-|--------|---------|
-| Release evidence index | One row per bundle: level, sha, criteria pass counts, operator, chain head |
-| Attestation history | Selector attestation results over time, showing UI stability trend |
+When sprint/backlog capability is live-evidenced, reporting may include:
 
-Both are append-only and referenced from the release record ([release-process.md](release-process.md)).
+- sprint scope/dates/status;
+- committed/completed/remaining task counts;
+- blocked/overdue sprint items;
+- backlog size and movement;
+- freshness/capability warnings.
 
-## 5. Reconciliation reports
+Do not infer unsupported Scrum metrics from fields that do not semantically represent them.
 
-Produced by each reconciliation run (see [reconciliation.md](reconciliation.md)).
+## 8. Portfolio reporting
 
-| Field | Notes |
-|-------|-------|
-| `run_id`, `started_at`, `duration_ms` | |
-| `scope` | Plan hash, resource kinds examined |
-| `counts` | `examined`, `equivalent`, `divergent`, `missing`, `extra` |
-| `items` | Per item: `resource_kind`, `id_hash`, `divergent_fields` (names only), `proposed_action` |
-| `applied` | Empty unless the run was authorized to remediate |
-| `graph_context` | Optional, labelled non-authoritative |
+Portfolio/roadmap reports consume supported portfolio membership plus project summaries.
 
-The `internal-detailed` variant resolves `id_hash` to titles for operator use and is written only to the host evidence directory, never shipped.
+Rules:
 
-## 6. Client-facing responses
+- missing/blocked projects are listed explicitly;
+- no plan is silently dropped because its read failed;
+- aggregate status includes data freshness;
+- project-level detail is included only as required by the report contract;
+- portfolio mutation/restructure is never triggered by report generation.
 
-Tool responses returned through the Portal to ChatGPT are themselves a reporting surface and obey stricter rules than logs, because they legitimately carry business content the user asked for.
+## 9. Executive summary
 
-| Rule | Detail |
-|------|--------|
-| Scope | Only resources the request targeted; no incidental enumeration of unrelated plans. |
-| Minimization | Return the fields the tool contract declares; no raw DOM, no internal ids beyond what the contract specifies. |
-| No secrets | Never any session, token, cookie, or configuration value. |
-| No internals | No stack traces, selectors, file paths, or worker URLs; errors map to the public taxonomy. |
-| Provenance | Every response includes `operation_id` and, for mutations, the read-back verdict. |
-| Graph labelling | Any contextual Graph-derived field is explicitly flagged as contextual. |
+An executive summary is a derived presentation layer over semantic reports. It may summarize:
 
-## 7. Formats
+- overall project/portfolio health;
+- major milestones;
+- schedule/overdue indicators;
+- blockers/dependencies;
+- workload concerns;
+- decisions requiring attention;
+- evidence/freshness limitations.
 
-| Format | Used for | Notes |
-|--------|----------|-------|
-| NDJSON | machine-readable exports (audit, logs, reconciliation items) | Stable field names, schema-versioned |
-| Markdown | human-readable digests and summaries | Tables preferred; no images |
-| JSON | manifests, attestation reports | Schema-validated in CI |
-| Prometheus text | metrics snapshots inside evidence bundles | Raw exposition, unmodified |
-| CSV | optional spreadsheet export of the capability matrix | Generated, never authored |
+It must distinguish observed facts from derived/inferred narrative. Unsupported/unverified fields are
+not filled with plausible guesses.
 
-Every machine-readable report carries `schema_version`, `generated_at`, `generator_version`, and `source_range` (time window or git sha).
+## 10. Operational/security reporting
 
-## 8. Generation and scheduling
+Separate operational reports may summarize:
 
-| Report | Trigger | Generator |
-|--------|---------|-----------|
-| Daily digest | cron, 06:00 local | control-plane admin command |
-| Selector drift | alert-driven + weekly | admin command |
-| Reconciliation | per run | reconciliation job |
-| Capability matrix | per evidence bundle close + per release | CI |
-| Backlog/roadmap status | per PR merge to main | CI |
-| Security posture | per release + weekly scan | CI |
-| Incident | manual | operator, from templates |
+- service health/readiness;
+- tool volume/latency/error rates;
+- auth/session events;
+- UIContract/drift state;
+- policy/approval/lock outcomes;
+- acceptance/release gate status;
+- supply-chain scan/SBOM status;
+- audit integrity.
 
-Generators are read-only with respect to Planner: no report generation may invoke a mutating tool. This is asserted by a contract test that runs each generator against a stack where mutating handlers are unregistered.
+These reports use redacted telemetry and do not expose project content unless the report explicitly
+has a business-report authorization scope.
 
-## 9. Retention and distribution
+## 11. Capability matrix report
 
-| Report | Retention | Distribution |
-|--------|-----------|--------------|
-| Daily digest | 90 days | Operator; optional Hermes summary notification (counts only) |
-| Incident | indefinite | Governance |
-| Selector drift | 180 days | Operator |
-| Capability matrix | versioned in the repo | Public docs |
-| Evidence bundles | per release + 2 | Release record |
-| `internal-detailed` | 30 days | On-host only, 0700 |
+The capability matrix is generated from the capability/evidence state, not hand-edited upward.
 
-Hermes may receive only *counts and severities* from any report — never rows, never content — consistent with [hermes-integration.md](hermes-integration.md).
+Recommended columns:
 
-## 10. Verification
+```text
+capability
+tenant/license observation
+UI observed
+UIContract fragment/version
+read evidence
+mutation evidence
+support state
+blocker/degradation
+last validated
+evidence reference
+```
 
-| Check | Level |
-|-------|-------|
-| Every generated report passes the redaction detector | unit + isolated acceptance |
-| Capability matrix cannot exceed evidence | CI gate |
-| Report schemas validate against fixtures | schema tests |
-| Generators perform zero mutations | contract test |
-| `internal-detailed` reports are never written outside the evidence dir | unit test on the writer |
+Canonical states are:
 
-## 11. Backlog mapping
+```text
+UNVERIFIED_LIVE
+DISCOVERED
+READ_ATTESTED
+MUTATION_ATTESTED
+SUPPORTED
+DEGRADED
+UI_DRIFT
+BLOCKED_CONDITIONAL_ACCESS
+```
 
-| Item | Backlog keys |
-|------|--------------|
-| Report generator framework + schemas | P-068, P-069 |
-| Capability matrix automation + CI gate | P-074 |
-| Reconciliation reporting | P-028, P-029 |
-| Evidence index + attestation history | P-070, P-072 |
-| Operational digest + drift report | P-053, P-069 |
+Graph availability is not a decisive reporting column.
+
+## 12. Reconciliation report
+
+Future reconciliation reports include:
+
+- run/saga id;
+- source snapshot/fingerprint;
+- examined resource counts;
+- create/update/delete/adopt/no-op/ambiguous/orphan counts;
+- planned operation classes;
+- policy/approval summary;
+- checkpoint state;
+- verified/partial/unknown outcome;
+- residual state requiring operator action.
+
+The public/sanitized form avoids raw tenant/business content where counts/hashes/references are
+sufficient. A request-scoped detailed diff may return semantic project fields according to policy.
+
+## 13. Release/evidence reporting
+
+Release reports index:
+
+- exact git SHA/version;
+- required gate results;
+- IA-01..IA-16 outcome;
+- live read-only evidence where performed;
+- image digests;
+- control-plane/browser-worker SBOM references;
+- vulnerability findings/exceptions;
+- capability matrix delta;
+- known blockers/limitations.
+
+A required gate that did not run is rendered `BLOCKED`/`UNAVAILABLE`, never green.
+
+## 14. Formats
+
+Supported future formats may include:
+
+- JSON for tool/API responses and manifests;
+- Markdown for human summaries;
+- CSV for bounded tabular exports where appropriate;
+- NDJSON for audit/evidence exports;
+- Prometheus text only for metrics snapshots, not business reports.
+
+Every machine-readable report is schema-versioned.
+
+## 15. Retention/distribution
+
+Retention/distribution follows the data class:
+
+- operational aggregates: bounded according to observability policy;
+- release/evidence indexes: retained with releases;
+- request-scoped project reports: not automatically retained as system telemetry;
+- detailed local evidence: host-only/controlled, minimized and time-bounded;
+- exports: explicit user action/path, restrictive permissions, no automatic commit/upload.
+
+Hermes may receive only a specifically sanitized notification/summary payload defined by
+[`hermes-integration.md`](hermes-integration.md), not arbitrary report rows/project content.
+
+## 16. Verification
+
+Report tests include:
+
+- schema validation;
+- generator performs zero mutation calls;
+- capability/evidence status cannot be raised by report code;
+- missing/degraded input capability is visible in output;
+- freshness is present;
+- telemetry-safe report classes pass redaction tests;
+- project report responses stay within requested/policy scope;
+- no selector/browser internals leak into user reports;
+- export path/content is not logged unnecessarily.
+
+## 17. Backlog mapping
+
+Reporting/portfolio ownership is canonically EPIC-08:
+
+| Concern | Canonical P-key(s) |
+| --- | --- |
+| Portfolio and roadmap reads | P-054 |
+| Snapshot history | P-055 |
+| Status and variance reports | P-056 |
+| Portfolio rollup | P-057 |
+| Sharing/permissions governance feeding reports | P-058 |
+| Controlled export/reporting surfaces | P-059 |
+| Governance reporting | P-060 |
+
+Cross-cutting release/capability reporting also depends on P-068..P-074. Reporting must not reuse
+P-068/P-069 as “report generator” work; those keys are canonically CI and isolated acceptance.
