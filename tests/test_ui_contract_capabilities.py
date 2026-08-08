@@ -9,6 +9,17 @@ from planner_mcp.errors import UiContractUnattested, UiDrift
 from planner_mcp.ui_contract import assert_no_drift, load_status, require_attested
 
 
+CAP_030_STATES = {
+    "UNVERIFIED_LIVE",
+    "DISCOVERED",
+    "READ_SUPPORTED",
+    "MUTATION_SUPPORTED",
+    "DEGRADED",
+    "BLOCKED",
+    "OUT_OF_SCOPE",
+}
+
+
 def test_selectors_are_unverified_and_not_fabricated() -> None:
     status = load_status()
     assert status.attested is False
@@ -28,13 +39,15 @@ def test_drift_detection() -> None:
         assert_no_drift("9.9.9")
 
 
-def test_capabilities_do_not_use_graph() -> None:
+def test_capabilities_do_not_use_graph_or_mock_as_live_evidence() -> None:
     caps = build_capabilities(license_evidence={"premium_detected": True})
     assert caps["graph_api_used"] is False
+    assert set(caps["support_levels"]) == CAP_030_STATES
     assert caps["capabilities"]
     for row in caps["capabilities"]:
-        assert row["support_level"] in {
-            "unsupported", "planned", "read_unattested", "read_attested",
-            "mutation_attested",
-        }
+        assert row["support_level"] == "UNVERIFIED_LIVE"
+        assert row["tenant_license_availability"] == "OBSERVED"
+        assert row["ui_observed"] == "UNVERIFIED_LIVE"
         assert row["ui_contract_status"] == "UNVERIFIED_LIVE"
+        assert row["read_attestation"] == "NO"
+        assert row["mutation_attestation"] == "NO"
