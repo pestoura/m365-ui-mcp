@@ -87,6 +87,6 @@ def test_compose_keeps_worker_private_while_adding_dedicated_egress() -> None:
     assert "m365-egress" not in control_plane_block.split("networks:", maxsplit=1)[0]
 
 
-def test_mock_browser_still_never_starts_chromium() -> None:
-    browser = PersistentBrowser(BrowserConfig(Path("/tmp/unused"), mode="mock"))
+def test_mock_browser_still_never_starts_chromium(tmp_path: Path) -> None:
+    browser = PersistentBrowser(BrowserConfig(tmp_path / "profile", mode="mock"))
     assert browser.started is False
