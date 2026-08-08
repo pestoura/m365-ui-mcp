@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import sys
 from typing import Any
 
 from .config import Settings, load_settings
+from .errors import ConfigurationError
 from .logging_setup import configure_logging
 from .state import initialise
 from .tools import PlannerTools
@@ -107,8 +110,13 @@ def build_server(settings: Settings | None = None) -> Any:
 
 
 def run() -> None:
-    """Run the Streamable HTTP MCP server."""
-    settings = load_settings()
+    """Run the Streamable HTTP MCP server, failing closed on invalid configuration."""
+    try:
+        settings = load_settings()
+    except ConfigurationError as exc:
+        print(json.dumps(exc.to_dict(), sort_keys=True), file=sys.stderr)
+        raise SystemExit(2) from None
+
     configure_logging(settings.log_level)
     initialise(settings.state_path)
     server = build_server(settings)
