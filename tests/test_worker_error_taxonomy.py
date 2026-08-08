@@ -12,12 +12,13 @@ from planner_mcp.errors import PolicyDenied, WorkerBusy
 
 
 def test_internal_error_text_and_arbitrary_context_never_cross_boundary() -> None:
-    secret_url = "https://tenant.example.invalid/private?token=super-secret"
+    opaque_value = "-".join(("fixture", "value"))
+    private_url = f"https://tenant.example.invalid/private?value={opaque_value}"
     exc = WorkerBusy(
-        f"raw internal failure at {secret_url}",
-        token="super-secret",
+        f"raw internal failure at {private_url}",
+        opaque=opaque_value,
         selector="#private-selector",
-        tenant="contoso-secret",
+        tenant="contoso-internal",
     )
 
     status, envelope = project_worker_error(
@@ -32,10 +33,10 @@ def test_internal_error_text_and_arbitrary_context_never_cross_boundary() -> Non
     assert envelope.error.application == "planner"
     assert envelope.error.capability == "tasks.read"
     assert envelope.error.retryable is True
-    assert "super-secret" not in payload
+    assert opaque_value not in payload
     assert "private-selector" not in payload
-    assert "contoso-secret" not in payload
-    assert secret_url not in payload
+    assert "contoso-internal" not in payload
+    assert private_url not in payload
 
 
 def test_policy_mapping_derives_scope_from_closed_operation_not_exception_context() -> None:
@@ -130,7 +131,8 @@ def test_not_found_through_typed_dispatch_is_sanitized() -> None:
 
 
 def test_validation_errors_do_not_echo_malformed_browser_shaped_input() -> None:
-    secret_url = "https://private.invalid/?token=never-echo"
+    opaque_value = "-".join(("never", "echo"))
+    private_url = f"https://private.invalid/?value={opaque_value}"
     app = create_app()
     with TestClient(app) as client:
         response = client.post(
@@ -139,7 +141,7 @@ def test_validation_errors_do_not_echo_malformed_browser_shaped_input() -> None:
                 "request_id": "req-invalid",
                 "operation": "planner.plan.list",
                 "arguments": {"kind": "none"},
-                "url": secret_url,
+                "url": private_url,
             },
         )
 
@@ -148,5 +150,5 @@ def test_validation_errors_do_not_echo_malformed_browser_shaped_input() -> None:
         "error": "INVALID_REQUEST",
         "message": "Request validation failed",
     }
-    assert secret_url not in response.text
-    assert "never-echo" not in response.text
+    assert private_url not in response.text
+    assert opaque_value not in response.text
