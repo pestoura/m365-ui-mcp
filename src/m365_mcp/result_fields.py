@@ -16,7 +16,7 @@ class FieldSensitivity(StrEnum):
     """Closed result-field sensitivity classes."""
 
     STANDARD = "STANDARD"
-    SECRET = "SECRET"
+    SECRET = "SECRET"  # noqa: S105 - classification label, not credential material
 
 
 class FieldExposure(StrEnum):
