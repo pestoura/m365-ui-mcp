@@ -40,7 +40,8 @@ Phase 2 gate: **PASS / GREEN** — CORE-011..020 are merged and all applicable p
 
 | Key | Status | Evidence / decision |
 |---|---|---|
-| CORE-021 | IMPLEMENTED_AWAITING_GATES | FastAPI lifespan now explicitly owns the canonical browser process. `PersistentBrowser` owns both Playwright and the Chromium persistent context, startup is idempotent, partial startup is cleaned up, and shutdown stops Playwright even when context closure fails. No generic browser primitive or new tenant/Outlook capability is introduced. |
+| CORE-021 | PASS | FastAPI browser lifespan ownership merged through PR #235 to `f57514abf21188dd76a2065521506d9d2e18f5c7`; post-merge docs `31266922919` and CI `31266922911` SUCCESS. Playwright and persistent Chromium ownership/cleanup are process-bound without introducing generic browser primitives. |
+| CORE-022 | IMPLEMENTED_AWAITING_GATES | `/livez` now proves process liveness only; `/readyz` requires browser ownership, authenticated session state, attested UI contract and broker viability simultaneously. Default broker viability remains false until CORE-023, preventing premature live-readiness claims. |
 
 ## CORE-017 boundary decision
 
@@ -80,7 +81,11 @@ The resulting fragment lifecycle overlay is consumed by the existing dependency-
 
 Browser process lifecycle is not capability authorization: semantic live operations retain their fail-closed UIContract guard, current Planner fragments remain `UNVERIFIED_LIVE`, and no live-support claim is created by launching infrastructure. `CORE-021` does not enable an automated real-tenant campaign; `CORE-025` remains mandatory before controlled live Microsoft 365 egress is enabled.
 
-Readiness semantics are intentionally unchanged in this block and remain `CORE-022`.
+## CORE-022 boundary decision
+
+`CORE-022` separates a responsive ASGI process from readiness for live Microsoft 365 work. `/livez` only asserts that the process is alive. `/readyz` is a four-signal AND gate over real browser ownership, `AUTHENTICATED`, UIContract attestation and broker viability; any absent signal returns HTTP 503 with a bounded reason code.
+
+The implementation intentionally leaves default broker viability false before `CORE-023`. It therefore cannot manufacture readiness from mode/configuration, a profile directory or a responsive route. Mock mode remains useful for CI but is not treated as live M365 readiness.
 
 ## Current compatibility invariants
 
@@ -95,8 +100,8 @@ Readiness semantics are intentionally unchanged in this block and remain `CORE-0
 ## Next gate
 
 ```text
-CORE-021 PR CI/security/images/SBOM GREEN
+CORE-022 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-022
+        -> CORE-023
 ```
