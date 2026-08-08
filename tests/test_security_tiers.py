@@ -25,7 +25,12 @@ def _definition(
         application="planner",
         surface="test",
         domain="test",
-        input_schema={"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
         output_schema={"type": "object", "properties": {}, "additionalProperties": False},
         mutation_class=mutation_class,
         risk_class=risk_class,
@@ -47,7 +52,13 @@ def test_closed_security_tier_order_is_stable() -> None:
         SecurityTier.T3,
         SecurityTier.T4,
     )
-    assert SecurityTier.T0 < SecurityTier.T1 < SecurityTier.T2 < SecurityTier.T3 < SecurityTier.T4
+    assert (
+        SecurityTier.T0
+        < SecurityTier.T1
+        < SecurityTier.T2
+        < SecurityTier.T3
+        < SecurityTier.T4
+    )
 
 
 def test_read_risk_metadata_maps_to_t0_t1_t2() -> None:
