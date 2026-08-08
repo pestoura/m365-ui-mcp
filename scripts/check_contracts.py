@@ -188,7 +188,11 @@ def main() -> int:
 
     capability = docs["capability_manifest.json"]
     check_equal("CapabilityManifest contract_version", capability.get("contract_version"), VERSION)
-    check_equal("CapabilityManifest CAP-030 states", capability.get("support_levels"), list(SUPPORT_STATES))
+    check_equal(
+        "CapabilityManifest CAP-030 states",
+        capability.get("support_levels"),
+        list(SUPPORT_STATES),
+    )
 
     base = docs["tool_manifest.json"]
     extended = docs["extended_tool_manifest.json"]
