@@ -34,4 +34,4 @@ Outlook remains `RESERVED`:
 
 Tests prove determinism, synthetic provenance, absence of identity/routing/session material, and continued zero Outlook public-tool/browser-operation exposure.
 
-OUT-001 is merged and post-merge GREEN. PLN-MIG-002 is also merged and post-merge GREEN on `main`. This commit deliberately re-triggers OUT-002 so all mandatory gates execute against the current cross-lane integration base rather than relying on an earlier successful merge simulation.
+OUT-001, PLN-MIG-001, PLN-MIG-002 and CORE-035 are merged and post-merge GREEN on current `main`. This revision deliberately re-triggers OUT-002 so the complete mandatory suite executes against that cross-lane integration base; earlier GREEN evidence is not reused for merge.
