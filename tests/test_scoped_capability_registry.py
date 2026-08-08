@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from m365_mcp.capability_registry import (
-    CapabilityRegistry,
-    ScopedCapability,
-    default_capability_registry,
-)
+import m365_mcp.capability_registry as capability_registry
 
 
 EXPECTED_PLANNER_CAPABILITIES = (
@@ -25,7 +21,7 @@ EXPECTED_PLANNER_CAPABILITIES = (
 
 
 def test_default_registry_preserves_planner_capability_order_and_scope() -> None:
-    registry = default_capability_registry()
+    registry = capability_registry.default_capability_registry()
     definitions = registry.by_application("planner")
 
     assert registry.capability_names("planner") == EXPECTED_PLANNER_CAPABILITIES
@@ -38,7 +34,7 @@ def test_default_registry_preserves_planner_capability_order_and_scope() -> None
 
 
 def test_scoped_identity_uses_all_required_dimensions() -> None:
-    registry = default_capability_registry()
+    registry = capability_registry.default_capability_registry()
     definition = registry.get_scoped(
         application="planner",
         surface="planner_web",
@@ -56,13 +52,13 @@ def test_scoped_identity_uses_all_required_dimensions() -> None:
 
 
 def test_same_semantic_capability_can_exist_in_distinct_container_scopes() -> None:
-    first = ScopedCapability(
+    first = capability_registry.ScopedCapability(
         "planner", "planner_web", "professional_session", "plan", "tasks.read"
     )
-    second = ScopedCapability(
+    second = capability_registry.ScopedCapability(
         "planner", "planner_web", "professional_session", "account", "tasks.read"
     )
-    registry = CapabilityRegistry((first, second))
+    registry = capability_registry.CapabilityRegistry((first, second))
 
     assert registry.capability_names("planner") == ("tasks.read",)
     assert len(registry.definitions()) == 2
@@ -71,17 +67,17 @@ def test_same_semantic_capability_can_exist_in_distinct_container_scopes() -> No
 def test_duplicate_exact_scope_fails_closed() -> None:
     import pytest
 
-    definition = ScopedCapability(
+    definition = capability_registry.ScopedCapability(
         "planner", "planner_web", "professional_session", "plan", "tasks.read"
     )
     with pytest.raises(ValueError, match="duplicate scoped capability"):
-        CapabilityRegistry((definition, definition))
+        capability_registry.CapabilityRegistry((definition, definition))
 
 
 def test_tool_registry_capability_keys_are_backed_by_capability_registry() -> None:
     from m365_mcp.tool_registry import default_tool_registry
 
-    capabilities = default_capability_registry()
+    capabilities = capability_registry.default_capability_registry()
     for tool in default_tool_registry().by_application("planner"):
         for key in tool.capability_keys:
             assert capabilities.has_capability("planner", key), (tool.name, key)
@@ -97,7 +93,7 @@ def test_existing_planner_capability_output_names_are_preserved() -> None:
 
 
 def test_registry_snapshot_contains_scope_classes_not_tenant_ids() -> None:
-    rendered = str(default_capability_registry().snapshot()).lower()
+    rendered = str(capability_registry.default_capability_registry().snapshot()).lower()
     assert "@" not in rendered
     assert "mailbox" not in rendered
     assert "tenant_id" not in rendered
