@@ -104,12 +104,17 @@ def project_rows(rows: list[Row], request: ProjectionRequest) -> ProjectionResul
         return ProjectionResult(request.kind, metadata, input_count, 1)
 
     if request.kind is ProjectionKind.SELECT:
-        data = [_select(row, request.fields) for row in rows]
-        return ProjectionResult(request.kind, data, input_count, len(data))
+        selected_rows = [_select(row, request.fields) for row in rows]
+        return ProjectionResult(request.kind, selected_rows, input_count, len(selected_rows))
 
     if request.kind is ProjectionKind.FIRST:
-        data = _copy_row(rows[0]) if rows else None
-        return ProjectionResult(request.kind, data, input_count, int(data is not None))
+        first_row = _copy_row(rows[0]) if rows else None
+        return ProjectionResult(
+            request.kind,
+            first_row,
+            input_count,
+            int(first_row is not None),
+        )
 
     if request.kind is ProjectionKind.LATEST:
         sort_field = request.sort_field
@@ -117,17 +122,22 @@ def project_rows(rows: list[Row], request: ProjectionRequest) -> ProjectionResul
             raise ValueError("latest projection requires sort_field")
         candidates = [row for row in rows if sort_field in row]
         latest = max(candidates, key=lambda row: _sortable(row[sort_field]), default=None)
-        data = _copy_row(latest) if latest is not None else None
-        return ProjectionResult(request.kind, data, input_count, int(data is not None))
+        latest_row = _copy_row(latest) if latest is not None else None
+        return ProjectionResult(
+            request.kind,
+            latest_row,
+            input_count,
+            int(latest_row is not None),
+        )
 
     if request.kind is ProjectionKind.TOP_N:
-        data = [_copy_row(row) for row in rows[: request.top_n]]
-        return ProjectionResult(request.kind, data, input_count, len(data))
+        top_rows = [_copy_row(row) for row in rows[: request.top_n]]
+        return ProjectionResult(request.kind, top_rows, input_count, len(top_rows))
 
     if request.kind is ProjectionKind.PAGINATION:
         end = request.offset + request.limit
-        data = [_copy_row(row) for row in rows[request.offset:end]]
-        return ProjectionResult(request.kind, data, input_count, len(data))
+        page_rows = [_copy_row(row) for row in rows[request.offset:end]]
+        return ProjectionResult(request.kind, page_rows, input_count, len(page_rows))
 
     raise AssertionError(f"unhandled projection kind: {request.kind}")
 
