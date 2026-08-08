@@ -3,7 +3,6 @@ import pytest
 import m365_mcp.application_registry as application_registry
 import m365_mcp.execution_lifecycle as execution_lifecycle
 
-
 IDEMPOTENCY_KEY = "a" * 64
 
 
