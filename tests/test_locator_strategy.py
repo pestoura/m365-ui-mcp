@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import importlib
-import json
-from pathlib import Path
-from typing import Any
 
 
-pytest: Any = importlib.import_module("pytest")
-locators: Any = importlib.import_module("m365_mcp.locators")
-worker_locators: Any = importlib.import_module("m365_browser_worker.locators")
-ui_contract_store: Any = importlib.import_module("m365_mcp.ui_contract_store")
+pytest = importlib.import_module("pytest")
+json = importlib.import_module("json")
+locators = importlib.import_module("m365_mcp.locators")
+worker_locators = importlib.import_module("m365_browser_worker.locators")
+ui_contract_store = importlib.import_module("m365_mcp.ui_contract_store")
 
 EVIDENCE = "sha256:" + "a" * 64
 
@@ -109,7 +107,7 @@ def test_shipped_contract_does_not_invent_live_locators() -> None:
     )
 
 
-def test_ui_contract_loader_rejects_fallback_without_evidence(tmp_path: Path) -> None:
+def test_ui_contract_loader_rejects_fallback_without_evidence(tmp_path) -> None:
     manifest = {
         "ui_contract_set_version": "0.1.0",
         "legacy_ui_contract_version": "0.1.0",
