@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import m365_mcp.result_projection as result_projection
 import pytest
 
+import m365_mcp.result_projection as result_projection
 
 ROWS = [
     {"id": "a", "title": "Alpha", "updated": "2026-08-01T10:00:00Z"},
