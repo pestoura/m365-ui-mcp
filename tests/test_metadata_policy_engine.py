@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import cast
 
 from m365_mcp.config import Settings
-from m365_mcp.policy import Decision, MetadataPolicyEngine, READ_TOOLS, evaluate
+from m365_mcp.policy import READ_TOOLS, Decision, MetadataPolicyEngine, evaluate
 from m365_mcp.tool_registry import (
     CompatibilityRequirement,
     ImplementationState,
