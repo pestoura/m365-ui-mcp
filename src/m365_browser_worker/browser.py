@@ -7,13 +7,15 @@ surface and never exports authenticated session material.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from m365_browser_worker.egress import enforce_route_egress
 from m365_mcp.config import browser_runtime_settings
-from planner_mcp.errors import BlockerConditionalAccess, UiContractUnattested
+from planner_mcp.errors import BlockerConditionalAccess, UiContractUnattested, WorkerUnavailable
 from planner_mcp.ui_contract import load_status
 
 
@@ -56,6 +58,8 @@ class PersistentBrowser:
 
     The persistent profile is the authentication boundary. Passwords, cookies,
     tokens and storage state are never copied into MCP or application state.
+    Individual semantic operations use fresh operation-scoped pages so page-local
+    navigation/DOM state cannot bleed into the next operation.
     """
 
     def __init__(self, config: BrowserConfig | None = None) -> None:
@@ -76,6 +80,28 @@ class PersistentBrowser:
                 f"live browser operation '{operation}' blocked",
                 ui_contract_version=status.version,
             )
+
+    @asynccontextmanager
+    async def operation_page(self, operation: str) -> AsyncIterator[Any]:
+        """Yield one fresh page and close it deterministically after the operation.
+
+        Authentication/session state remains intentionally shared only through the
+        process-owned persistent browser context. Page-local state is never reused.
+        This primitive is internal infrastructure and does not expose navigation,
+        selectors, scripts or browser state through the worker API.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "browser context is not available for an operation-scoped page",
+                operation=operation,
+            )
+
+        context = self._context
+        page = await context.new_page()
+        try:
+            yield page
+        finally:
+            await page.close()
 
     async def start(self) -> None:
         """Launch and own Playwright plus the persistent Chromium context."""
