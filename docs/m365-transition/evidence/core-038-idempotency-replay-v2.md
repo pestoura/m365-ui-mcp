@@ -1,6 +1,6 @@
 # CORE-038 — Idempotency and replay protection v2
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_037**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -79,6 +79,6 @@ Tests prove:
 - result digests are legal only for completed operations;
 - a first operation with no existing record is executable.
 
-## Dependency gate
+## Current integration gate
 
-This work is stacked on CORE-037. It must not merge until CORE-037 is merged and post-merge `main` is GREEN. It will then be retargeted to `main` and revalidated through the complete mandatory CI/security/image/Trivy/SBOM/documentation suite.
+CORE-037 is merged and post-merge GREEN on `main` at `1f00e64ca5e7ab03488746d44ca7abc7260a5093`. PR #262 is now based directly on that integration point. This revision deliberately re-triggers the full mandatory gate suite; stacked-branch evidence is not reused for merge.
