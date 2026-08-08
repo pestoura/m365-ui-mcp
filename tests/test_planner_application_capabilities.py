@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from m365_mcp.apps.planner import planner_capability_definitions
 from m365_mcp.capability_registry import default_capability_registry
-from m365_mcp.policy import Decision, MetadataPolicyEngine
 from m365_mcp.config import Settings
+from m365_mcp.policy import Decision, MetadataPolicyEngine
 from m365_mcp.tool_registry import default_tool_registry
 
 
@@ -31,7 +31,9 @@ def test_planner_app_owns_all_11_canonical_capability_definitions() -> None:
     ) == EXPECTED_CAPABILITIES
     assert all(definition.application == "planner" for definition in definitions)
     assert all(definition.surface == "planner_web" for definition in definitions)
-    assert all(definition.account_scope == "professional_session" for definition in definitions)
+    assert all(
+        definition.account_scope == "professional_session" for definition in definitions
+    )
 
 
 def test_default_capability_registry_is_composed_from_planner_app_definitions() -> None:
