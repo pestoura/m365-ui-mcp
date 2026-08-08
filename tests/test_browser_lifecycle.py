@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
+from m365_browser_worker import lifecycle
 from m365_browser_worker.browser import BrowserConfig, PersistentBrowser
 from planner_browser_worker.app import create_app
 
 
 class RecordingBrowser(PersistentBrowser):
     def __init__(self, *, fail_start: bool = False) -> None:
-        super().__init__(BrowserConfig(profile_dir=Path("/tmp/core-021-test"), mode="mock"))
+        super().__init__(
+            BrowserConfig(profile_dir=Path.cwd() / ".core-021-test", mode="mock")
+        )
         self.fail_start = fail_start
         self.start_calls = 0
         self.stop_calls = 0
@@ -142,12 +144,5 @@ def test_lifecycle_surface_contains_no_generic_browser_primitive() -> None:
         "raw_action",
         "storage_state",
     }
-    from m365_browser_worker import lifecycle
-
     exported = set(lifecycle.__all__)
     assert not (forbidden & exported)
-
-
-def _keep_any_import_used(value: Any) -> Any:
-    """Keep the Any import explicit for strict static analysis of test doubles."""
-    return value
