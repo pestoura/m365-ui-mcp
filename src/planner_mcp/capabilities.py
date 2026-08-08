@@ -48,6 +48,23 @@ def _account_context_valid(account_context: dict[str, Any]) -> bool:
     )
 
 
+def _explicit_live_evidence_present(
+    *,
+    requested: bool,
+    auth_evidence: dict[str, Any],
+    account_context: dict[str, Any],
+    license_evidence: dict[str, Any],
+) -> bool:
+    """Require explicit live-UI provenance; live mode alone is never evidence."""
+    if not requested:
+        return False
+    evidence_sets = (auth_evidence, account_context, license_evidence)
+    return all(
+        str(item.get("evidence_source", "")).strip().lower() == "live_ui"
+        for item in evidence_sets
+    )
+
+
 def build_capabilities(
     *,
     auth_evidence: dict[str, Any] | None = None,
@@ -73,7 +90,12 @@ def build_capabilities(
         runtime_healthy=runtime_ok,
         policy_allowed=policy_allowed,
         license_available=bool(license_evidence.get("premium_detected")),
-        live_evidence=live_evidence,
+        live_evidence=_explicit_live_evidence_present(
+            requested=live_evidence,
+            auth_evidence=auth_evidence,
+            account_context=account_context,
+            license_evidence=license_evidence,
+        ),
     )
     registry = default_capability_registry()
     effective = project_effective_capabilities(
