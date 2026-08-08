@@ -51,7 +51,7 @@ jobs:
       - name: Isolated acceptance
         run: python scripts/isolated_acceptance.py
 
-      - name: Base image digest pinning gate (P-020)
+      - name: Base image digest pinning gate (P-065)
         run: python scripts/check_base_image_pinning.py
 
       - uses: actions/upload-artifact@v4
@@ -93,7 +93,7 @@ jobs:
         run: mkdir -p artifacts
 
       - name: Trivy image scan - control plane (CRITICAL,HIGH)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: planner-mcp:ci
           format: table
@@ -102,7 +102,7 @@ jobs:
           exit-code: "1"
 
       - name: Trivy image scan - browser worker (CRITICAL,HIGH)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: planner-browser-worker:ci
           format: table
@@ -111,7 +111,7 @@ jobs:
           exit-code: "1"
 
       - name: CycloneDX SBOM - control plane (written to workspace)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: planner-mcp:ci
@@ -119,7 +119,7 @@ jobs:
           output: artifacts/sbom-control-plane.cdx.json
 
       - name: CycloneDX SBOM - browser worker (written to workspace)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: planner-browser-worker:ci
@@ -163,7 +163,7 @@ jobs:
           fetch-depth: 0
 
       - name: Trivy filesystem scan - dependencies (CRITICAL,HIGH)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -173,7 +173,7 @@ jobs:
           exit-code: "1"
 
       - name: Trivy secret scanning (blocking)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -182,7 +182,7 @@ jobs:
           exit-code: "1"
 
       - name: Trivy misconfiguration scan (advisory)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
