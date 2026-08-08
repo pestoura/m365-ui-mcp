@@ -43,21 +43,30 @@ Phase 2 gate: **PASS / GREEN** — CORE-011..020 are merged and all applicable p
 | CORE-021 | PASS | FastAPI browser lifespan ownership merged through PR #235 to `f57514abf21188dd76a2065521506d9d2e18f5c7`; post-merge docs `31266922919` and CI `31266922911` SUCCESS. |
 | CORE-022 | PASS | True liveness/readiness merged through PR #236 to `b3aef8e08f13621070e777bdca81921a95320aed`; post-merge docs `31267827191` and CI `31267827213` SUCCESS. Readiness is a fail-closed seven-signal AND gate over browser/profile/auth/UI contract/broker/protocol/lock. |
 | CORE-023 | PASS | Session/Capability Broker merged through PR #237 to `6736a229c0a601ba40cc7308d6bcd193c71caf78`; post-merge docs `31268368222` and CI `31268368228` SUCCESS. Semantic grants are browser-session bound and export only bounded scope metadata. |
-| CORE-024 | IMPLEMENTED_AWAITING_GATES | Account-context enforcement adds closed VERIFIED/UNVERIFIED/AMBIGUOUS/WRONG_ACCOUNT/WRONG_TENANT states. Broker viability and authorization require an explicitly verified professional expected-profile context; safe default is UNVERIFIED. No raw tenant/user identity is required by the model. |
+| CORE-024 | PASS | Account-context enforcement merged through PR #238 to `14a81643ba727ecd542a8cb31c2f7089161883a6`; post-merge docs `31268882024` and CI `31268882046` SUCCESS. Broker viability requires an explicitly verified professional expected-profile context. |
+| CORE-025 | IMPLEMENTED_AWAITING_GATES | Dedicated worker-only `m365-egress` network plus fail-closed Playwright HTTPS/domain policy; `browser-internal` remains private, the worker publishes no host port, and unreviewed outbound hosts are aborted. |
 
 ## CORE-017..020 evidence/lifecycle boundary
 
 UI lifecycle, evidence persistence, attestation and freshness remain separate reviewed concerns. Evidence is bound to the exact UIContractSet digest, contains no tenant/session content, and expiration/degradation is capability scoped. Current Planner fragments remain `UNVERIFIED_LIVE` until real controlled evidence is collected; no CI workflow authenticates to the real tenant.
 
-## CORE-021..023 browser/session boundary
+## CORE-021..025 browser/session/network boundary
 
 FastAPI lifespan owns Playwright/Chromium. Readiness remains a fail-closed seven-signal AND gate. The Session/Capability Broker binds only registered semantic capabilities to a process-owned authenticated session and returns bounded application/surface/account/container metadata; it exposes no generic browser primitive.
+
+Account correctness is separately fail-closed: authentication alone is insufficient unless the sanitized professional expected-profile context is VERIFIED. Controlled egress preserves the private control-plane/worker network, adds a worker-only outbound path, and applies a closed Playwright request policy so an outbound route does not become arbitrary Internet access.
 
 ## CORE-024 boundary decision
 
 `CORE-024` separates authentication from account correctness. An authenticated session is insufficient unless its sanitized account-context assertion is `VERIFIED`, professional and associated with the expected isolated profile. UNVERIFIED, AMBIGUOUS, WRONG_ACCOUNT and WRONG_TENANT all fail semantic authorization with `POLICY_DENIED`.
 
-The account-context model intentionally does not persist or require raw tenant IDs, email addresses or user identifiers. The live `/account/context` route exposes only state/professional/expected_profile/valid flags. Runtime discovery of that assertion requires controlled Microsoft connectivity and therefore remains constrained by CORE-025.
+The account-context model intentionally does not persist or require raw tenant IDs, email addresses or user identifiers. The live `/account/context` route exposes only state/professional/expected_profile/valid flags.
+
+## CORE-025 boundary decision
+
+`CORE-025` makes worker outbound connectivity explicit without creating a public worker route. `browser-internal` remains Docker-internal; only the browser worker joins `m365-egress`; and Playwright aborts non-HTTPS or unreviewed outbound hosts by default.
+
+CI validates the mechanism and network topology only. It does not authenticate to a real Microsoft tenant and therefore does not claim that the reviewed Microsoft domain set is complete for every live tenant flow. Any additional dependency discovered during controlled live evidence collection remains a reviewed policy change.
 
 ## Current compatibility invariants
 
@@ -67,13 +76,13 @@ The account-context model intentionally does not persist or require raw tenant I
 - mock mode cannot be interpreted as live support;
 - Outlook remains `RESERVED`, with zero public tools/capabilities/selectors;
 - no raw browser primitive/session-secret export is introduced;
-- `CORE-025` remains mandatory before any automated live M365 worker egress/revalidation claim.
+- controlled worker egress does not expose an inbound worker route or generic Internet primitive.
 
 ## Next gate
 
 ```text
-CORE-024 PR CI/security/images/SBOM GREEN
+CORE-025 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-025
+        -> CORE-026
 ```

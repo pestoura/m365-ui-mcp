@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from m365_browser_worker.egress import enforce_route_egress
 from m365_mcp.config import browser_runtime_settings
 from planner_mcp.errors import BlockerConditionalAccess, UiContractUnattested
 from planner_mcp.ui_contract import load_status
@@ -96,6 +97,7 @@ class PersistentBrowser:
                 headless=self.config.headless,
                 args=["--no-first-run", "--no-default-browser-check"],
             )
+            await context.route("**/*", enforce_route_egress)
         finally:
             if context is None:
                 await playwright.stop()
