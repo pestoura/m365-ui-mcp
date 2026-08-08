@@ -4,6 +4,7 @@
   "scope": "application",
   "application": "planner",
   "surface": null,
+  "capability_keys": [],
   "attested": false,
   "attestation_status": "UNVERIFIED_LIVE",
   "selectors": {

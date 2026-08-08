@@ -4,6 +4,10 @@
   "scope": "surface",
   "application": "planner",
   "surface": "planner-premium-web",
+  "capability_keys": [
+    "plans.read",
+    "project_snapshot.read"
+  ],
   "attested": false,
   "attestation_status": "UNVERIFIED_LIVE",
   "selectors": {

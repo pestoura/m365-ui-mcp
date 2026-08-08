@@ -4,6 +4,11 @@
   "scope": "surface",
   "application": "planner",
   "surface": "planner-premium-web",
+  "capability_keys": [
+    "tasks.read",
+    "buckets.read",
+    "project_snapshot.read"
+  ],
   "attested": false,
   "attestation_status": "UNVERIFIED_LIVE",
   "selectors": {

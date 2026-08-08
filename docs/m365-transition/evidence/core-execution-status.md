@@ -25,8 +25,8 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 |---|---|---|
 | CORE-011 | PASS | Scoped Capability Registry merged through PR #225 to `3a53d44a77254810c701a04535b1ef2065302ab6`; PR docs `31257236487` and CI `31257236512` SUCCESS; post-merge docs `31257452439` and CI `31257452441` SUCCESS. Eleven Planner capability keys retain order and semantics with explicit app/surface/account/container scope. |
 | CORE-012 | PASS | Effective capability projection merged through PR #226 to `608bc854863c9e9fa756c20503c7c7d27d83d61a`; PR docs `31258209123` and CI `31258209104` SUCCESS; post-merge docs `31258381298` and CI `31258381284` SUCCESS. Mock or mode flags cannot promote live support without explicit live-UI evidence provenance. |
-| CORE-013 | IMPLEMENTED_AWAITING_GATES | UIContract storage split into validated common/application/surface fragments with exact legacy-selector equivalence and global compatibility aggregation preserved. |
-| CORE-014 | NOT_STARTED | Per-fragment attestation. |
+| CORE-013 | PASS | Fragmented UIContract storage merged through PR #227 to `9b1a8aeb3a9ab536d8b26eeaf45717e95fd34d86`; PR docs `31258776662` and CI `31258776663` SUCCESS; post-merge docs `31258954098` and CI `31258954095` SUCCESS. Ten legacy selectors remain exactly preserved and globally compatible. |
+| CORE-014 | IMPLEMENTED_AWAITING_GATES | Capability dependencies are explicit per UI fragment; unattested/drifted evidence now affects only dependent capabilities, with undeclared dependencies remaining fail-closed. |
 | CORE-015 | NOT_STARTED | Contract-set digest. |
 | CORE-016 | NOT_STARTED | Locator strategy abstraction. |
 | CORE-017 | NOT_STARTED | UI drift lifecycle. |
@@ -34,17 +34,17 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 | CORE-019 | NOT_STARTED | Attestation tooling/runbook. |
 | CORE-020 | NOT_STARTED | Capability expiration/revalidation. |
 
-## CORE-013 boundary decision
+## CORE-014 boundary decision
 
-Fragmentation is a storage boundary only. The manifest defines deterministic ordering and each selector has exactly one fragment owner. Planner compatibility still aggregates all fragments into one global `UiContractStatus`; therefore one unattested fragment continues to leave the compatibility status unattested until CORE-014 introduces dependency-aware per-fragment attestation.
+Fragment-to-capability dependencies are explicit metadata, never inferred from selector names. A drifted task fragment can therefore degrade `tasks.read`, `buckets.read` and `project_snapshot.read` without degrading `plans.read`. Capabilities with no evidence-bearing fragment remain `UNVERIFIED_LIVE` rather than inheriting support from a nearby UI surface.
 
-The existing `contracts/ui_contract.json` remains a temporary compatibility snapshot, with CI requiring exact selector equivalence to the fragmented set so it cannot silently diverge.
+The global Planner UIContract status remains as a compatibility view. CORE-015 will add the exact contract-set digest used by an execution; no digest is introduced by CORE-014.
 
 ## Current compatibility invariants
 
 - all 17 public `planner_*` tools remain `PRESERVE` under default profile;
 - all 11 Planner capability keys are preserved;
-- all 10 existing UI selectors are preserved exactly once;
+- all 10 existing UI selectors are preserved exactly once and in historical order;
 - mock mode cannot be interpreted as live support;
 - Outlook remains `RESERVED`, with zero public tools/capabilities/selectors;
 - no raw browser primitive/session-secret export is introduced;
@@ -53,8 +53,8 @@ The existing `contracts/ui_contract.json` remains a temporary compatibility snap
 ## Next gate
 
 ```text
-CORE-013 PR CI/security/images/SBOM GREEN
+CORE-014 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-014
+        -> CORE-015
 ```
