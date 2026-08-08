@@ -5,40 +5,67 @@
 
 ## Context
 
-The component that holds an authenticated corporate browser session is the highest-value target
-in this system. The component that talks to an external MCP client is the most exposed. Putting
-both in one process means a protocol-level flaw reaches the tenant session directly, and policy
-decisions become co-located with the code that can execute anything.
+The component that holds the authenticated professional browser profile is a high-value trust zone.
+The component that accepts MCP client requests is externally exposed by comparison. Combining both
+would let a protocol/application flaw reach the browser session directly and would co-locate policy
+with arbitrary execution capability.
 
 ## Decision
 
-Two processes/containers, two trust zones:
+Use two separate components/trust boundaries.
 
-- **planner-mcp control plane (Z1)** — MCP protocol, manifests, policy engine, approvals,
-  idempotency, locks, reconciliation, state DB, telemetry. Never touches the browser profile.
-- **planner-browser-worker (Z2/Z3)** — owns Chromium and the persistent profile, executes a
-  **closed enum** of typed operations, resolves UI contract fragments, returns typed results plus
-  evidence hashes. Makes no policy decisions, holds no approval state, has no public route.
+### `planner-mcp` control plane
 
-The boundary is a one-way command channel: Z1 sends validated operation envelopes; Z2 returns
-typed results. Z2 never calls Hermes and is not reachable from the internet or the host network.
+Owns:
+
+- MCP runtime and semantic tool registry;
+- contracts/manifests;
+- policy and approvals;
+- desired-state/reconciliation orchestration;
+- idempotency, locks, sagas/checkpoints;
+- persistent state/audit;
+- capability/UIContract metadata;
+- observability/reporting orchestration;
+- calls to the browser worker.
+
+It does **not** mount or directly manipulate the Chromium professional profile.
+
+### `planner-browser-worker`
+
+Owns:
+
+- Playwright/Chromium lifecycle;
+- dedicated professional profile;
+- browser authentication observation;
+- UIContract selector resolution;
+- semantic UI reads/actions requested through a closed typed operation contract;
+- read-back of UI state.
+
+It does not own policy/approval state, does not expose generic browser primitives to the public MCP
+and has no public route.
+
+The worker accepts only schema-valid typed operation envelopes. Unknown operations fail closed.
 
 ## Consequences
 
-- A compromised or buggy MCP surface still cannot issue an arbitrary browser action — only
-  operations in the enum, only with schema-valid arguments, only after a policy decision.
-- Authorisation logic is testable without a browser; browser logic is testable without policy.
-- The worker can be restarted independently; the profile volume preserves the session.
-- Costs: an extra hop, envelope schemas to maintain, and correlation via `operation_id`. Accepted.
+- external MCP compromise has a narrower path to the browser session;
+- policy/governance logic can be tested without a live browser;
+- browser/UI logic can be tested against mock surfaces without weakening control-plane policy;
+- the worker can restart independently while preserving the dedicated profile volume;
+- an explicit internal contract/version must be maintained between components;
+- operation correlation/evidence must span both components.
 
 ## Enforcement
 
-- Worker publishes no host ports; `internal: true` network.
-- Control plane has no mount of the profile volume.
-- Unknown operation ⇒ `UNKNOWN_OPERATION`; schema-invalid ⇒ `SCHEMA_INVALID`.
-- Container posture asserted automatically (IA-15).
+- worker publishes no public/host port in the production topology;
+- control plane does not mount the browser profile volume;
+- worker does not mount host home, Docker socket, personal credential directories or Hermes state;
+- generic browser actions are not part of the public MCP tool catalogue;
+- container/network posture is tested in isolated acceptance;
+- dedicated professional-profile handling follows ADR-007.
 
 ## Related
 
-ADR-001, ADR-008; [docs/architecture.md](../architecture.md);
-[docs/deployment.md](../deployment.md); backlog P-011, P-064.
+ADR-001, ADR-006, ADR-007;
+[`architecture.md`](../architecture.md), [`browser-worker.md`](../browser-worker.md),
+[`deployment.md`](../deployment.md); backlog P-011, P-013, P-064.
