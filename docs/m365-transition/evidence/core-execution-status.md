@@ -17,22 +17,22 @@ This file is the execution overlay for the `CORE-*` definitions in `../roadmap-a
 | CORE-009 | PASS | Metadata-driven semantic registration; PR #223 merged to `2c250af7763a325df34f53c826adea5c01e61a3d`; post-merge docs `31255688052` and CI `31255688039` SUCCESS. |
 | CORE-010 | PASS | Bounded exposure profiles; PR #224 merged to `ccfb2c0382c1e812abad6517a5d735ddebe5ec62`; post-merge docs `31256189742` and CI `31256189728` SUCCESS. |
 
-Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests remain GREEN.
+Phase 1 gate: **PASS / GREEN**.
 
 ## Phase 2 — Capability and UI contract redesign
 
 | Key | Status | Evidence / decision |
 |---|---|---|
-| CORE-011 | PASS | Scoped Capability Registry merged through PR #225 to `3a53d44a77254810c701a04535b1ef2065302ab6`; PR docs `31257236487` and CI `31257236512` SUCCESS; post-merge docs `31257452439` and CI `31257452441` SUCCESS. Eleven Planner capability keys retain order and semantics with explicit app/surface/account/container scope. |
-| CORE-012 | PASS | Effective capability projection merged through PR #226 to `608bc854863c9e9fa756c20503c7c7d27d83d61a`; PR docs `31258209123` and CI `31258209104` SUCCESS; post-merge docs `31258381298` and CI `31258381284` SUCCESS. Mock or mode flags cannot promote live support without explicit live-UI evidence provenance. |
-| CORE-013 | PASS | Fragmented UIContract storage merged through PR #227 to `9b1a8aeb3a9ab536d8b26eeaf45717e95fd34d86`; PR docs `31258776662` and CI `31258776663` SUCCESS; post-merge docs `31258954098` and CI `31258954095` SUCCESS. Ten legacy selectors remain exactly preserved and globally compatible. |
-| CORE-014 | PASS | Per-fragment attestation merged through PR #228 to `66d03890492f072364c270b9a9c6b42958da086e`; PR docs `31259317512` and CI `31259317510` SUCCESS; post-merge docs `31259491871` and CI `31259491856` SUCCESS. Drift affects only capabilities with explicit fragment dependencies. |
-| CORE-015 | PASS | Contract-set digest merged through PR #229 to `f41915de3dbdcb052993f1e31f2aca1637840add`; PR docs `31259832059` and CI `31259832057` SUCCESS; post-merge docs `31260020398` and CI `31260020388` SUCCESS. Deterministic SHA-256 identifies the exact semantic contract set without runtime/session identity. |
-| CORE-016 | PASS | Closed locator strategy merged through PR #230 to `7c321271ce5eae042754f8b18480758b6cf0ead1`; post-merge docs `31261175335` and CI `31261175402` SUCCESS. Accessible semantics outrank evidence-bound test-id/CSS fallbacks; unsafe generic primitives remain rejected. |
-| CORE-017 | PASS | Closed UI drift lifecycle merged through PR #231 to `b9322f676eddb06a22fe98ead9292f05f6fdc5ef`; post-merge docs `31264131559` and CI `31264131570` SUCCESS. Capability-scoped degradation remains fail closed, and successful re-attestation cannot bypass the required drift lifecycle. |
-| CORE-018 | PASS | Sanitized capability evidence persistence merged through PR #232 to `99f32929ab13c5068ac00410e8418abc9b8a7ef2`; post-merge docs `31264839172` and CI `31264839203` SUCCESS. Evidence is append-only/idempotent, contract-digest bound and contains no tenant/session content. |
-| CORE-019 | PASS | Deterministic attestation workflow merged through PR #233 to `f7b89a4eb740fa561189bc1e62c4869d5242a644`; PR CI `31265403348` and push CI `31265401773` SUCCESS; post-merge docs `31265582918` and CI `31265582939` SUCCESS. No browser execution or real-tenant CI path was introduced. |
-| CORE-020 | PASS | Versioned evidence lifetime/revalidation merged through PR #234 to `b60f9b80c22cba841265962d0308518b57667fd6`; post-merge docs `31266326587` and CI `31266326601` SUCCESS. Current reviewable baseline is 7 days; expiry is `STALE`, missing/future evidence requires re-attestation, and degraded source evidence is never promoted. |
+| CORE-011 | PASS | Scoped Capability Registry merged through PR #225 to `3a53d44a77254810c701a04535b1ef2065302ab6`; post-merge docs `31257452439` and CI `31257452441` SUCCESS. |
+| CORE-012 | PASS | Effective capability projection merged through PR #226 to `608bc854863c9e9fa756c20503c7c7d27d83d61a`; post-merge docs `31258381298` and CI `31258381284` SUCCESS. |
+| CORE-013 | PASS | Fragmented UIContract storage merged through PR #227 to `9b1a8aeb3a9ab536d8b26eeaf45717e95fd34d86`; post-merge docs `31258954098` and CI `31258954095` SUCCESS. |
+| CORE-014 | PASS | Per-fragment attestation merged through PR #228 to `66d03890492f072364c270b9a9c6b42958da086e`; post-merge docs `31259491871` and CI `31259491856` SUCCESS. |
+| CORE-015 | PASS | Contract-set digest merged through PR #229 to `f41915de3dbdcb052993f1e31f2aca1637840add`; post-merge docs `31260020398` and CI `31260020388` SUCCESS. |
+| CORE-016 | PASS | Closed locator strategy merged through PR #230 to `7c321271ce5eae042754f8b18480758b6cf0ead1`; post-merge docs `31261175335` and CI `31261175402` SUCCESS. |
+| CORE-017 | PASS | Closed UI drift lifecycle merged through PR #231 to `b9322f676eddb06a22fe98ead9292f05f6fdc5ef`; post-merge docs `31264131559` and CI `31264131570` SUCCESS. |
+| CORE-018 | PASS | Sanitized capability evidence persistence merged through PR #232 to `99f32929ab13c5068ac00410e8418abc9b8a7ef2`; post-merge docs `31264839172` and CI `31264839203` SUCCESS. |
+| CORE-019 | PASS | Deterministic attestation workflow merged through PR #233 to `f7b89a4eb740fa561189bc1e62c4869d5242a644`; post-merge docs `31265582918` and CI `31265582939` SUCCESS. |
+| CORE-020 | PASS | Versioned evidence lifetime/revalidation merged through PR #234 to `b60f9b80c22cba841265962d0308518b57667fd6`; post-merge docs `31266326587` and CI `31266326601` SUCCESS. |
 
 Phase 2 gate: **PASS / GREEN** — CORE-011..020 are merged and all applicable post-merge gates completed successfully.
 
@@ -40,47 +40,24 @@ Phase 2 gate: **PASS / GREEN** — CORE-011..020 are merged and all applicable p
 
 | Key | Status | Evidence / decision |
 |---|---|---|
-| CORE-021 | IMPLEMENTED_AWAITING_GATES | FastAPI lifespan now explicitly owns the canonical browser process. `PersistentBrowser` owns both Playwright and the Chromium persistent context, startup is idempotent, partial startup is cleaned up, and shutdown stops Playwright even when context closure fails. No generic browser primitive or new tenant/Outlook capability is introduced. |
+| CORE-021 | PASS | FastAPI browser lifespan ownership merged through PR #235 to `f57514abf21188dd76a2065521506d9d2e18f5c7`; post-merge docs `31266922919` and CI `31266922911` SUCCESS. |
+| CORE-022 | IMPLEMENTED_AWAITING_GATES | `/livez` proves process liveness only. `/readyz` models the complete fail-closed readiness contract: browser ownership, professional profile usability, authenticated session, attested UI contract, broker viability, protocol compatibility and lock viability. Signals owned by later CORE blocks default false until proven. |
 
-## CORE-017 boundary decision
+## CORE-017..020 evidence/lifecycle boundary
 
-Lifecycle semantics are deliberately separate from evidence persistence and aging policy. `CORE-017` provides a closed state/event model and capability-scoped degradation. `CORE-018` owns sanitized evidence persistence; `CORE-020` owns expiration/revalidation policy.
-
-A contract-recorded drift cannot be hidden by runtime lifecycle input, and a lifecycle overlay cannot promote an unattested fragment to healthy. Recovery from drift requires an explicit `RE_ATTESTATION_REQUIRED` state before successful re-attestation can return evidence to `HEALTHY`.
-
-## CORE-018 boundary decision
-
-`CORE-018` persists only bounded fragment metadata, SHA-256 digests, closed lifecycle state and a timezone-aware evidence timestamp. The table deliberately has no generic JSON/payload field and no account/container identifiers, authenticated URLs, screenshots, cookies, tokens or browser storage state.
-
-Each append is bound to the exact `UIContractSet.digest()` and exact fragment version/scope/application/surface metadata. Evidence from an older contract-set digest is never projected into the current lifecycle overlay. Replaying the exact same sanitized record is idempotent.
-
-Evidence collection remains `CORE-019`; expiration/TTL/revalidation semantics remain `CORE-020`; generalized resource state identity remains `CORE-037`. `CORE-018` does not claim or require live Microsoft 365 egress.
-
-## CORE-019 boundary decision
-
-`CORE-019` separates deterministic repository-side campaign planning/evaluation from live observation collection. The repository tooling never drives a browser and CI never authenticates to the real Microsoft 365 tenant.
-
-Campaigns are pinned to the exact UIContractSet digest and expose only fragment/selector keys, status and closed locator strategy names. Observation documents are strict and content-free; `UNIQUE_MATCH` requires a structural SHA-256 digest and arbitrary fields such as screenshots/raw DOM are rejected.
-
-Evidence maturity levels are `DISCOVERY`, `UI`, `READ` and `MUTATION`; they do not replace the `CORE-017` runtime lifecycle. Mock evidence cannot promote live support. READ requires a semantic probe. MUTATION additionally requires opaque approval evidence, confirmed application, mandatory read-back and proven compensation.
-
-The current Planner fragments remain `UNVERIFIED_LIVE` until a real controlled campaign is executed. The first live campaign is expected to be discovery because current selectors do not yet carry attested typed locator plans. Automated live collection remains subject to later browser/session/network gates, especially `CORE-025` controlled egress.
-
-## CORE-020 boundary decision
-
-`CORE-020` makes evidence lifetime a versioned repository contract instead of an untracked runtime environment value. The current baseline is seven days, bounded by implementation to 60 seconds through 30 days. That baseline is a reviewable product policy and not a claim about Microsoft 365 UI stability.
-
-Freshness is evaluated dynamically from the latest exact-contract CORE-018 record. No historical evidence row is deleted or rewritten merely because time passed. At the exact expiry threshold a previously healthy record becomes `STALE`; missing evidence and future timestamps become `RE_ATTESTATION_REQUIRED`. Existing `STALE`, `DRIFTED` or `RE_ATTESTATION_REQUIRED` records can never be promoted by freshness evaluation.
-
-The resulting fragment lifecycle overlay is consumed by the existing dependency-aware UIContract projection, so expiration degrades only capabilities that depend on the expired fragment. Recovery requires fresh CORE-019 attestation evidence; automatic live revalidation remains dependent on later browser/session/network gates and especially `CORE-025` controlled egress.
+UI lifecycle, evidence persistence, attestation and freshness remain separate reviewed concerns. Evidence is bound to the exact UIContractSet digest, contains no tenant/session content, and expiration/degradation is capability scoped. Current Planner fragments remain `UNVERIFIED_LIVE` until real controlled evidence is collected; no CI workflow authenticates to the real tenant.
 
 ## CORE-021 boundary decision
 
-`CORE-021` makes the FastAPI lifespan the explicit owner of the canonical browser object. Mock startup performs no Playwright work. Live lifecycle ownership covers both Playwright and the persistent Chromium context, with deterministic cleanup on shutdown and startup failure.
+FastAPI lifespan is the explicit owner of the canonical browser object. Live lifecycle ownership covers both Playwright and the persistent Chromium context with deterministic cleanup. Browser process ownership is infrastructure state, not semantic authorization; CORE-025 remains mandatory before controlled live Microsoft 365 egress.
 
-Browser process lifecycle is not capability authorization: semantic live operations retain their fail-closed UIContract guard, current Planner fragments remain `UNVERIFIED_LIVE`, and no live-support claim is created by launching infrastructure. `CORE-021` does not enable an automated real-tenant campaign; `CORE-025` remains mandatory before controlled live Microsoft 365 egress is enabled.
+## CORE-022 boundary decision
 
-Readiness semantics are intentionally unchanged in this block and remain `CORE-022`.
+`CORE-022` separates a responsive ASGI process from readiness for live Microsoft 365 work. `/livez` only asserts process liveness. `/readyz` is a seven-signal AND gate over browser ownership, profile usability, `AUTHENTICATED`, UIContract attestation, broker viability, protocol compatibility and lock viability; any absent signal returns HTTP 503 with a bounded reason code.
+
+This explicitly matches the roadmap requirement that readiness prove browser/profile/protocol/contract/lock subsystems, while also retaining auth and broker viability. Providers belonging to later work remain fail closed: CORE-023 will supply broker viability, CORE-024 strengthens profile/account context, CORE-026 supplies lock viability and CORE-029 supplies protocol compatibility. Therefore sequencing cannot manufacture premature readiness.
+
+Mock mode remains useful for CI but is never treated as live M365 readiness.
 
 ## Current compatibility invariants
 
@@ -95,8 +72,8 @@ Readiness semantics are intentionally unchanged in this block and remain `CORE-0
 ## Next gate
 
 ```text
-CORE-021 PR CI/security/images/SBOM GREEN
+CORE-022 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-022
+        -> CORE-023
 ```

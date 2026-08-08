@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 from m365_browser_worker.lifecycle import browser_lifespan
+from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
 from planner_mcp.auth import AuthState
 from planner_mcp.errors import PlannerMcpError
 from planner_mcp.logging_setup import configure_logging
@@ -26,15 +29,42 @@ def _is_mock() -> bool:
     return _mode() != "live"
 
 
-def create_app(browser: PersistentBrowser | None = None) -> FastAPI:
-    """Build the worker application with explicit ASGI browser ownership."""
+def create_app(
+    browser: PersistentBrowser | None = None,
+    *,
+    profile_viability_provider: Callable[[], bool] | None = None,
+    auth_state_provider: Callable[[], AuthState] | None = None,
+    broker_viability_provider: Callable[[], bool] | None = None,
+    protocol_compatibility_provider: Callable[[], bool] | None = None,
+    lock_viability_provider: Callable[[], bool] | None = None,
+) -> FastAPI:
+    """Build the worker app with separate liveness and live-readiness semantics."""
     configure_logging(os.getenv("PLANNER_LOG_LEVEL", "INFO"))
     worker_browser = browser or PersistentBrowser(BrowserConfig.from_env())
+    profile_usable = profile_viability_provider or (lambda: False)
+    current_auth_state = auth_state_provider or (
+        lambda: AuthState.AUTHENTICATED if _is_mock() else AuthState.UNKNOWN
+    )
+    broker_viable = broker_viability_provider or (lambda: False)
+    protocol_compatible = protocol_compatibility_provider or (lambda: False)
+    lock_viable = lock_viability_provider or (lambda: False)
     app = FastAPI(
         title="planner-browser-worker",
         version=__version__,
         lifespan=browser_lifespan(worker_browser),
     )
+
+    def current_readiness() -> WorkerReadiness:
+        ui = load_status()
+        return evaluate_worker_readiness(
+            browser_started=worker_browser.started,
+            profile_usable=profile_usable(),
+            auth_state=current_auth_state(),
+            ui_contract_attested=ui.attested,
+            broker_viable=broker_viable(),
+            protocol_compatible=protocol_compatible(),
+            lock_viable=lock_viable(),
+        )
 
     def live_guard(operation: str) -> None:
         if _is_mock():
@@ -44,9 +74,22 @@ def create_app(browser: PersistentBrowser | None = None) -> FastAPI:
         except PlannerMcpError as exc:
             raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
 
+    @app.get("/livez")
+    async def livez() -> dict[str, object]:
+        return {"alive": True, "version": __version__}
+
+    @app.get("/readyz")
+    async def readyz() -> JSONResponse:
+        readiness = current_readiness()
+        return JSONResponse(
+            status_code=200 if readiness.ready else 503,
+            content=readiness.to_dict(),
+        )
+
     @app.get("/health")
     async def health() -> dict[str, Any]:
         ui = load_status()
+        readiness = current_readiness()
         return {
             "ok": True,
             "mode": _mode(),
@@ -54,7 +97,7 @@ def create_app(browser: PersistentBrowser | None = None) -> FastAPI:
             "ui_contract_version": ui.version,
             "ui_contract_set_digest": ui.contract_set_digest,
             "ui_contract_attested": ui.attested,
-            "live_ready": (not _is_mock()) and ui.attested,
+            "live_ready": readiness.ready,
         }
 
     @app.get("/auth/status")
