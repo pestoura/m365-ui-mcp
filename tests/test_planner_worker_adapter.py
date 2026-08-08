@@ -32,7 +32,10 @@ def test_adapter_owns_exact_current_planner_worker_operations() -> None:
         WorkerOperation.PLANNER_PROJECT_SNAPSHOT,
     }
 
-    assert {operation for operation in WorkerOperation if PlannerWorkerAdapter.owns(operation)} == expected
+    owned = {
+        operation for operation in WorkerOperation if PlannerWorkerAdapter.owns(operation)
+    }
+    assert owned == expected
     assert PlannerWorkerAdapter.owns(WorkerOperation.AUTH_STATUS) is False
     assert PlannerWorkerAdapter.owns(WorkerOperation.ACCOUNT_CONTEXT) is False
 
@@ -75,7 +78,10 @@ async def test_live_adapter_preserves_capability_guards_and_safe_empty_reads() -
     assert await adapter.plan_get("opaque-plan") == {"plan": None}
     assert await adapter.task_list("opaque-plan") == {"tasks": []}
     assert await adapter.task_get("opaque-task") == {"task": None}
-    assert await adapter.project_snapshot("opaque-plan") == {"plan": None, "tasks": []}
+    assert await adapter.project_snapshot("opaque-plan") == {
+        "plan": None,
+        "tasks": [],
+    }
     assert guarded == [
         "plans.read",
         "plans.read",
