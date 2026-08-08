@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # Official Playwright image already provides a non-root `pwuser`; no custom user is added.
-# Base image pinned by digest (P-020). Python 3.12 is required by the project.
+# Base image pinned by digest (P-065). Python 3.12 is required by the project.
 FROM mcr.microsoft.com/playwright/python:v1.55.0-noble@sha256:640d578aae63cfb632461d1b0aecb01414e4e020864ac3dd45a868dc0eff3078
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
