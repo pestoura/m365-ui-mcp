@@ -84,7 +84,7 @@ def _sortable(value: Scalar) -> tuple[int, str]:
         return (0, "")
     if isinstance(value, bool):
         return (1, "1" if value else "0")
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return (2, f"{float(value):030.12f}")
     return (3, value)
 
