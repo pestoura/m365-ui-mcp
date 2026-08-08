@@ -2,11 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from m365_mcp.result_projection import (
-    ProjectionKind,
-    ProjectionRequest,
-    project_rows,
-)
+from m365_mcp.result_projection import ProjectionKind, ProjectionRequest, project_rows
 
 
 ROWS = [
