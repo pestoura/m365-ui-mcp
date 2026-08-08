@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from m365_mcp.apps.planner import planner_capability_definitions
 
 
@@ -45,9 +43,7 @@ def test_default_capability_registry_is_composed_from_planner_app_definitions() 
 
 def test_capability_migration_preserves_scope_aware_policy_for_all_planner_tools() -> None:
     import m365_mcp.config as config
-
     import m365_mcp.policy as policy
-
     import m365_mcp.tool_registry as tool_registry
 
     engine = policy.MetadataPolicyEngine()
