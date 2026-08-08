@@ -14,12 +14,16 @@ from m365_browser_worker.account_context import AccountContext, unverified_accou
 from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
 from m365_browser_worker.protocol import (
-    NoArguments,
     PlanArguments,
     TaskArguments,
     WorkerOperation,
     WorkerRequestEnvelope,
     WorkerResponseEnvelope,
+)
+from m365_browser_worker.protocol_negotiation import (
+    ProtocolNegotiationRequest,
+    ProtocolNegotiationResponse,
+    ProtocolNegotiator,
 )
 from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
 from m365_browser_worker.session_broker import SessionCapabilityBroker
@@ -49,6 +53,7 @@ def create_app(
     account_context_provider: Callable[[], AccountContext] | None = None,
     broker: SessionCapabilityBroker | None = None,
     executor: ProfileSerializedExecutor | None = None,
+    protocol_negotiator: ProtocolNegotiator | None = None,
     broker_viability_provider: Callable[[], bool] | None = None,
     protocol_compatibility_provider: Callable[[], bool] | None = None,
     lock_viability_provider: Callable[[], bool] | None = None,
@@ -57,6 +62,7 @@ def create_app(
     configure_logging(os.getenv("PLANNER_LOG_LEVEL", "INFO"))
     worker_browser = browser or PersistentBrowser(BrowserConfig.from_env())
     profile_executor = executor or ProfileSerializedExecutor()
+    worker_protocol = protocol_negotiator or ProtocolNegotiator()
     profile_usable = profile_viability_provider or (lambda: False)
     current_auth_state = auth_state_provider or (
         lambda: AuthState.AUTHENTICATED if _is_mock() else AuthState.UNKNOWN
@@ -69,7 +75,7 @@ def create_app(
         account_context_provider=current_account_context,
     )
     broker_viable = broker_viability_provider or (lambda: session_broker.viable)
-    protocol_compatible = protocol_compatibility_provider or (lambda: False)
+    protocol_compatible = protocol_compatibility_provider or (lambda: worker_protocol.compatible)
     lock_viable = lock_viability_provider or (lambda: profile_executor.viable)
     app = FastAPI(
         title="planner-browser-worker",
@@ -78,6 +84,7 @@ def create_app(
     )
     # Internal ownership only; no generic executor/browser endpoint is exposed.
     app.state.profile_executor = profile_executor
+    app.state.protocol_negotiator = worker_protocol
 
     def current_readiness() -> WorkerReadiness:
         ui = load_status()
@@ -132,6 +139,16 @@ def create_app(
             "ui_contract_attested": ui.attested,
             "live_ready": readiness.ready,
         }
+
+    @app.get("/protocol")
+    async def protocol_status() -> dict[str, object]:
+        return worker_protocol.snapshot()
+
+    @app.post("/protocol/negotiate", response_model=ProtocolNegotiationResponse)
+    async def protocol_negotiate(
+        request: ProtocolNegotiationRequest,
+    ) -> ProtocolNegotiationResponse:
+        return worker_protocol.negotiate(request.supported_versions)
 
     @app.get("/auth/status")
     async def auth_status() -> dict[str, Any]:
@@ -280,11 +297,6 @@ def create_app(
     @app.post("/operations", response_model=WorkerResponseEnvelope)
     async def execute_operation(request: WorkerRequestEnvelope) -> WorkerResponseEnvelope:
         """Execute one closed semantic operation through the serialized profile executor."""
-        # Pydantic has already rejected unknown operations, extra fields and
-        # operation/argument mismatches before admission to the executor.
-        if isinstance(request.arguments, NoArguments):
-            pass
-
         result = await profile_executor.execute(
             request.operation.value,
             lambda: dispatch_semantic_operation(request),
