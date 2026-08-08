@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
+from m365_browser_worker.account_context import AccountContext, unverified_account_context
 from m365_browser_worker.lifecycle import browser_lifespan
 from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
 from m365_browser_worker.session_broker import SessionCapabilityBroker
@@ -36,6 +37,7 @@ def create_app(
     *,
     profile_viability_provider: Callable[[], bool] | None = None,
     auth_state_provider: Callable[[], AuthState] | None = None,
+    account_context_provider: Callable[[], AccountContext] | None = None,
     broker: SessionCapabilityBroker | None = None,
     broker_viability_provider: Callable[[], bool] | None = None,
     protocol_compatibility_provider: Callable[[], bool] | None = None,
@@ -48,10 +50,12 @@ def create_app(
     current_auth_state = auth_state_provider or (
         lambda: AuthState.AUTHENTICATED if _is_mock() else AuthState.UNKNOWN
     )
+    current_account_context = account_context_provider or unverified_account_context
     session_broker = broker or SessionCapabilityBroker(
         browser=worker_browser,
         registry=default_capability_registry(),
         auth_state_provider=current_auth_state,
+        account_context_provider=current_account_context,
     )
     broker_viable = broker_viability_provider or (lambda: session_broker.viable)
     protocol_compatible = protocol_compatibility_provider or (lambda: False)
@@ -163,7 +167,7 @@ def create_app(
         if _is_mock():
             return dict(mock_data.ACCOUNT_CONTEXT)
         live_guard("account_context")
-        return {}
+        return current_account_context().to_dict()
 
     @app.get("/account/license")
     async def account_license() -> dict[str, Any]:
