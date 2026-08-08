@@ -136,7 +136,11 @@ class ExecutionCheckpoint:
             payload["state_identity_digest"] = self.state_identity_digest
         if self.result_digest is not None:
             payload["result_digest"] = self.result_digest
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        encoded = json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()
 
 
@@ -152,6 +156,9 @@ def start_checkpoint(
     """Create the immutable PLANNED checkpoint at sequence zero."""
     if state_identity is not None and state_identity.application is not application:
         raise ValueError("state identity application does not match checkpoint application")
+    for lock in locks:
+        if lock.application is not None and lock.application is not application:
+            raise ValueError("typed lock application does not match checkpoint application")
     ordered_locks = canonical_lock_order(locks)
     return ExecutionCheckpoint(
         saga_id_digest=_opaque_digest(saga_id, field_name="saga_id"),
