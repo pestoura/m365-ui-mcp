@@ -41,7 +41,8 @@ Phase 2 gate: **PASS / GREEN** — CORE-011..020 are merged and all applicable p
 | Key | Status | Evidence / decision |
 |---|---|---|
 | CORE-021 | PASS | FastAPI browser lifespan ownership merged through PR #235 to `f57514abf21188dd76a2065521506d9d2e18f5c7`; post-merge docs `31266922919` and CI `31266922911` SUCCESS. |
-| CORE-022 | IMPLEMENTED_AWAITING_GATES | `/livez` proves process liveness only. `/readyz` models the complete fail-closed readiness contract: browser ownership, professional profile usability, authenticated session, attested UI contract, broker viability, protocol compatibility and lock viability. Signals owned by later CORE blocks default false until proven. |
+| CORE-022 | PASS | True liveness/readiness merged through PR #236 to `b3aef8e08f13621070e777bdca81921a95320aed`; post-merge docs `31267827191` and CI `31267827213` SUCCESS. Readiness is a fail-closed seven-signal AND gate over browser/profile/auth/UI contract/broker/protocol/lock. |
+| CORE-023 | IMPLEMENTED_AWAITING_GATES | Canonical `SessionCapabilityBroker` binds registered semantic capability grants to the process-owned authenticated professional browser session. Grants contain bounded scope metadata only; no cookies, tokens, headers or storage state can be exported. Planner read endpoints now use semantic capability grants. |
 
 ## CORE-017..020 evidence/lifecycle boundary
 
@@ -53,11 +54,13 @@ FastAPI lifespan is the explicit owner of the canonical browser object. Live lif
 
 ## CORE-022 boundary decision
 
-`CORE-022` separates a responsive ASGI process from readiness for live Microsoft 365 work. `/livez` only asserts process liveness. `/readyz` is a seven-signal AND gate over browser ownership, profile usability, `AUTHENTICATED`, UIContract attestation, broker viability, protocol compatibility and lock viability; any absent signal returns HTTP 503 with a bounded reason code.
+`CORE-022` separates a responsive ASGI process from readiness for live Microsoft 365 work. `/livez` only asserts process liveness. `/readyz` is a seven-signal AND gate over browser ownership, profile usability, `AUTHENTICATED`, UIContract attestation, broker viability, protocol compatibility and lock viability. Providers belonging to later work remain fail closed until proven.
 
-This explicitly matches the roadmap requirement that readiness prove browser/profile/protocol/contract/lock subsystems, while also retaining auth and broker viability. Providers belonging to later work remain fail closed: CORE-023 will supply broker viability, CORE-024 strengthens profile/account context, CORE-026 supplies lock viability and CORE-029 supplies protocol compatibility. Therefore sequencing cannot manufacture premature readiness.
+## CORE-023 boundary decision
 
-Mock mode remains useful for CI but is never treated as live M365 readiness.
+`CORE-023` is a semantic authorization broker, not a credential broker. It receives the process-owned browser, the closed Capability Registry and an authentication-state provider. Viability requires both an owned browser and `AUTHENTICATED`; authorization additionally requires one unique registered application/capability and the existing UIContract live guard.
+
+Successful grants contain application/surface/account/container/capability metadata plus explicit `session_bound=true` and `secret_material_exported=false`. There is no broker method that returns cookies, tokens, authorization headers, browser storage state or arbitrary page primitives. Account-context correctness remains CORE-024 and controlled egress remains CORE-025.
 
 ## Current compatibility invariants
 
@@ -72,8 +75,8 @@ Mock mode remains useful for CI but is never treated as live M365 readiness.
 ## Next gate
 
 ```text
-CORE-022 PR CI/security/images/SBOM GREEN
+CORE-023 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-023
+        -> CORE-024
 ```

@@ -12,6 +12,8 @@ from fastapi.responses import JSONResponse
 
 from m365_browser_worker.lifecycle import browser_lifespan
 from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
+from m365_browser_worker.session_broker import SessionCapabilityBroker
+from m365_mcp.capability_registry import default_capability_registry
 from planner_mcp.auth import AuthState
 from planner_mcp.errors import PlannerMcpError
 from planner_mcp.logging_setup import configure_logging
@@ -34,6 +36,7 @@ def create_app(
     *,
     profile_viability_provider: Callable[[], bool] | None = None,
     auth_state_provider: Callable[[], AuthState] | None = None,
+    broker: SessionCapabilityBroker | None = None,
     broker_viability_provider: Callable[[], bool] | None = None,
     protocol_compatibility_provider: Callable[[], bool] | None = None,
     lock_viability_provider: Callable[[], bool] | None = None,
@@ -45,7 +48,12 @@ def create_app(
     current_auth_state = auth_state_provider or (
         lambda: AuthState.AUTHENTICATED if _is_mock() else AuthState.UNKNOWN
     )
-    broker_viable = broker_viability_provider or (lambda: False)
+    session_broker = broker or SessionCapabilityBroker(
+        browser=worker_browser,
+        registry=default_capability_registry(),
+        auth_state_provider=current_auth_state,
+    )
+    broker_viable = broker_viability_provider or (lambda: session_broker.viable)
     protocol_compatible = protocol_compatibility_provider or (lambda: False)
     lock_viable = lock_viability_provider or (lambda: False)
     app = FastAPI(
@@ -71,6 +79,14 @@ def create_app(
             return
         try:
             worker_browser.ensure_live_allowed(operation)
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+    def capability_guard(capability: str) -> None:
+        if _is_mock():
+            return
+        try:
+            session_broker.authorize(application="planner", capability=capability)
         except PlannerMcpError as exc:
             raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
 
@@ -139,6 +155,7 @@ def create_app(
             "persistent_profile": True,
             "secrets_stored_in_state": False,
             "mode": _mode(),
+            "broker": session_broker.snapshot(),
         }
 
     @app.get("/account/context")
@@ -159,13 +176,13 @@ def create_app(
     async def plans() -> dict[str, Any]:
         if _is_mock():
             return {"plans": mock_data.PLANS}
-        live_guard("plan_list")
+        capability_guard("plans.read")
         return {"plans": []}
 
     @app.get("/planner/plans/{plan_id}")
     async def plan_get(plan_id: str) -> dict[str, Any]:
         if not _is_mock():
-            live_guard("plan_get")
+            capability_guard("plans.read")
             return {"plan": None}
         plan = mock_data.plan(plan_id)
         if plan is None:
@@ -175,14 +192,14 @@ def create_app(
     @app.get("/planner/tasks")
     async def task_list(plan_id: str) -> dict[str, Any]:
         if not _is_mock():
-            live_guard("task_list")
+            capability_guard("tasks.read")
             return {"tasks": []}
         return {"plan_id": plan_id, "tasks": mock_data.tasks_for(plan_id)}
 
     @app.get("/planner/tasks/{task_id}")
     async def task_get(task_id: str) -> dict[str, Any]:
         if not _is_mock():
-            live_guard("task_get")
+            capability_guard("tasks.read")
             return {"task": None}
         task = mock_data.task(task_id)
         if task is None:
@@ -192,7 +209,7 @@ def create_app(
     @app.get("/planner/plans/{plan_id}/snapshot")
     async def snapshot(plan_id: str) -> dict[str, Any]:
         if not _is_mock():
-            live_guard("project_snapshot")
+            capability_guard("project_snapshot.read")
             return {"plan": None, "tasks": []}
         plan = mock_data.plan(plan_id)
         if plan is None:
