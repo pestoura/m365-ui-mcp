@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from m365_mcp import capability_registry, config, policy, tool_registry
-from m365_mcp.apps.planner import planner_capability_definitions
+import m365_mcp.apps.planner as planner_app
+import m365_mcp.capability_registry as capability_registry
+import m365_mcp.config as config
+import m365_mcp.policy as policy
+import m365_mcp.tool_registry as tool_registry
 
 
 EXPECTED_CAPABILITIES = (
@@ -20,7 +23,7 @@ EXPECTED_CAPABILITIES = (
 
 
 def test_planner_app_owns_all_11_canonical_capability_definitions() -> None:
-    definitions = planner_capability_definitions()
+    definitions = planner_app.planner_capability_definitions()
 
     assert len(definitions) == 11
     assert tuple(
@@ -34,7 +37,7 @@ def test_planner_app_owns_all_11_canonical_capability_definitions() -> None:
 
 
 def test_default_capability_registry_is_composed_from_planner_app_definitions() -> None:
-    app_definitions = planner_capability_definitions()
+    app_definitions = planner_app.planner_capability_definitions()
     registry = capability_registry.default_capability_registry()
 
     assert registry.definitions() == app_definitions
