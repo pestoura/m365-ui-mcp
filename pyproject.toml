@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "planner-mcp"
 dynamic = ["version"]
-description = "MCP control plane for Microsoft Planner Premium via a private Playwright/Chromium browser worker"
+description = "Microsoft 365 semantic UI MCP evolving from the Planner compatibility baseline"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Proprietary" }
@@ -31,15 +31,23 @@ dev = [
 ]
 
 [project.scripts]
+m365-ui-mcp = "m365_mcp.__main__:main"
+m365-browser-worker = "m365_browser_worker.__main__:main"
+m365-ui-mcp-healthcheck = "m365_mcp.healthcheck:main"
 planner-mcp = "planner_mcp.__main__:main"
 planner-browser-worker = "planner_browser_worker.__main__:main"
 planner-mcp-healthcheck = "planner_mcp.healthcheck:main"
 
 [tool.hatch.version]
-path = "src/planner_mcp/version.py"
+path = "src/m365_mcp/version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/planner_mcp", "src/planner_browser_worker"]
+packages = [
+  "src/m365_mcp",
+  "src/m365_browser_worker",
+  "src/planner_mcp",
+  "src/planner_browser_worker",
+]
 
 [tool.hatch.build.targets.wheel.force-include]
 "contracts" = "planner_mcp/_contracts"
@@ -55,7 +63,7 @@ ignore = ["S101"]
 
 [tool.mypy]
 python_version = "3.12"
-packages = ["planner_mcp", "planner_browser_worker"]
+packages = ["m365_mcp", "m365_browser_worker", "planner_mcp", "planner_browser_worker"]
 mypy_path = "src"
 ignore_missing_imports = true
 disallow_untyped_defs = true
