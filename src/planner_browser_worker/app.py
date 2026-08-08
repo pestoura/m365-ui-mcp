@@ -47,6 +47,7 @@ def create_app() -> FastAPI:
             "mode": _mode(),
             "version": __version__,
             "ui_contract_version": ui.version,
+            "ui_contract_set_digest": ui.contract_set_digest,
             "ui_contract_attested": ui.attested,
             "live_ready": (not _is_mock()) and ui.attested,
         }
