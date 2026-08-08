@@ -96,6 +96,10 @@ def test_closed_operation_enum_matches_current_semantic_worker_surface() -> None
 def test_typed_dispatch_preserves_mock_planner_semantics() -> None:
     app = create_app()
     with TestClient(app) as client:
+        negotiation = client.post(
+            "/protocol/negotiate",
+            json={"supported_versions": ["1"]},
+        )
         response = client.post(
             "/operations",
             json={
@@ -106,6 +110,8 @@ def test_typed_dispatch_preserves_mock_planner_semantics() -> None:
         )
         compatibility = client.get("/planner/plans/plan-alpha")
 
+    assert negotiation.status_code == 200
+    assert negotiation.json()["compatible"] is True
     assert response.status_code == 200
     payload = response.json()
     assert payload["schema_version"] == "1"
@@ -124,6 +130,7 @@ def test_typed_dispatch_uses_explicit_empty_arguments() -> None:
 
     app = create_app()
     with TestClient(app) as client:
+        client.post("/protocol/negotiate", json={"supported_versions": ["1"]})
         response = client.post("/operations", json=request.model_dump(mode="json"))
 
     assert response.status_code == 200
