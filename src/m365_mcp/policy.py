@@ -12,7 +12,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from m365_mcp.config import Settings
-from m365_mcp.tool_registry import MutationClass, ToolDefinition, ToolRegistry, default_tool_registry
+from m365_mcp.tool_registry import (
+    MutationClass,
+    ToolDefinition,
+    ToolRegistry,
+    default_tool_registry,
+)
 
 
 class Decision(StrEnum):
