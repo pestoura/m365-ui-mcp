@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import pytest
-
 import m365_mcp.result_projection as result_projection
+import pytest
 
 
 ROWS = [
