@@ -2,7 +2,7 @@
 
 > **Document status:** Normative. **Companion docs:** [state-model.md](state-model.md) (operation
 > lifecycle, locks), [reconciliation.md](reconciliation.md), [governance.md](governance.md)
-> (mutation classes), [security.md](security.md#7-fail-closed-invariants) (SEC-065),
+> (mutation classes), [security.md](security.md#1-hard-invariants) (SEC-001, SEC-006),
 > [threat-model.md](threat-model.md#3-stride) (T10, T11).
 > Browser automation has no transaction. Idempotency is achieved through **keys, fingerprints and
 > read-back**, never through optimism.
@@ -247,7 +247,7 @@ failure mid-run can be compensated or resumed.
 | `READ_BACK_MISMATCH` | read-back ≠ desired | no (discrepancy) | open discrepancy |
 
 All are returned as stable codes with a human-readable reason; never a raw exception or DOM
-fragment (SEC-075).
+fragment (SEC-051).
 
 ## 11. Worked examples
 
@@ -298,5 +298,5 @@ fragment (SEC-075).
 - [state-model.md](state-model.md) — operation lifecycle, typed locks, saga.
 - [reconciliation.md](reconciliation.md) — plan/apply/verify loop, `planner_reconcile_resume`.
 - [governance.md](governance.md) — mutation classes, approvals.
-- [security.md](security.md#7-fail-closed-invariants) — SEC-065 read-back mismatch.
+- [security.md](security.md#4-idempotency-read-back-concurrency) — SEC-040 read-back-before-retry.
 - [threat-model.md](threat-model.md#3-stride) — T10 (replay), T11 (duplicate mutation).
