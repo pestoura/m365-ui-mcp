@@ -8,13 +8,13 @@ cannot fetch additional data or execute browser operations.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Mapping, TypeAlias
 
-Scalar: TypeAlias = str | int | float | bool | None
-Row: TypeAlias = Mapping[str, Scalar]
-ProjectedRow: TypeAlias = dict[str, Scalar]
+type Scalar = str | int | float | bool | None
+type Row = Mapping[str, Scalar]
+type ProjectedRow = dict[str, Scalar]
 
 _MAX_PAGE_SIZE = 100
 _MAX_TOP_N = 100
