@@ -8,7 +8,6 @@ import m365_mcp.apps.outlook.shell_contracts as shell_contracts
 from m365_mcp.capability_registry import default_capability_registry
 from m365_mcp.tool_registry import default_tool_registry
 
-
 DIGEST_A = "a" * 64
 DIGEST_B = "b" * 64
 
