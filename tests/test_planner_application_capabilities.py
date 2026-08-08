@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import m365_mcp.apps.planner as planner_app
-import m365_mcp.capability_registry as capability_registry
-import m365_mcp.config as config
-import m365_mcp.policy as policy
-import m365_mcp.tool_registry as tool_registry
+from m365_mcp import capability_registry, config, policy, tool_registry
+from m365_mcp.apps import planner as planner_app
 
 
 EXPECTED_CAPABILITIES = (
