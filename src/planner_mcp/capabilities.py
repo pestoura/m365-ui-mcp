@@ -24,11 +24,13 @@ class CapabilityEvidence:
 
 
 SUPPORT_LEVELS = (
-    "unsupported",
-    "planned",
-    "read_unattested",
-    "read_attested",
-    "mutation_attested",
+    "UNVERIFIED_LIVE",
+    "DISCOVERED",
+    "READ_SUPPORTED",
+    "MUTATION_SUPPORTED",
+    "DEGRADED",
+    "BLOCKED",
+    "OUT_OF_SCOPE",
 )
 
 _CAPABILITIES = (
@@ -46,10 +48,13 @@ _CAPABILITIES = (
 )
 
 
-def _support_level(ui_attested: bool, license_known: bool) -> str:
-    if not license_known:
-        return "planned"
-    return "read_attested" if ui_attested else "read_unattested"
+def _support_level(ui_attested: bool, license_known: bool, runtime_ok: bool) -> str:
+    """Return only evidence-backed CAP-030 support states."""
+    if not runtime_ok:
+        return "BLOCKED"
+    if ui_attested and license_known:
+        return "READ_SUPPORTED"
+    return "UNVERIFIED_LIVE"
 
 
 def build_capabilities(
@@ -63,14 +68,14 @@ def build_capabilities(
         CapabilityEvidence(
             capability=name,
             tenant_license_availability=(
-                "planner_premium_detected" if license_known else "unknown_no_evidence"
+                "OBSERVED" if license_known else "UNVERIFIED_LIVE"
             ),
-            ui_observed="not_observed" if not ui.attested else "observed",
+            ui_observed="OBSERVED" if ui.attested else "UNVERIFIED_LIVE",
             ui_contract_status=ui.attestation_status,
-            read_attestation="attested" if ui.attested else "unattested",
-            mutation_attestation="not_implemented_0_1_0",
-            support_level=_support_level(ui.attested, license_known),
-            notes="Graph API availability is not an input to support level.",
+            read_attestation="YES" if ui.attested else "NO",
+            mutation_attestation="NO",
+            support_level=_support_level(ui.attested, license_known, runtime_ok),
+            notes="Graph API availability is not an input to support state.",
         )
         for name in _CAPABILITIES
     ]
