@@ -115,24 +115,49 @@ jobs:
       - name: pip-audit
         run: pip-audit --strict || (echo "::error::vulnerable dependency"; exit 1)
 
+  # Detects which optional gates can run. hashFiles() is not available in a
+  # job-level `if`, so presence is computed here and consumed via needs.
+  detect:
+    name: detect optional gates
+    runs-on: ubuntu-latest
+    outputs:
+      has_dockerfile: ${{ steps.probe.outputs.has_dockerfile }}
+      has_acceptance: ${{ steps.probe.outputs.has_acceptance }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: probe
+        run: |
+          if ls Dockerfile docker/*.Dockerfile >/dev/null 2>&1; then
+            echo "has_dockerfile=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_dockerfile=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -f docker-compose.acceptance.yml ]; then
+            echo "has_acceptance=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_acceptance=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # G8-G10, G12: container build, Trivy CRITICAL/HIGH fail, SBOM, digest pinning.
-  # Enabled once Dockerfiles land (backlog P-064, P-065). Declared here so the
-  # gate model in docs/release-process.md has a concrete home.
+  # Wiring and first execution are tracked by backlog P-064 / P-065.
   container:
     name: container build / Trivy / SBOM
     runs-on: ubuntu-latest
-    if: hashFiles('Dockerfile', '**/Dockerfile') != ''
+    needs: detect
+    if: needs.detect.outputs.has_dockerfile == 'true'
     steps:
       - uses: actions/checkout@v4
 
       - name: G12 base image digest pinning
         run: |
-          if grep -rIn '^FROM ' --include='Dockerfile*' . | grep -v '@sha256:' ; then
+          if grep -rIn '^FROM ' --include='Dockerfile*' --include='*.Dockerfile' . \
+               | grep -v '@sha256:' ; then
             echo "::error::base images must be digest-pinned (SEC-062)"; exit 1
           fi
+          echo "ok: all base images are digest-pinned"
 
-      - name: G8 build
-        run: docker build -t planner-mcp:ci .
+      - name: G8 build control plane
+        run: docker build -f docker/control-plane.Dockerfile -t planner-mcp:ci .
 
       - name: G9 Trivy (CRITICAL/HIGH fail)
         uses: aquasecurity/trivy-action@master
@@ -156,18 +181,17 @@ jobs:
           path: sbom.cyclonedx.json
 
   # G11: isolated acceptance against the mock Planner UI. NEVER a live tenant.
-  # Enabled once the compose stack and mock UI land (backlog P-017, P-069).
+  # Enabled by backlog P-017 / P-069.
   isolated-acceptance:
     name: isolated acceptance (mock UI only)
     runs-on: ubuntu-latest
-    if: hashFiles('docker-compose.acceptance.yml') != ''
+    needs: detect
+    if: needs.detect.outputs.has_acceptance == 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Assert no live-tenant target configured
-        run: |
-          if grep -rIn 'planner.cloud.microsoft\|tasks.office.com\|login.microsoftonline.com' \
-               docker-compose.acceptance.yml ; then
-            echo "::error::CI must never target a live tenant (SEC-064)"; exit 1
-          fi
+        env:
+          PLANNER_MCP_LIVE_TENANT: forbidden
+        run: python scripts/assert_no_live_tenant.py
       - name: Run IA-01..IA-16
         run: docker compose -f docker-compose.acceptance.yml up --abort-on-container-exit
