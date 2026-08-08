@@ -14,14 +14,26 @@ TARGETS = [
     "security.md",
     "governance.md",
     "privacy-boundary.md",
+    "authentication-and-mfa.md",
+    "ui-contract.md",
+    "browser-worker.md",
+    "planner-premium-capabilities.md",
+    "tool-catalog.md",
 ]
-ID_RE = re.compile(r"\b(ARCH|SEC|PRIV|GOV|THR|TB|A|AC)-(\d{2,3})\b")
+# Prefixes that carry stable, definable requirement IDs.
+DEF_PREFIXES = ("ARCH", "SEC", "PRIV", "GOV", "THR", "AUTH", "UI", "WORKER", "CAP", "TOOL")
+ID_RE = re.compile(
+    r"\b(ARCH|SEC|PRIV|GOV|THR|AUTH|UI|WORKER|CAP|TOOL|TB|A|AC)-(\d{2,3})\b"
+)
 # A definition is a requirement ID opening a bold span at the start of a line or of a
 # table cell, e.g. "**SEC-001 — ...", "| **THR-001** | ..." or "| **TB-1 / ARCH-050** | ...".
 DEF_RE = re.compile(
-    r"^(?:\|\s*)?\*\*(?:TB-\d+\s*/\s*)?(ARCH|SEC|PRIV|GOV|THR)-(\d{3})\b",
+    r"^(?:\|\s*)?\*\*(?:TB-\d+\s*/\s*)?("
+    + "|".join(DEF_PREFIXES)
+    + r")-(\d{3})\b",
     re.MULTILINE,
 )
+
 LINK_RE = re.compile(r"\[[^\]]*\]\((?!https?://)([^)#]+)(?:#[^)]*)?\)")
 
 errors: list[str] = []
@@ -55,7 +67,7 @@ for name in TARGETS:
 
     # 4. collect all references
     for prefix, num in ID_RE.findall(text):
-        if prefix in {"ARCH", "SEC", "PRIV", "GOV", "THR"} and len(num) == 3:
+        if prefix in DEF_PREFIXES and len(num) == 3:
             referenced.setdefault(f"{prefix}-{num}", set()).add(name)
 
     # 5. forbidden literal secret-looking content in docs
