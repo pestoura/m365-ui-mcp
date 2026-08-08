@@ -134,10 +134,32 @@ class PlannerTools:
     async def planner_capabilities(self) -> dict[str, Any]:
         async def body() -> dict[str, Any]:
             try:
+                auth_evidence = await self.worker.auth_status()
+            except PlannerMcpError as exc:
+                auth_evidence = exc.to_dict()
+            try:
+                account_context = await self.worker.account_context()
+            except PlannerMcpError as exc:
+                account_context = exc.to_dict()
+            try:
                 license_evidence = await self.worker.license_capabilities()
             except PlannerMcpError as exc:
                 license_evidence = exc.to_dict()
-            return build_capabilities(license_evidence=license_evidence)
+            try:
+                runtime = await self.worker.health()
+                runtime_ok = bool(runtime.get("ok", False))
+            except PlannerMcpError:
+                runtime_ok = False
+
+            policy_allowed = evaluate("planner_capabilities", self.settings).allowed
+            return build_capabilities(
+                auth_evidence=auth_evidence,
+                account_context=account_context,
+                license_evidence=license_evidence,
+                runtime_ok=runtime_ok,
+                policy_allowed=policy_allowed,
+                live_evidence=self.settings.is_live,
+            )
 
         return await _guarded("planner_capabilities", self.settings, body)
 
