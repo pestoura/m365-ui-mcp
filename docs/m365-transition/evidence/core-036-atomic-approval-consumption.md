@@ -1,6 +1,6 @@
 # CORE-036 — Atomic approval consumption
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_035**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -53,6 +53,6 @@ The approval database does not store:
 
 The generated approval handle is opaque and URL-safe. No public MCP approval tool or UI is introduced in this phase.
 
-## Dependency boundary
+## Current integration gate
 
-This work is stacked on CORE-035. It must not merge before CORE-035 is merged and post-merge `main` is GREEN. After that dependency is satisfied, the PR will be retargeted to `main` and all mandatory CI/security/image/Trivy/SBOM/documentation gates will be rerun against the current integration base.
+CORE-035 is merged and post-merge GREEN on `main`, together with the completed Planner schema and Tool Registry migrations. PR #258 is now based directly on that integrated `main`. This revision deliberately re-triggers the complete mandatory suite; stacked-branch evidence is not reused for merge.
