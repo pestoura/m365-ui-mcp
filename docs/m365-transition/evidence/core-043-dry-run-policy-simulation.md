@@ -1,6 +1,6 @@
 # CORE-043 — Dry-run / policy simulation
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_042**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -69,6 +69,6 @@ Tests prove:
 - the simulation implementation imports no execution/persistence dependencies;
 - all 17 current Planner public tools are simulatable without mutation.
 
-## Dependency gate
+## Current integration gate
 
-This work is stacked on CORE-042. It must not merge until CORE-042 is merged and post-merge `main` is GREEN. Once merged, CORE-043 closes Phase 4 and unlocks current-base integration of CORE-044 result projection.
+CORE-042 is merged into `main` at `b897077f01bd7a13428c36f479bd222f228a7a18`. This revision deliberately re-triggers the complete mandatory CI/security/image/Trivy/SBOM/documentation suite against that current integration base. CORE-043 will merge only after CORE-042 post-merge `main` is GREEN and these fresh PR gates are GREEN. Its completion closes Phase 4 and unlocks CORE-044 integration.
