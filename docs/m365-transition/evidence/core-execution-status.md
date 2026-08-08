@@ -29,8 +29,8 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 | CORE-014 | PASS | Per-fragment attestation merged through PR #228 to `66d03890492f072364c270b9a9c6b42958da086e`; PR docs `31259317512` and CI `31259317510` SUCCESS; post-merge docs `31259491871` and CI `31259491856` SUCCESS. Drift affects only capabilities with explicit fragment dependencies. |
 | CORE-015 | PASS | Contract-set digest merged through PR #229 to `f41915de3dbdcb052993f1e31f2aca1637840add`; PR docs `31259832059` and CI `31259832057` SUCCESS; post-merge docs `31260020398` and CI `31260020388` SUCCESS. Deterministic SHA-256 identifies the exact semantic contract set without runtime/session identity. |
 | CORE-016 | PASS | Closed locator strategy merged through PR #230 to `7c321271ce5eae042754f8b18480758b6cf0ead1`; post-merge docs `31261175335` and CI `31261175402` SUCCESS. Accessible semantics outrank evidence-bound test-id/CSS fallbacks; unsafe generic primitives remain rejected. |
-| CORE-017 | IMPLEMENTED_AWAITING_GATES | Closed `HEALTHY`/`STALE`/`DRIFTED`/`RE_ATTESTATION_REQUIRED` lifecycle, fail-closed transitions and dependent-capability degradation implemented without persisting or inventing live evidence. |
-| CORE-018 | NOT_STARTED | Capability evidence persistence. |
+| CORE-017 | PASS | Closed UI drift lifecycle merged through PR #231 to `b9322f676eddb06a22fe98ead9292f05f6fdc5ef`; post-merge docs `31264131559` and CI `31264131570` SUCCESS. Capability-scoped degradation remains fail closed, and successful re-attestation cannot bypass the required drift lifecycle. |
+| CORE-018 | IMPLEMENTED_AWAITING_GATES | Sanitized append-only capability/UI evidence metadata persistence implemented with deterministic evidence IDs, exact contract-set/fragment binding and lifecycle projection. No tenant content, session material, expiry policy or live attestation is persisted/implemented. |
 | CORE-019 | NOT_STARTED | Attestation tooling/runbook. |
 | CORE-020 | NOT_STARTED | Capability expiration/revalidation. |
 
@@ -39,6 +39,14 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 Lifecycle semantics are deliberately separate from evidence persistence and aging policy. `CORE-017` provides a closed state/event model and capability-scoped degradation. `CORE-018` owns sanitized evidence persistence; `CORE-020` owns expiration/revalidation policy.
 
 A contract-recorded drift cannot be hidden by runtime lifecycle input, and a lifecycle overlay cannot promote an unattested fragment to healthy. Recovery from drift requires an explicit `RE_ATTESTATION_REQUIRED` state before successful re-attestation can return evidence to `HEALTHY`.
+
+## CORE-018 boundary decision
+
+`CORE-018` persists only bounded fragment metadata, SHA-256 digests, closed lifecycle state and a timezone-aware evidence timestamp. The table deliberately has no generic JSON/payload field and no account/container identifiers, authenticated URLs, screenshots, cookies, tokens or browser storage state.
+
+Each append is bound to the exact `UIContractSet.digest()` and exact fragment version/scope/application/surface metadata. Evidence from an older contract-set digest is never projected into the current lifecycle overlay. Replaying the exact same sanitized record is idempotent.
+
+Evidence collection remains `CORE-019`; expiration/TTL/revalidation semantics remain `CORE-020`; generalized resource state identity remains `CORE-037`. `CORE-018` does not claim or require live Microsoft 365 egress.
 
 ## Current compatibility invariants
 
@@ -53,8 +61,8 @@ A contract-recorded drift cannot be hidden by runtime lifecycle input, and a lif
 ## Next gate
 
 ```text
-CORE-017 PR CI/security/images/SBOM GREEN
+CORE-018 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-018
+        -> CORE-019
 ```
