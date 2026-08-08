@@ -9,7 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from m365_mcp.capability_registry import CapabilityRegistry, default_capability_registry
+from m365_mcp.capability_registry import (
+    CapabilityRegistry,
+    ScopedCapability,
+    default_capability_registry,
+)
 from m365_mcp.tool_registry import ToolDefinition
 
 
@@ -94,7 +98,7 @@ class ScopeAssessment:
 def _matching_capabilities(
     definition: ToolDefinition,
     registry: CapabilityRegistry,
-) -> tuple[object, ...]:
+) -> tuple[ScopedCapability, ...]:
     keys = set(definition.capability_keys)
     return tuple(
         capability
@@ -103,7 +107,10 @@ def _matching_capabilities(
     )
 
 
-def _resource_scope(definition: ToolDefinition, container_scope: str | None) -> ResourceScope | None:
+def _resource_scope(
+    definition: ToolDefinition,
+    container_scope: str | None,
+) -> ResourceScope | None:
     required = tuple(definition.input_schema.get("required", ()))
     if "task_id" in required:
         return ResourceScope.RESOURCE
