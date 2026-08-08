@@ -6,10 +6,14 @@ import m365_mcp.compensation_registry as compensation_registry
 import m365_mcp.tool_registry as tool_registry
 
 
+def _first_tool(registry: tool_registry.ToolRegistry) -> tool_registry.ToolDefinition:
+    return registry.get(registry.names()[0])
+
+
 def _mutation_tool(
     mutation_class: tool_registry.MutationClass = tool_registry.MutationClass.CREATE,
 ) -> tool_registry.ToolDefinition:
-    source = tool_registry.default_tool_registry().definitions()[0]
+    source = _first_tool(tool_registry.default_tool_registry())
     return replace(
         source,
         name="synthetic_mutation",
@@ -25,8 +29,8 @@ def test_current_read_only_registry_has_explicitly_empty_compensation_set() -> N
     assert registry.definitions() == ()
     registry.validate_tool_registry_coverage(tools)
     assert all(
-        tool.mutation_class is tool_registry.MutationClass.READ
-        for tool in tools.definitions()
+        tools.get(name).mutation_class is tool_registry.MutationClass.READ
+        for name in tools.names()
     )
 
 
@@ -113,7 +117,7 @@ def test_invalid_availability_strategy_combinations_fail_closed() -> None:
 
 
 def test_read_tools_cannot_declare_compensation() -> None:
-    read_tool = tool_registry.default_tool_registry().definitions()[0]
+    read_tool = _first_tool(tool_registry.default_tool_registry())
 
     with pytest.raises(ValueError, match="read-only tools cannot declare"):
         compensation_registry.CompensationDefinition(
@@ -143,9 +147,8 @@ def test_version_or_mutation_class_drift_fails_closed() -> None:
     )
 
     with pytest.raises(ValueError):
-        compensation_registry.CompensationRegistry((wrong_version,)).validate_tool_registry_coverage(
-            tool_registry.ToolRegistry((mutation,))
-        )
+        registry = compensation_registry.CompensationRegistry((wrong_version,))
+        registry.validate_tool_registry_coverage(tool_registry.ToolRegistry((mutation,)))
     with pytest.raises(ValueError, match="mutation class"):
         compensation_registry.CompensationRegistry((wrong_class,)).for_tool(mutation)
 
@@ -161,6 +164,5 @@ def test_orphan_compensation_definition_is_rejected() -> None:
     )
 
     with pytest.raises(ValueError, match="orphan compensation definition"):
-        compensation_registry.CompensationRegistry((definition,)).validate_tool_registry_coverage(
-            tool_registry.default_tool_registry()
-        )
+        registry = compensation_registry.CompensationRegistry((definition,))
+        registry.validate_tool_registry_coverage(tool_registry.default_tool_registry())
