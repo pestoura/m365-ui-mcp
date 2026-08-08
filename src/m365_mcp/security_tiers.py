@@ -51,8 +51,14 @@ def classify_security_tier(definition: ToolDefinition) -> SecurityTierAssessment
     closed into T4 so adding a new semantic risk vocabulary cannot silently
     inherit a lower-privilege tier.
     """
-    if definition.mutation_class in {MutationClass.DELETE, MutationClass.HIGH_IMPACT}:
-        return SecurityTierAssessment(SecurityTier.T4, "DESTRUCTIVE_OR_HIGH_IMPACT_MUTATION")
+    if definition.mutation_class in {
+        MutationClass.DELETE,
+        MutationClass.HIGH_IMPACT,
+    }:
+        return SecurityTierAssessment(
+            SecurityTier.T4,
+            "DESTRUCTIVE_OR_HIGH_IMPACT_MUTATION",
+        )
 
     if definition.mutation_class in {MutationClass.CREATE, MutationClass.UPDATE}:
         return SecurityTierAssessment(SecurityTier.T3, "BOUNDED_MUTATION")
