@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -11,6 +12,7 @@ from m365_mcp.effective_capabilities import (
     project_effective_capabilities_by_capability,
 )
 from m365_mcp.ui_contract_store import load_ui_contract_set
+from m365_mcp.ui_drift import UILifecycleState
 
 from .auth import AuthState
 from .contracts import load_contract
@@ -73,6 +75,7 @@ def build_capabilities(
     runtime_ok: bool = True,
     policy_allowed: bool = True,
     live_evidence: bool = False,
+    ui_lifecycle_by_fragment: Mapping[str, UILifecycleState | str] | None = None,
 ) -> dict[str, Any]:
     """Build compatibility output plus dependency-aware effective projection."""
     auth_evidence = auth_evidence or {}
@@ -95,7 +98,11 @@ def build_capabilities(
     )
 
     ui_attestation = {
-        name: contract_set.attestation_for_capability("planner", name)
+        name: contract_set.attestation_for_capability(
+            "planner",
+            name,
+            lifecycle_by_fragment=ui_lifecycle_by_fragment,
+        )
         for name in registry.capability_names("planner")
     }
     evidence_by_capability = {
@@ -108,6 +115,8 @@ def build_capabilities(
             license_available=license_available,
             live_evidence=explicit_live,
             ui_drifted=attestation.drifted,
+            ui_stale=attestation.stale,
+            ui_reattestation_required=attestation.reattestation_required,
         )
         for name, attestation in ui_attestation.items()
     }
@@ -130,6 +139,10 @@ def build_capabilities(
             ui_contract_status=(
                 "DRIFTED"
                 if ui_attestation[name].drifted
+                else "RE_ATTESTATION_REQUIRED"
+                if ui_attestation[name].reattestation_required
+                else "STALE"
+                if ui_attestation[name].stale
                 else "ATTESTED"
                 if ui_attestation[name].attested
                 else "UNVERIFIED_LIVE"

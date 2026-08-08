@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from typing import Any
 from m365_mcp.capability_registry import default_capability_registry
 from m365_mcp.contracts import contracts_dir
 from m365_mcp.locators import locator_plan_from_metadata
+from m365_mcp.ui_drift import UILifecycleState
 
 _ALLOWED_SCOPES = frozenset({"common", "application", "surface"})
 _ALLOWED_ATTESTATION = frozenset({"ATTESTED", "UNVERIFIED_LIVE", "DRIFTED"})
@@ -75,6 +77,9 @@ class CapabilityUIAttestation:
     attested: bool
     drifted: bool
     reasons: tuple[str, ...]
+    stale: bool = False
+    reattestation_required: bool = False
+    lifecycle_states: tuple[tuple[str, str], ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -83,6 +88,12 @@ class CapabilityUIAttestation:
             "dependency_fragments": list(self.dependency_fragments),
             "attested": self.attested,
             "drifted": self.drifted,
+            "stale": self.stale,
+            "reattestation_required": self.reattestation_required,
+            "lifecycle_states": [
+                {"fragment_id": fragment_id, "state": state}
+                for fragment_id, state in self.lifecycle_states
+            ],
             "reasons": list(self.reasons),
         }
 
@@ -134,8 +145,30 @@ class UIContractSet:
             and capability in fragment.capability_keys
         )
 
+    def _normalize_lifecycle_overlay(
+        self,
+        lifecycle_by_fragment: Mapping[str, UILifecycleState | str] | None,
+    ) -> dict[str, UILifecycleState]:
+        if lifecycle_by_fragment is None:
+            return {}
+        known = {fragment.fragment_id for fragment in self.fragments}
+        unknown = set(lifecycle_by_fragment) - known
+        if unknown:
+            raise ValueError("UI lifecycle overlay references unknown fragment")
+        normalized: dict[str, UILifecycleState] = {}
+        for fragment_id, raw_state in lifecycle_by_fragment.items():
+            try:
+                normalized[fragment_id] = UILifecycleState(raw_state)
+            except ValueError as exc:
+                raise ValueError("UI lifecycle overlay contains invalid state") from exc
+        return normalized
+
     def attestation_for_capability(
-        self, application: str, capability: str
+        self,
+        application: str,
+        capability: str,
+        *,
+        lifecycle_by_fragment: Mapping[str, UILifecycleState | str] | None = None,
     ) -> CapabilityUIAttestation:
         """Compute attestation without allowing unrelated fragments to degrade support."""
         dependencies = self.fragments_for_capability(application, capability)
@@ -150,7 +183,47 @@ class UIContractSet:
                 reasons=("UI_DEPENDENCY_UNDECLARED",),
             )
 
-        drifted = tuple(fragment for fragment in dependencies if fragment.drifted)
+        overlay = self._normalize_lifecycle_overlay(lifecycle_by_fragment)
+        lifecycle: dict[str, UILifecycleState] = {}
+        invalid_healthy: list[UIContractFragment] = []
+        for fragment in dependencies:
+            if fragment.drifted:
+                lifecycle[fragment.fragment_id] = UILifecycleState.DRIFTED
+                continue
+            explicit = overlay.get(fragment.fragment_id)
+            if explicit is UILifecycleState.HEALTHY and not fragment.effectively_attested:
+                invalid_healthy.append(fragment)
+                continue
+            if explicit is not None:
+                lifecycle[fragment.fragment_id] = explicit
+            elif fragment.effectively_attested:
+                lifecycle[fragment.fragment_id] = UILifecycleState.HEALTHY
+
+        lifecycle_states = tuple(
+            (fragment.fragment_id, lifecycle[fragment.fragment_id].value)
+            for fragment in dependencies
+            if fragment.fragment_id in lifecycle
+        )
+
+        if invalid_healthy:
+            return CapabilityUIAttestation(
+                application=application,
+                capability=capability,
+                dependency_fragments=dependency_ids,
+                attested=False,
+                drifted=False,
+                reasons=tuple(
+                    f"UI_FRAGMENT_HEALTHY_WITHOUT_ATTESTATION:{fragment.fragment_id}"
+                    for fragment in invalid_healthy
+                ),
+                lifecycle_states=lifecycle_states,
+            )
+
+        drifted = tuple(
+            fragment
+            for fragment in dependencies
+            if lifecycle.get(fragment.fragment_id) is UILifecycleState.DRIFTED
+        )
         if drifted:
             return CapabilityUIAttestation(
                 application=application,
@@ -161,6 +234,47 @@ class UIContractSet:
                 reasons=tuple(
                     f"UI_FRAGMENT_DRIFT:{fragment.fragment_id}" for fragment in drifted
                 ),
+                lifecycle_states=lifecycle_states,
+            )
+
+        reattestation = tuple(
+            fragment
+            for fragment in dependencies
+            if lifecycle.get(fragment.fragment_id)
+            is UILifecycleState.RE_ATTESTATION_REQUIRED
+        )
+        if reattestation:
+            return CapabilityUIAttestation(
+                application=application,
+                capability=capability,
+                dependency_fragments=dependency_ids,
+                attested=False,
+                drifted=False,
+                reattestation_required=True,
+                reasons=tuple(
+                    f"UI_FRAGMENT_RE_ATTESTATION_REQUIRED:{fragment.fragment_id}"
+                    for fragment in reattestation
+                ),
+                lifecycle_states=lifecycle_states,
+            )
+
+        stale = tuple(
+            fragment
+            for fragment in dependencies
+            if lifecycle.get(fragment.fragment_id) is UILifecycleState.STALE
+        )
+        if stale:
+            return CapabilityUIAttestation(
+                application=application,
+                capability=capability,
+                dependency_fragments=dependency_ids,
+                attested=False,
+                drifted=False,
+                stale=True,
+                reasons=tuple(
+                    f"UI_FRAGMENT_STALE:{fragment.fragment_id}" for fragment in stale
+                ),
+                lifecycle_states=lifecycle_states,
             )
 
         unattested = tuple(
@@ -177,6 +291,7 @@ class UIContractSet:
                     f"UI_FRAGMENT_UNATTESTED:{fragment.fragment_id}"
                     for fragment in unattested
                 ),
+                lifecycle_states=lifecycle_states,
             )
 
         return CapabilityUIAttestation(
@@ -186,6 +301,7 @@ class UIContractSet:
             attested=True,
             drifted=False,
             reasons=("UI_DEPENDENCIES_ATTESTED",),
+            lifecycle_states=lifecycle_states,
         )
 
 

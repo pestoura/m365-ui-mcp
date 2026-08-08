@@ -28,17 +28,17 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 | CORE-013 | PASS | Fragmented UIContract storage merged through PR #227 to `9b1a8aeb3a9ab536d8b26eeaf45717e95fd34d86`; PR docs `31258776662` and CI `31258776663` SUCCESS; post-merge docs `31258954098` and CI `31258954095` SUCCESS. Ten legacy selectors remain exactly preserved and globally compatible. |
 | CORE-014 | PASS | Per-fragment attestation merged through PR #228 to `66d03890492f072364c270b9a9c6b42958da086e`; PR docs `31259317512` and CI `31259317510` SUCCESS; post-merge docs `31259491871` and CI `31259491856` SUCCESS. Drift affects only capabilities with explicit fragment dependencies. |
 | CORE-015 | PASS | Contract-set digest merged through PR #229 to `f41915de3dbdcb052993f1e31f2aca1637840add`; PR docs `31259832059` and CI `31259832057` SUCCESS; post-merge docs `31260020398` and CI `31260020388` SUCCESS. Deterministic SHA-256 identifies the exact semantic contract set without runtime/session identity. |
-| CORE-016 | IMPLEMENTED_AWAITING_GATES | Closed locator strategy prioritizes role/label/placeholder; test-id/CSS fallbacks require SHA-256 evidence and unsafe generic primitives are rejected. |
-| CORE-017 | NOT_STARTED | UI drift lifecycle. |
+| CORE-016 | PASS | Closed locator strategy merged through PR #230 to `7c321271ce5eae042754f8b18480758b6cf0ead1`; post-merge docs `31261175335` and CI `31261175402` SUCCESS. Accessible semantics outrank evidence-bound test-id/CSS fallbacks; unsafe generic primitives remain rejected. |
+| CORE-017 | IMPLEMENTED_AWAITING_GATES | Closed `HEALTHY`/`STALE`/`DRIFTED`/`RE_ATTESTATION_REQUIRED` lifecycle, fail-closed transitions and dependent-capability degradation implemented without persisting or inventing live evidence. |
 | CORE-018 | NOT_STARTED | Capability evidence persistence. |
 | CORE-019 | NOT_STARTED | Attestation tooling/runbook. |
 | CORE-020 | NOT_STARTED | Capability expiration/revalidation. |
 
-## CORE-016 boundary decision
+## CORE-017 boundary decision
 
-Locator metadata is a closed semantic contract, not a generic browser executor. Accessible candidates always outrank fallback selectors. `test_id` and `css` require explicit evidence digests; XPath, JavaScript and unknown fields/strategies fail closed.
+Lifecycle semantics are deliberately separate from evidence persistence and aging policy. `CORE-017` provides a closed state/event model and capability-scoped degradation. `CORE-018` owns sanitized evidence persistence; `CORE-020` owns expiration/revalidation policy.
 
-No live locators are invented in shipped fragments. The generic browser worker receives the same validated model, but locator execution remains behind later typed worker/lifecycle controls.
+A contract-recorded drift cannot be hidden by runtime lifecycle input, and a lifecycle overlay cannot promote an unattested fragment to healthy. Recovery from drift requires an explicit `RE_ATTESTATION_REQUIRED` state before successful re-attestation can return evidence to `HEALTHY`.
 
 ## Current compatibility invariants
 
@@ -53,8 +53,8 @@ No live locators are invented in shipped fragments. The generic browser worker r
 ## Next gate
 
 ```text
-CORE-016 PR CI/security/images/SBOM GREEN
+CORE-017 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-017
+        -> CORE-018
 ```

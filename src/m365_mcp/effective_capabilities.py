@@ -33,6 +33,8 @@ class EffectiveCapabilityEvidence:
     license_available: bool
     live_evidence: bool
     ui_drifted: bool = False
+    ui_stale: bool = False
+    ui_reattestation_required: bool = False
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,8 @@ class EffectiveCapability:
                 "license_available": self.evidence.license_available,
                 "live_evidence": self.evidence.live_evidence,
                 "ui_drifted": self.evidence.ui_drifted,
+                "ui_stale": self.evidence.ui_stale,
+                "ui_reattestation_required": self.evidence.ui_reattestation_required,
             },
         }
 
@@ -103,18 +107,26 @@ def _evaluate(
     if not evidence.live_evidence:
         missing.append("LIVE_EVIDENCE_ABSENT")
 
+    lifecycle_reason: str | None = None
     if evidence.ui_drifted:
+        lifecycle_reason = "UI_FRAGMENT_DRIFT"
+    elif evidence.ui_reattestation_required:
+        lifecycle_reason = "UI_RE_ATTESTATION_REQUIRED"
+    elif evidence.ui_stale:
+        lifecycle_reason = "UI_EVIDENCE_STALE"
+
+    if lifecycle_reason is not None:
         if missing:
             return EffectiveCapability(
                 definition,
                 EffectiveCapabilityState.UNVERIFIED_LIVE,
-                tuple((*missing, "UI_FRAGMENT_DRIFT")),
+                tuple((*missing, lifecycle_reason)),
                 evidence,
             )
         return EffectiveCapability(
             definition,
             EffectiveCapabilityState.DEGRADED,
-            ("UI_FRAGMENT_DRIFT",),
+            (lifecycle_reason,),
             evidence,
         )
 
