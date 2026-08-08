@@ -27,18 +27,18 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 | CORE-012 | PASS | Effective capability projection merged through PR #226 to `608bc854863c9e9fa756c20503c7c7d27d83d61a`; PR docs `31258209123` and CI `31258209104` SUCCESS; post-merge docs `31258381298` and CI `31258381284` SUCCESS. Mock or mode flags cannot promote live support without explicit live-UI evidence provenance. |
 | CORE-013 | PASS | Fragmented UIContract storage merged through PR #227 to `9b1a8aeb3a9ab536d8b26eeaf45717e95fd34d86`; PR docs `31258776662` and CI `31258776663` SUCCESS; post-merge docs `31258954098` and CI `31258954095` SUCCESS. Ten legacy selectors remain exactly preserved and globally compatible. |
 | CORE-014 | PASS | Per-fragment attestation merged through PR #228 to `66d03890492f072364c270b9a9c6b42958da086e`; PR docs `31259317512` and CI `31259317510` SUCCESS; post-merge docs `31259491871` and CI `31259491856` SUCCESS. Drift affects only capabilities with explicit fragment dependencies. |
-| CORE-015 | IMPLEMENTED_AWAITING_GATES | Deterministic SHA-256 identity covers the exact semantic UI contract set and is exposed in UI status, capability evidence and browser-worker health without including runtime/session identity. |
-| CORE-016 | NOT_STARTED | Locator strategy abstraction. |
+| CORE-015 | PASS | Contract-set digest merged through PR #229 to `f41915de3dbdcb052993f1e31f2aca1637840add`; PR docs `31259832059` and CI `31259832057` SUCCESS; post-merge docs `31260020398` and CI `31260020388` SUCCESS. Deterministic SHA-256 identifies the exact semantic contract set without runtime/session identity. |
+| CORE-016 | IMPLEMENTED_AWAITING_GATES | Closed locator strategy prioritizes role/label/placeholder; test-id/CSS fallbacks require SHA-256 evidence and unsafe generic primitives are rejected. |
 | CORE-017 | NOT_STARTED | UI drift lifecycle. |
 | CORE-018 | NOT_STARTED | Capability evidence persistence. |
 | CORE-019 | NOT_STARTED | Attestation tooling/runbook. |
 | CORE-020 | NOT_STARTED | Capability expiration/revalidation. |
 
-## CORE-015 boundary decision
+## CORE-016 boundary decision
 
-The contract-set digest is a correlation identity, not an authorization or attestation decision. It binds semantic contract content and manifest fragment order using canonical JSON plus SHA-256. It excludes filesystem location, timestamps, tenant/account/user/session identifiers and credential material.
+Locator metadata is a closed semantic contract, not a generic browser executor. Accessible candidates always outrank fallback selectors. `test_id` and `css` require explicit evidence digests; XPath, JavaScript and unknown fields/strategies fail closed.
 
-Mapping-key ordering is normalized, while fragment list ordering remains significant. The digest is exposed as metadata only; raw selector documents are not exported through MCP tool output as part of this block.
+No live locators are invented in shipped fragments. The generic browser worker receives the same validated model, but locator execution remains behind later typed worker/lifecycle controls.
 
 ## Current compatibility invariants
 
@@ -53,8 +53,8 @@ Mapping-key ordering is normalized, while fragment list ordering remains signifi
 ## Next gate
 
 ```text
-CORE-015 PR CI/security/images/SBOM GREEN
+CORE-016 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-016
+        -> CORE-017
 ```

@@ -10,6 +10,7 @@ from typing import Any
 
 from m365_mcp.capability_registry import default_capability_registry
 from m365_mcp.contracts import contracts_dir
+from m365_mcp.locators import locator_plan_from_metadata
 
 _ALLOWED_SCOPES = frozenset({"common", "application", "surface"})
 _ALLOWED_ATTESTATION = frozenset({"ATTESTED", "UNVERIFIED_LIVE", "DRIFTED"})
@@ -263,6 +264,7 @@ def _load_fragment(root: Path, expected_id: str, relative: str) -> UIContractFra
             raise ValueError(f"UIContract fragment {fragment_id} contains invalid selector")
         if metadata.get("status") not in _ALLOWED_ATTESTATION:
             raise ValueError(f"UIContract fragment {fragment_id} has invalid selector status")
+        locator_plan_from_metadata(name, metadata)
 
     return UIContractFragment(
         fragment_id=fragment_id,
