@@ -1,9 +1,11 @@
 # ADR-M365-001 — Evolve planner-mcp into m365-ui-mcp
 
-- Status: **Proposed / accepted in product direction, implementation gated by Phase 0**
+- Status: **Accepted**
 - Date: 2026-08-08
+- Accepted after Phase 0: 2026-08-08
 - Current repository: `pestoura/planner-mcp`
 - Target repository: `pestoura/m365-ui-mcp`
+- Planner compatibility baseline: `planner-pre-m365-0.1.0`
 
 ## Context
 
@@ -31,19 +33,19 @@ The product will:
 6. add Outlook as the second application adapter;
 7. introduce `m365_*` core/composite tools and `outlook_*` Outlook semantic tools;
 8. adopt the relevant Hermes v2 deterministic execution concepts without making Hermes or its LLM a mandatory hop;
-9. require a final-state assessment of Planner before any implementation transition or repository rename;
+9. preserve the immutable pre-transition Planner baseline and its compatibility evidence;
 10. preserve or strengthen all current Planner security/governance controls.
 
 ## Repository rename
 
-The intended rename is:
+The approved rename is:
 
 ```text
 pestoura/planner-mcp
 -> pestoura/m365-ui-mcp
 ```
 
-The rename is delayed until the active Planner delivery cycle completes and Phase 0 records/reconciles the final state.
+Phase 0 has completed successfully. The rename may proceed under `CORE-002` after this ADR status change passes its own PR and post-merge gates.
 
 ## Public compatibility
 
@@ -171,8 +173,14 @@ Costs:
 - UI fragmentation and capability projection become more sophisticated;
 - browser-profile concurrency remains a throughput constraint until safely redesigned.
 
+## Phase 0 resolution
+
+Phase 0 completed on `main` after PR #213 was reconciled and merged.
+
+The post-merge state is `17819e0a804753712f6eef3ac1e02e27249c1e00`, with both canonical documentation and full CI/security/image/SBOM workflows completed successfully. The pre-transition Planner implementation remains anchored by `planner-pre-m365-0.1.0` at `232c72632ab5c93d0bee70ac588af08422cbc42d`.
+
+The assessment confirmed that the current worker is mock-first and not live-attested; therefore this ADR authorizes the controlled core/product transition, not unsupported claims of live Planner or Outlook capability.
+
 ## Implementation gate
 
-This ADR does not authorize immediate code changes while the current Planner cycle is active.
-
-Implementation starts only after `M365-SETUP-001..010` are complete and the transition blueprint has been reconciled against the final Planner `main`.
+**Gate satisfied.** `M365-SETUP-001..010` are complete. Phase 1 may proceed in roadmap order, beginning with this accepted product identity decision and `CORE-002` repository rename. Every subsequent block remains gated by its own executed CI/security evidence and Planner compatibility invariants.
