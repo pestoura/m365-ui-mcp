@@ -42,25 +42,22 @@ Phase 2 gate: **PASS / GREEN** — CORE-011..020 are merged and all applicable p
 |---|---|---|
 | CORE-021 | PASS | FastAPI browser lifespan ownership merged through PR #235 to `f57514abf21188dd76a2065521506d9d2e18f5c7`; post-merge docs `31266922919` and CI `31266922911` SUCCESS. |
 | CORE-022 | PASS | True liveness/readiness merged through PR #236 to `b3aef8e08f13621070e777bdca81921a95320aed`; post-merge docs `31267827191` and CI `31267827213` SUCCESS. Readiness is a fail-closed seven-signal AND gate over browser/profile/auth/UI contract/broker/protocol/lock. |
-| CORE-023 | IMPLEMENTED_AWAITING_GATES | Canonical `SessionCapabilityBroker` binds registered semantic capability grants to the process-owned authenticated professional browser session. Grants contain bounded scope metadata only; no cookies, tokens, headers or storage state can be exported. Planner read endpoints now use semantic capability grants. |
+| CORE-023 | PASS | Session/Capability Broker merged through PR #237 to `6736a229c0a601ba40cc7308d6bcd193c71caf78`; post-merge docs `31268368222` and CI `31268368228` SUCCESS. Semantic grants are browser-session bound and export only bounded scope metadata. |
+| CORE-024 | IMPLEMENTED_AWAITING_GATES | Account-context enforcement adds closed VERIFIED/UNVERIFIED/AMBIGUOUS/WRONG_ACCOUNT/WRONG_TENANT states. Broker viability and authorization require an explicitly verified professional expected-profile context; safe default is UNVERIFIED. No raw tenant/user identity is required by the model. |
 
 ## CORE-017..020 evidence/lifecycle boundary
 
 UI lifecycle, evidence persistence, attestation and freshness remain separate reviewed concerns. Evidence is bound to the exact UIContractSet digest, contains no tenant/session content, and expiration/degradation is capability scoped. Current Planner fragments remain `UNVERIFIED_LIVE` until real controlled evidence is collected; no CI workflow authenticates to the real tenant.
 
-## CORE-021 boundary decision
+## CORE-021..023 browser/session boundary
 
-FastAPI lifespan is the explicit owner of the canonical browser object. Live lifecycle ownership covers both Playwright and the persistent Chromium context with deterministic cleanup. Browser process ownership is infrastructure state, not semantic authorization; CORE-025 remains mandatory before controlled live Microsoft 365 egress.
+FastAPI lifespan owns Playwright/Chromium. Readiness remains a fail-closed seven-signal AND gate. The Session/Capability Broker binds only registered semantic capabilities to a process-owned authenticated session and returns bounded application/surface/account/container metadata; it exposes no generic browser primitive.
 
-## CORE-022 boundary decision
+## CORE-024 boundary decision
 
-`CORE-022` separates a responsive ASGI process from readiness for live Microsoft 365 work. `/livez` only asserts process liveness. `/readyz` is a seven-signal AND gate over browser ownership, profile usability, `AUTHENTICATED`, UIContract attestation, broker viability, protocol compatibility and lock viability. Providers belonging to later work remain fail closed until proven.
+`CORE-024` separates authentication from account correctness. An authenticated session is insufficient unless its sanitized account-context assertion is `VERIFIED`, professional and associated with the expected isolated profile. UNVERIFIED, AMBIGUOUS, WRONG_ACCOUNT and WRONG_TENANT all fail semantic authorization with `POLICY_DENIED`.
 
-## CORE-023 boundary decision
-
-`CORE-023` is a semantic authorization broker, not a credential broker. It receives the process-owned browser, the closed Capability Registry and an authentication-state provider. Viability requires both an owned browser and `AUTHENTICATED`; authorization additionally requires one unique registered application/capability and the existing UIContract live guard.
-
-Successful grants contain application/surface/account/container/capability metadata plus explicit `session_bound=true` and `secret_material_exported=false`. There is no broker method that returns cookies, tokens, authorization headers, browser storage state or arbitrary page primitives. Account-context correctness remains CORE-024 and controlled egress remains CORE-025.
+The account-context model intentionally does not persist or require raw tenant IDs, email addresses or user identifiers. The live `/account/context` route exposes only state/professional/expected_profile/valid flags. Runtime discovery of that assertion requires controlled Microsoft connectivity and therefore remains constrained by CORE-025.
 
 ## Current compatibility invariants
 
@@ -75,8 +72,8 @@ Successful grants contain application/surface/account/container/capability metad
 ## Next gate
 
 ```text
-CORE-023 PR CI/security/images/SBOM GREEN
+CORE-024 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-024
+        -> CORE-025
 ```
