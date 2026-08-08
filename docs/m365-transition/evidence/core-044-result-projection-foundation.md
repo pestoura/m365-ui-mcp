@@ -1,10 +1,10 @@
-# CORE-044 — Result projection operators (parallel foundation)
+# CORE-044 — Result projection operators
 
-Status: **PREIMPLEMENTED_AWAITING_DEPENDENCY_AND_GATES**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
-Pre-implement the bounded result-reduction operators from CORE-044 while the governance lane continues through CORE-032..043. This work must not integrate into the execution plane or merge ahead of the CORE-043 dependency gate.
+Implement the bounded result-reduction operators from CORE-044 after completion of the governance/execution foundation through CORE-043.
 
 ## Implemented operators
 
@@ -21,9 +21,13 @@ The pure `m365_mcp.result_projection` module defines a closed projection vocabul
 
 Projection is pure: it receives already-produced semantic rows, cannot fetch more data and has no browser/session dependency.
 
-## Dependency boundary
+## Dependency gate
 
-This lane is intentionally developed and tested in parallel, but integration/merge remains blocked until CORE-043 is accepted. CORE-046 will later add secret-aware field classification; therefore CORE-044 does not make a claim that projection alone authorizes access to any field.
+CORE-043 is merged and post-merge GREEN on `main` at `4e732e7c5758559c9fbb8c56edcc43d985e48531`. CORE-044 is therefore formally unblocked for integration.
+
+This revision intentionally re-triggers the complete mandatory CI/security/image/Trivy/SBOM/documentation suite against the current integration base. Historical stacked CI is not reused as merge evidence.
+
+CORE-046 adds secret-aware field classification; CORE-044 therefore does not claim that projection alone authorizes access to any field.
 
 ## Safety
 
