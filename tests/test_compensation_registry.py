@@ -24,7 +24,10 @@ def test_current_read_only_registry_has_explicitly_empty_compensation_set() -> N
 
     assert registry.definitions() == ()
     registry.validate_tool_registry_coverage(tools)
-    assert all(tool.mutation_class is tool_registry.MutationClass.READ for tool in tools.definitions())
+    assert all(
+        tool.mutation_class is tool_registry.MutationClass.READ
+        for tool in tools.definitions()
+    )
 
 
 def test_every_registered_mutation_requires_explicit_compensation_definition() -> None:
