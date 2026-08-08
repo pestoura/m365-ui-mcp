@@ -9,7 +9,6 @@ navigation primitive.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 from urllib.parse import urlsplit
 
 
@@ -66,10 +65,10 @@ def evaluate_browser_egress(url: str) -> EgressDecision:
     return EgressDecision(False, "HOST_NOT_ALLOWLISTED")
 
 
-async def enforce_route_egress(route: Any, request: Any) -> None:
+async def enforce_route_egress(route: object, request: object) -> None:
     """Playwright route handler that aborts any request outside the closed policy."""
-    decision = evaluate_browser_egress(str(request.url))
+    decision = evaluate_browser_egress(str(getattr(request, "url", "")))
     if decision.allowed:
-        await route.continue_()
+        await getattr(route, "continue_")()
         return
-    await route.abort("blockedbyclient")
+    await getattr(route, "abort")("blockedbyclient")
