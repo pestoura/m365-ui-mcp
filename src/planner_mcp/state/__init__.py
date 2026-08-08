@@ -1,4 +1,4 @@
-"""SQLite state foundation (WAL, FULL sync, FKs, busy timeout)."""
+"""SQLite state package foundation (WAL, FULL sync, FKs, busy timeout)."""
 
 from __future__ import annotations
 
@@ -114,3 +114,12 @@ def health(path: Path) -> dict[str, object]:
         }
     except sqlite3.Error as exc:  # pragma: no cover - defensive
         return {"ok": False, "error": type(exc).__name__}
+
+
+__all__ = [
+    "SCHEMA_VERSION",
+    "closing_connection",
+    "connect",
+    "health",
+    "initialise",
+]

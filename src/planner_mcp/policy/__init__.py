@@ -1,11 +1,11 @@
-"""Fail-closed policy engine: ALLOW / DENY / REQUIRE_APPROVAL."""
+"""Fail-closed policy package: ALLOW / DENY / REQUIRE_APPROVAL."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
 
-from .config import Settings
+from ..config import Settings
 
 
 class Decision(StrEnum):
@@ -58,3 +58,6 @@ def evaluate(tool: str, settings: Settings, *, mutation: bool = False) -> Policy
             return PolicyResult(Decision.DENY, "MUTATIONS_DISABLED_IN_0_1_0")
         return PolicyResult(Decision.REQUIRE_APPROVAL, "MUTATION_REQUIRES_APPROVAL")
     return PolicyResult(Decision.ALLOW, "READ_ONLY_TOOL")
+
+
+__all__ = ["Decision", "PolicyResult", "READ_TOOLS", "evaluate"]
