@@ -71,50 +71,41 @@ def common_read_output_schema() -> dict[str, Any]:
     }
 
 
-_EMPTY_INPUT_TOOLS = (
-    "planner_health",
-    "planner_readiness",
-    "planner_capabilities",
-    "planner_agent_card",
-    "planner_ui_contract_status",
-    "planner_auth_status",
-    "planner_auth_start",
-    "planner_auth_resume",
-    "planner_auth_session_info",
-    "planner_plan_list",
-    "planner_account_context",
-    "planner_license_capabilities",
-    "planner_smoke_test",
+# Exact current Tool Registry order. The second tuple item is the only supported
+# opaque identifier input kind for that tool; None means an empty input object.
+_PLANNER_SCHEMA_ORDER: tuple[tuple[str, str | None], ...] = (
+    ("planner_health", None),
+    ("planner_readiness", None),
+    ("planner_capabilities", None),
+    ("planner_agent_card", None),
+    ("planner_ui_contract_status", None),
+    ("planner_auth_status", None),
+    ("planner_auth_start", None),
+    ("planner_auth_resume", None),
+    ("planner_auth_session_info", None),
+    ("planner_plan_list", None),
+    ("planner_plan_get", "plan_id"),
+    ("planner_task_list", "plan_id"),
+    ("planner_task_get", "task_id"),
+    ("planner_project_snapshot", "plan_id"),
+    ("planner_account_context", None),
+    ("planner_license_capabilities", None),
+    ("planner_smoke_test", None),
 )
-
-_PLAN_ID_TOOLS = (
-    "planner_plan_get",
-    "planner_task_list",
-    "planner_project_snapshot",
-)
-
-_TASK_ID_TOOLS = ("planner_task_get",)
 
 
 def planner_semantic_schemas() -> dict[str, PlannerSemanticSchema]:
     """Return the complete 17-tool Planner schema catalog in canonical order."""
     catalog: dict[str, PlannerSemanticSchema] = {}
 
-    for name in _EMPTY_INPUT_TOOLS:
-        catalog[name] = PlannerSemanticSchema(
-            input_schema=empty_input_schema(),
-            output_schema=common_read_output_schema(),
+    for name, identifier_field in _PLANNER_SCHEMA_ORDER:
+        input_schema = (
+            empty_input_schema()
+            if identifier_field is None
+            else id_input_schema(identifier_field)
         )
-
-    for name in _PLAN_ID_TOOLS:
         catalog[name] = PlannerSemanticSchema(
-            input_schema=id_input_schema("plan_id"),
-            output_schema=common_read_output_schema(),
-        )
-
-    for name in _TASK_ID_TOOLS:
-        catalog[name] = PlannerSemanticSchema(
-            input_schema=id_input_schema("task_id"),
+            input_schema=input_schema,
             output_schema=common_read_output_schema(),
         )
 
