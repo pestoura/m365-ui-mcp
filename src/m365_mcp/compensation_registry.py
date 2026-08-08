@@ -119,12 +119,12 @@ class CompensationRegistry:
             if tool.mutation_class is not MutationClass.READ:
                 self.for_tool(tool)
         for identity, definition in self._definitions.items():
-            tool = registered.get(identity)
-            if tool is None:
+            registered_tool = registered.get(identity)
+            if registered_tool is None:
                 raise ValueError("orphan compensation definition")
-            if tool.mutation_class is MutationClass.READ:
+            if registered_tool.mutation_class is MutationClass.READ:
                 raise ValueError("compensation definition targets read-only tool")
-            if tool.mutation_class is not definition.mutation_class:
+            if registered_tool.mutation_class is not definition.mutation_class:
                 raise ValueError("compensation mutation class does not match Tool Registry")
 
 
