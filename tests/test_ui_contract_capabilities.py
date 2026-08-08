@@ -8,7 +8,6 @@ from planner_mcp.capabilities import build_capabilities
 from planner_mcp.errors import UiContractUnattested, UiDrift
 from planner_mcp.ui_contract import assert_no_drift, load_status, require_attested
 
-
 CAP_030_STATES = {
     "UNVERIFIED_LIVE",
     "DISCOVERED",
