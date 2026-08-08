@@ -17,6 +17,12 @@ class PlannerMcpError(Exception):
         return {"error": self.code, "message": self.message, "context": self.context}
 
 
+class ConfigurationError(PlannerMcpError):
+    """Runtime configuration is invalid or violates the non-secret config boundary."""
+
+    code = "CONFIG_INVALID"
+
+
 class BlockerConditionalAccess(PlannerMcpError):
     """Conditional Access requires a managed/compliant device. Never bypass."""
 
