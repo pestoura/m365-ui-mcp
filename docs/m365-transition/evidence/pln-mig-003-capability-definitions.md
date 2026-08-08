@@ -1,6 +1,6 @@
 # PLN-MIG-003 — Planner capability definitions
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_PLN_MIG_002**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -20,7 +20,7 @@ tasks.read                 plan
 buckets.read               plan
 dependencies.read          plan
 scheduling.read            plan
-goals.read                 plan
+goals.read                  plan
 sprints.read               plan
 resources.read             plan
 custom_fields.read         plan
@@ -38,6 +38,6 @@ Every definition remains bound to `application=planner`, `surface=planner_web` a
 - CORE-033 scope-aware policy continues to derive bounded scope for all 17 preserved Planner tools;
 - no capability is promoted to live support by this ownership migration.
 
-## Dependency boundary
+## Current integration gate
 
-This work is stacked on PLN-MIG-002 and cannot merge until PLN-MIG-002 is merged and post-merge GREEN. It will then be retargeted to `main` and revalidated with fresh mandatory gates.
+PLN-MIG-001 and PLN-MIG-002 are merged and post-merge GREEN. This PR is now based directly on current `main`; this commit re-triggers all mandatory gates so no stacked-branch GREEN evidence is reused for merge.
