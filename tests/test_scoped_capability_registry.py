@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 import m365_mcp.capability_registry
 import m365_mcp.tool_registry
 import planner_mcp.capabilities
-import pytest
 
 
 EXPECTED_PLANNER_CAPABILITIES = (
