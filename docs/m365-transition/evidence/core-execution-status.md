@@ -31,8 +31,10 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 | CORE-016 | PASS | Closed locator strategy merged through PR #230 to `7c321271ce5eae042754f8b18480758b6cf0ead1`; post-merge docs `31261175335` and CI `31261175402` SUCCESS. Accessible semantics outrank evidence-bound test-id/CSS fallbacks; unsafe generic primitives remain rejected. |
 | CORE-017 | PASS | Closed UI drift lifecycle merged through PR #231 to `b9322f676eddb06a22fe98ead9292f05f6fdc5ef`; post-merge docs `31264131559` and CI `31264131570` SUCCESS. Capability-scoped degradation remains fail closed, and successful re-attestation cannot bypass the required drift lifecycle. |
 | CORE-018 | PASS | Sanitized capability evidence persistence merged through PR #232 to `99f32929ab13c5068ac00410e8418abc9b8a7ef2`; post-merge docs `31264839172` and CI `31264839203` SUCCESS. Evidence is append-only/idempotent, contract-digest bound and contains no tenant/session content. |
-| CORE-019 | IMPLEMENTED_AWAITING_GATES | Deterministic attestation campaigns, strict sanitized observation evaluation, mock refusal, READ/MUTATION evidence gates and operational runbook implemented. No browser execution or real-tenant CI path is introduced. |
-| CORE-020 | NOT_STARTED | Capability expiration/revalidation. |
+| CORE-019 | PASS | Deterministic attestation workflow merged through PR #233 to `f7b89a4eb740fa561189bc1e62c4869d5242a644`; PR CI `31265403348` and push CI `31265401773` SUCCESS; post-merge docs `31265582918` and CI `31265582939` SUCCESS. No browser execution or real-tenant CI path was introduced. |
+| CORE-020 | IMPLEMENTED_AWAITING_GATES | Versioned evidence lifetime policy plus capability-scoped freshness/revalidation projection implemented. Current reviewable baseline is 7 days; expiry is `STALE`, missing/future evidence requires re-attestation, and degraded source evidence is never promoted. |
+
+Phase 2 gate: **PENDING CORE-020 PR + post-merge gates**.
 
 ## CORE-017 boundary decision
 
@@ -58,6 +60,14 @@ Evidence maturity levels are `DISCOVERY`, `UI`, `READ` and `MUTATION`; they do n
 
 The current Planner fragments remain `UNVERIFIED_LIVE` until a real controlled campaign is executed. The first live campaign is expected to be discovery because current selectors do not yet carry attested typed locator plans. Automated live collection remains subject to later browser/session/network gates, especially `CORE-025` controlled egress.
 
+## CORE-020 boundary decision
+
+`CORE-020` makes evidence lifetime a versioned repository contract instead of an untracked runtime environment value. The current baseline is seven days, bounded by implementation to 60 seconds through 30 days. That baseline is a reviewable product policy and not a claim about Microsoft 365 UI stability.
+
+Freshness is evaluated dynamically from the latest exact-contract CORE-018 record. No historical evidence row is deleted or rewritten merely because time passed. At the exact expiry threshold a previously healthy record becomes `STALE`; missing evidence and future timestamps become `RE_ATTESTATION_REQUIRED`. Existing `STALE`, `DRIFTED` or `RE_ATTESTATION_REQUIRED` records can never be promoted by freshness evaluation.
+
+The resulting fragment lifecycle overlay is consumed by the existing dependency-aware UIContract projection, so expiration degrades only capabilities that depend on the expired fragment. Recovery requires fresh CORE-019 attestation evidence; automatic live revalidation remains dependent on later browser/session/network gates and especially `CORE-025` controlled egress.
+
 ## Current compatibility invariants
 
 - all 17 public `planner_*` tools remain `PRESERVE` under default profile;
@@ -66,13 +76,14 @@ The current Planner fragments remain `UNVERIFIED_LIVE` until a real controlled c
 - mock mode cannot be interpreted as live support;
 - Outlook remains `RESERVED`, with zero public tools/capabilities/selectors;
 - no raw browser primitive/session-secret export is introduced;
-- `CORE-025` remains mandatory before any automated live M365 worker egress claim.
+- `CORE-025` remains mandatory before any automated live M365 worker egress/revalidation claim.
 
 ## Next gate
 
 ```text
-CORE-019 PR CI/security/images/SBOM GREEN
+CORE-020 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-020
+        -> Phase 2 PASS/GREEN
+        -> CORE-021
 ```
