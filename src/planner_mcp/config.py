@@ -8,6 +8,7 @@ from m365_mcp.config import (
     LEGACY_CONFIG_REMOVAL_VERSION,
     LEGACY_CONFIG_STATUS,
     Settings,
+    browser_runtime_settings,
     configuration_metadata,
     load_settings,
     worker_bind_settings,
@@ -22,4 +23,5 @@ __all__ = [
     "configuration_metadata",
     "load_settings",
     "worker_bind_settings",
+    "browser_runtime_settings",
 ]

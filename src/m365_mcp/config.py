@@ -49,6 +49,8 @@ _CONFIG_ALIAS_PAIRS: tuple[tuple[str, str], ...] = (
     ("M365_LOG_LEVEL", "PLANNER_LOG_LEVEL"),
     ("M365_WORKER_HOST", "PLANNER_WORKER_HOST"),
     ("M365_WORKER_PORT", "PLANNER_WORKER_PORT"),
+    ("M365_BROWSER_PROFILE_DIR", "PLANNER_BROWSER_PROFILE_DIR"),
+    ("M365_BROWSER_HEADLESS", "PLANNER_BROWSER_HEADLESS"),
 )
 
 _LIVE_REQUIRED_PAIRS = (
@@ -340,3 +342,27 @@ def worker_bind_settings(
             issues=[{"field": "M365_WORKER_PORT", "type": "range"}],
         )
     return host, port
+
+
+def browser_runtime_settings(
+    environ: Mapping[str, str] | None = None,
+) -> tuple[Path, bool, str]:
+    """Resolve browser-profile settings without requiring control-plane live settings."""
+    source = os.environ if environ is None else environ
+    _validate_environment(source)
+
+    profile_raw = _environment_value(
+        source,
+        "M365_BROWSER_PROFILE_DIR",
+        "PLANNER_BROWSER_PROFILE_DIR",
+        "/var/lib/planner-worker/profile",
+    )
+    headless_raw = _environment_value(
+        source,
+        "M365_BROWSER_HEADLESS",
+        "PLANNER_BROWSER_HEADLESS",
+        "1",
+    )
+    mode = _environment_value(source, "M365_MODE", "PLANNER_MODE", "mock") or "mock"
+
+    return Path(profile_raw or "/var/lib/planner-worker/profile"), headless_raw != "0", mode
