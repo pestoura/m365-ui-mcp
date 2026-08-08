@@ -8,11 +8,13 @@
     "runtime"
   ],
   "support_levels": [
-    "unsupported",
-    "planned",
-    "read_unattested",
-    "read_attested",
-    "mutation_attested"
+    "UNVERIFIED_LIVE",
+    "DISCOVERED",
+    "READ_SUPPORTED",
+    "MUTATION_SUPPORTED",
+    "DEGRADED",
+    "BLOCKED",
+    "OUT_OF_SCOPE"
   ],
-  "note": "Microsoft Graph availability is not an input to support level."
+  "note": "Microsoft Graph availability is not an input to support state."
 }
