@@ -3,7 +3,6 @@ from __future__ import annotations
 from m365_mcp import capability_registry, config, policy, tool_registry
 from m365_mcp.apps import planner as planner_app
 
-
 EXPECTED_CAPABILITIES = (
     ("plans.read", "account"),
     ("tasks.read", "plan"),
