@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from m365_mcp.capability_registry import CapabilityRegistry
-from m365_mcp.capability_registry import ScopedCapability
-from m365_mcp.capability_registry import default_capability_registry
+from m365_mcp.capability_registry import (
+    CapabilityRegistry,
+    ScopedCapability,
+    default_capability_registry,
+)
 from m365_mcp.tool_registry import default_tool_registry
 from planner_mcp.capabilities import build_capabilities
 
