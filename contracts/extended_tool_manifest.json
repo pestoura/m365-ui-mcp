@@ -1,0 +1,175 @@
+{
+  "contract_version": "0.1.0",
+  "tools": [
+    {
+      "name": "planner_health",
+      "category": "system",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_readiness",
+      "category": "system",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_capabilities",
+      "category": "capability",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_agent_card",
+      "category": "system",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_ui_contract_status",
+      "category": "ui_contract",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_auth_status",
+      "category": "auth",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "user_interactive",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_auth_start",
+      "category": "auth",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "user_interactive",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_auth_resume",
+      "category": "auth",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "user_interactive",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_auth_session_info",
+      "category": "auth",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "user_interactive",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_plan_list",
+      "category": "planner_read",
+      "trust_level": "untrusted_ui_derived",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "UNVERIFIED_LIVE"
+    },
+    {
+      "name": "planner_plan_get",
+      "category": "planner_read",
+      "trust_level": "untrusted_ui_derived",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "UNVERIFIED_LIVE"
+    },
+    {
+      "name": "planner_task_list",
+      "category": "planner_read",
+      "trust_level": "untrusted_ui_derived",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "UNVERIFIED_LIVE"
+    },
+    {
+      "name": "planner_task_get",
+      "category": "planner_read",
+      "trust_level": "untrusted_ui_derived",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "UNVERIFIED_LIVE"
+    },
+    {
+      "name": "planner_project_snapshot",
+      "category": "planner_read",
+      "trust_level": "untrusted_ui_derived",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "UNVERIFIED_LIVE"
+    },
+    {
+      "name": "planner_account_context",
+      "category": "auth",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "user_interactive",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_license_capabilities",
+      "category": "capability",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "attested_mock"
+    },
+    {
+      "name": "planner_smoke_test",
+      "category": "system",
+      "trust_level": "control_plane_local",
+      "mutation_class": "none",
+      "reversible": true,
+      "idempotency_class": "pure_read",
+      "approval_requirement": "none",
+      "attestation_status": "attested_mock"
+    }
+  ]
+}

@@ -1,0 +1,564 @@
+{
+  "backlog_version": "0.1.0",
+  "epics": [
+    {
+      "id": "EPIC-01",
+      "title": "Foundation, packaging and release contract"
+    },
+    {
+      "id": "EPIC-02",
+      "title": "Security, policy and privacy boundary"
+    },
+    {
+      "id": "EPIC-03",
+      "title": "Browser worker and Chromium profile isolation"
+    },
+    {
+      "id": "EPIC-04",
+      "title": "Authentication, MFA and session lifecycle"
+    },
+    {
+      "id": "EPIC-05",
+      "title": "UIContract attestation and drift management"
+    },
+    {
+      "id": "EPIC-06",
+      "title": "Planner Premium read surface"
+    },
+    {
+      "id": "EPIC-07",
+      "title": "State, idempotency, locks, sagas and reconciliation"
+    },
+    {
+      "id": "EPIC-08",
+      "title": "Observability, reporting and evidence"
+    },
+    {
+      "id": "EPIC-09",
+      "title": "Deployment, Cloudflare portal and Hermes integration"
+    },
+    {
+      "id": "EPIC-10",
+      "title": "Mutation readiness and 0.2.0 roadmap"
+    }
+  ],
+  "critical_path": [
+    "P-001",
+    "P-011",
+    "P-014",
+    "P-018",
+    "P-025",
+    "P-026",
+    "P-027",
+    "P-030",
+    "P-031",
+    "P-050",
+    "P-069",
+    "P-071",
+    "P-073",
+    "P-074"
+  ],
+  "items": [
+    {
+      "id": "P-001",
+      "epic": "EPIC-01",
+      "title": "Repository bootstrap and branch protection baseline",
+      "depends_on": []
+    },
+    {
+      "id": "P-002",
+      "epic": "EPIC-01",
+      "title": "Python 3.12+ packaging with hatchling and src layout",
+      "depends_on": [
+        "P-001"
+      ]
+    },
+    {
+      "id": "P-003",
+      "epic": "EPIC-01",
+      "title": "Versioned JSON contracts packaged with the wheel",
+      "depends_on": [
+        "P-002"
+      ]
+    },
+    {
+      "id": "P-004",
+      "epic": "EPIC-01",
+      "title": "Product/schema/contract version metadata alignment",
+      "depends_on": []
+    },
+    {
+      "id": "P-005",
+      "epic": "EPIC-01",
+      "title": "Ruff and mypy strict configuration",
+      "depends_on": []
+    },
+    {
+      "id": "P-006",
+      "epic": "EPIC-01",
+      "title": "Pytest harness with mock-mode default",
+      "depends_on": []
+    },
+    {
+      "id": "P-007",
+      "epic": "EPIC-01",
+      "title": "Release contract validation test suite",
+      "depends_on": [
+        "P-003"
+      ]
+    },
+    {
+      "id": "P-008",
+      "epic": "EPIC-01",
+      "title": "CHANGELOG and semantic versioning policy",
+      "depends_on": []
+    },
+    {
+      "id": "P-009",
+      "epic": "EPIC-01",
+      "title": "Wheel and sdist build validation in CI",
+      "depends_on": []
+    },
+    {
+      "id": "P-010",
+      "epic": "EPIC-01",
+      "title": "Contributor and code ownership documentation",
+      "depends_on": []
+    },
+    {
+      "id": "P-011",
+      "epic": "EPIC-02",
+      "title": "Fail-closed policy engine ALLOW/DENY/REQUIRE_APPROVAL",
+      "depends_on": [
+        "P-001"
+      ]
+    },
+    {
+      "id": "P-012",
+      "epic": "EPIC-02",
+      "title": "Secret redaction library and log scrubbing",
+      "depends_on": []
+    },
+    {
+      "id": "P-013",
+      "epic": "EPIC-02",
+      "title": "No-secrets-in-state invariant tests",
+      "depends_on": []
+    },
+    {
+      "id": "P-014",
+      "epic": "EPIC-02",
+      "title": "Threat model documentation and review",
+      "depends_on": [
+        "P-011"
+      ]
+    },
+    {
+      "id": "P-015",
+      "epic": "EPIC-02",
+      "title": "Container hardening: non-root, cap-drop, no-new-privileges",
+      "depends_on": []
+    },
+    {
+      "id": "P-016",
+      "epic": "EPIC-02",
+      "title": "Read-only rootfs and tmpfs mounts",
+      "depends_on": []
+    },
+    {
+      "id": "P-017",
+      "epic": "EPIC-02",
+      "title": "Trivy CRITICAL/HIGH gate in CI",
+      "depends_on": []
+    },
+    {
+      "id": "P-018",
+      "epic": "EPIC-02",
+      "title": "Secret scanning gate in CI",
+      "depends_on": [
+        "P-014"
+      ]
+    },
+    {
+      "id": "P-019",
+      "epic": "EPIC-02",
+      "title": "CycloneDX SBOM generation and validation for both images",
+      "depends_on": []
+    },
+    {
+      "id": "P-020",
+      "epic": "EPIC-02",
+      "title": "Base image digest pinning gate",
+      "depends_on": []
+    },
+    {
+      "id": "P-021",
+      "epic": "EPIC-03",
+      "title": "Browser worker FastAPI skeleton",
+      "depends_on": []
+    },
+    {
+      "id": "P-022",
+      "epic": "EPIC-03",
+      "title": "Persistent Chromium profile abstraction",
+      "depends_on": []
+    },
+    {
+      "id": "P-023",
+      "epic": "EPIC-03",
+      "title": "Professional profile isolation from personal browser data",
+      "depends_on": []
+    },
+    {
+      "id": "P-024",
+      "epic": "EPIC-03",
+      "title": "No-enrolment invariant: Intune/Company Portal/MDM forbidden",
+      "depends_on": []
+    },
+    {
+      "id": "P-025",
+      "epic": "EPIC-03",
+      "title": "Conditional Access detection and BLOCKER_CONDITIONAL_ACCESS",
+      "depends_on": [
+        "P-018"
+      ]
+    },
+    {
+      "id": "P-026",
+      "epic": "EPIC-03",
+      "title": "Worker private network only, no public port",
+      "depends_on": [
+        "P-025"
+      ]
+    },
+    {
+      "id": "P-027",
+      "epic": "EPIC-03",
+      "title": "Playwright image build and pwuser runtime",
+      "depends_on": [
+        "P-026"
+      ]
+    },
+    {
+      "id": "P-028",
+      "epic": "EPIC-03",
+      "title": "Worker health endpoint and readiness semantics",
+      "depends_on": []
+    },
+    {
+      "id": "P-029",
+      "epic": "EPIC-03",
+      "title": "Mock mode data fixtures for CI",
+      "depends_on": []
+    },
+    {
+      "id": "P-030",
+      "epic": "EPIC-03",
+      "title": "Live mode fail-closed gate wired to UIContract attestation",
+      "depends_on": [
+        "P-019",
+        "P-025",
+        "P-027"
+      ]
+    },
+    {
+      "id": "P-031",
+      "epic": "EPIC-04",
+      "title": "Auth state machine with eight states",
+      "depends_on": [
+        "P-030"
+      ]
+    },
+    {
+      "id": "P-032",
+      "epic": "EPIC-04",
+      "title": "Auth start/resume worker endpoints",
+      "depends_on": []
+    },
+    {
+      "id": "P-033",
+      "epic": "EPIC-04",
+      "title": "MFA number matching detection (2-digit)",
+      "depends_on": []
+    },
+    {
+      "id": "P-034",
+      "epic": "EPIC-04",
+      "title": "Sanitized MFA metadata contract",
+      "depends_on": []
+    },
+    {
+      "id": "P-035",
+      "epic": "EPIC-04",
+      "title": "Authenticator-only approval invariant (never Telegram)",
+      "depends_on": []
+    },
+    {
+      "id": "P-036",
+      "epic": "EPIC-04",
+      "title": "Session expiry detection and recovery",
+      "depends_on": []
+    },
+    {
+      "id": "P-037",
+      "epic": "EPIC-04",
+      "title": "Account context sanitization",
+      "depends_on": []
+    },
+    {
+      "id": "P-038",
+      "epic": "EPIC-04",
+      "title": "License capability evidence extraction",
+      "depends_on": []
+    },
+    {
+      "id": "P-039",
+      "epic": "EPIC-04",
+      "title": "Auth telemetry and low-cardinality metrics",
+      "depends_on": []
+    },
+    {
+      "id": "P-040",
+      "epic": "EPIC-04",
+      "title": "Auth documentation and runbook",
+      "depends_on": []
+    },
+    {
+      "id": "P-041",
+      "epic": "EPIC-05",
+      "title": "Centralized versioned UIContract under browser/selectors",
+      "depends_on": [
+        "P-021"
+      ]
+    },
+    {
+      "id": "P-042",
+      "epic": "EPIC-05",
+      "title": "UNVERIFIED_LIVE selector marking and lint",
+      "depends_on": [
+        "P-041"
+      ]
+    },
+    {
+      "id": "P-043",
+      "epic": "EPIC-05",
+      "title": "UI_CONTRACT_UNATTESTED fail-closed enforcement",
+      "depends_on": [
+        "P-042"
+      ]
+    },
+    {
+      "id": "P-044",
+      "epic": "EPIC-05",
+      "title": "UI_DRIFT detection between worker and control plane",
+      "depends_on": [
+        "P-043"
+      ]
+    },
+    {
+      "id": "P-045",
+      "epic": "EPIC-05",
+      "title": "Selector attestation procedure and evidence format",
+      "depends_on": []
+    },
+    {
+      "id": "P-046",
+      "epic": "EPIC-05",
+      "title": "UIContract versioning and migration policy",
+      "depends_on": []
+    },
+    {
+      "id": "P-047",
+      "epic": "EPIC-05",
+      "title": "Mock UI harness for CI selector tests",
+      "depends_on": []
+    },
+    {
+      "id": "P-048",
+      "epic": "EPIC-05",
+      "title": "Drift alerting and metrics",
+      "depends_on": []
+    },
+    {
+      "id": "P-049",
+      "epic": "EPIC-05",
+      "title": "Attestation storage in state database",
+      "depends_on": []
+    },
+    {
+      "id": "P-050",
+      "epic": "EPIC-05",
+      "title": "Live read-only attestation campaign (separate from CI)",
+      "depends_on": [
+        "P-031"
+      ]
+    },
+    {
+      "id": "P-051",
+      "epic": "EPIC-06",
+      "title": "planner_plan_list read tool",
+      "depends_on": [
+        "P-030"
+      ]
+    },
+    {
+      "id": "P-052",
+      "epic": "EPIC-06",
+      "title": "planner_plan_get read tool",
+      "depends_on": []
+    },
+    {
+      "id": "P-053",
+      "epic": "EPIC-06",
+      "title": "planner_task_list read tool",
+      "depends_on": []
+    },
+    {
+      "id": "P-054",
+      "epic": "EPIC-06",
+      "title": "planner_task_get read tool",
+      "depends_on": []
+    },
+    {
+      "id": "P-055",
+      "epic": "EPIC-06",
+      "title": "planner_project_snapshot composite read",
+      "depends_on": [
+        "P-051",
+        "P-053"
+      ]
+    },
+    {
+      "id": "P-056",
+      "epic": "EPIC-06",
+      "title": "Bucket domain read model",
+      "depends_on": []
+    },
+    {
+      "id": "P-057",
+      "epic": "EPIC-06",
+      "title": "Dependency domain read model",
+      "depends_on": []
+    },
+    {
+      "id": "P-058",
+      "epic": "EPIC-06",
+      "title": "Scheduling domain read model",
+      "depends_on": []
+    },
+    {
+      "id": "P-059",
+      "epic": "EPIC-06",
+      "title": "Goals, sprints and resources read models",
+      "depends_on": []
+    },
+    {
+      "id": "P-060",
+      "epic": "EPIC-06",
+      "title": "Custom fields and portfolios read models",
+      "depends_on": []
+    },
+    {
+      "id": "P-061",
+      "epic": "EPIC-07",
+      "title": "SQLite state foundation with WAL/FULL/FK/busy timeout",
+      "depends_on": []
+    },
+    {
+      "id": "P-062",
+      "epic": "EPIC-07",
+      "title": "Stable external_id and source_id mapping",
+      "depends_on": [
+        "P-061"
+      ]
+    },
+    {
+      "id": "P-063",
+      "epic": "EPIC-07",
+      "title": "Idempotency keys and read-back before retry",
+      "depends_on": [
+        "P-062"
+      ]
+    },
+    {
+      "id": "P-064",
+      "epic": "EPIC-07",
+      "title": "Typed resource locks",
+      "depends_on": []
+    },
+    {
+      "id": "P-065",
+      "epic": "EPIC-07",
+      "title": "Saga and checkpoint persistence",
+      "depends_on": []
+    },
+    {
+      "id": "P-066",
+      "epic": "EPIC-07",
+      "title": "Desired-state reconciliation engine",
+      "depends_on": [
+        "P-063"
+      ]
+    },
+    {
+      "id": "P-067",
+      "epic": "EPIC-07",
+      "title": "Conflict resolution policy",
+      "depends_on": []
+    },
+    {
+      "id": "P-068",
+      "epic": "EPIC-07",
+      "title": "State migration framework",
+      "depends_on": []
+    },
+    {
+      "id": "P-069",
+      "epic": "EPIC-08",
+      "title": "Structured redacted JSON logging",
+      "depends_on": [
+        "P-050"
+      ]
+    },
+    {
+      "id": "P-070",
+      "epic": "EPIC-08",
+      "title": "Low-cardinality Prometheus metrics",
+      "depends_on": [
+        "P-069"
+      ]
+    },
+    {
+      "id": "P-071",
+      "epic": "EPIC-08",
+      "title": "Reporting projections and evidence bundles",
+      "depends_on": [
+        "P-069"
+      ]
+    },
+    {
+      "id": "P-072",
+      "epic": "EPIC-09",
+      "title": "Cloudflare MCP Server Portal exposure and deployment",
+      "depends_on": [
+        "P-026"
+      ]
+    },
+    {
+      "id": "P-073",
+      "epic": "EPIC-09",
+      "title": "Hermes notification and HITL integration",
+      "depends_on": [
+        "P-071"
+      ]
+    },
+    {
+      "id": "P-074",
+      "epic": "EPIC-10",
+      "title": "Mutation readiness gate and 0.2.0 roadmap",
+      "depends_on": [
+        "P-073"
+      ]
+    }
+  ]
+}
