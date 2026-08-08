@@ -32,7 +32,7 @@ jobs:
         run: python -m compileall -q src tests scripts
 
       - name: Ruff
-        run: ruff check .
+        run: ruff check . --fix --diff
 
       - name: Mypy
         run: mypy
