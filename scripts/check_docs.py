@@ -73,6 +73,7 @@ DEF_RE = re.compile(
 LINK_RE = re.compile(r"\[[^\]]*\]\((?!https?://|mailto:)([^)#]+)(?:#[^)]*)?\)")
 ADR_REF_RE = re.compile(r"\bADR-(\d{3,4})\b")
 LEGACY_R_RE = re.compile(r"\bR-\d{2,3}\b")
+ADR_DECISION_ROW_RE = re.compile(r"^\|\s*ADR-00[1-8]\s*\|", re.IGNORECASE)
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -127,9 +128,12 @@ def validate_text(path: Path, display: str, *, require_vision: bool = False) -> 
     for legacy in sorted(set(LEGACY_R_RE.findall(text))):
         errors.append(f"LEGACY REQUIREMENT REFERENCE: {display} contains {legacy}")
 
-    # Detect the old semantic numbering from the parallel branch even when the
-    # numeric shape itself is valid.
+    # Detect the old semantic numbering from the parallel branch only in explicit
+    # ADR decision rows. Other traceability rows may legitimately list multiple
+    # related ADRs and concern terms on the same line.
     for lineno, line in enumerate(text.splitlines(), start=1):
+        if not ADR_DECISION_ROW_RE.match(line):
+            continue
         low = line.lower()
         if "adr-006" in low and "graph" in low:
             errors.append(f"LEGACY ADR MAPPING: {display}:{lineno} maps Graph to ADR-006; use ADR-008")
