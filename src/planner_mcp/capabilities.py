@@ -1,9 +1,11 @@
-"""Dynamic capability model driven by real evidence, never by Graph availability."""
+"""Dynamic Planner capability evidence projected from the scoped M365 registry."""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import Any
+
+from m365_mcp.capability_registry import default_capability_registry
 
 from .contracts import load_contract
 from .ui_contract import load_status
@@ -33,19 +35,9 @@ SUPPORT_LEVELS = (
     "OUT_OF_SCOPE",
 )
 
-_CAPABILITIES = (
-    "plans.read",
-    "tasks.read",
-    "buckets.read",
-    "dependencies.read",
-    "scheduling.read",
-    "goals.read",
-    "sprints.read",
-    "resources.read",
-    "custom_fields.read",
-    "portfolios.read",
-    "project_snapshot.read",
-)
+
+def _planner_capability_names() -> tuple[str, ...]:
+    return default_capability_registry().capability_names("planner")
 
 
 def _support_level(ui_attested: bool, license_known: bool, runtime_ok: bool) -> str:
@@ -60,7 +52,7 @@ def _support_level(ui_attested: bool, license_known: bool, runtime_ok: bool) -> 
 def build_capabilities(
     *, license_evidence: dict[str, Any] | None = None, runtime_ok: bool = True
 ) -> dict[str, Any]:
-    """Build the capability manifest from tenant/license/UI/UIContract/runtime evidence."""
+    """Build the Planner capability view from scoped definitions plus evidence."""
     ui = load_status()
     license_evidence = license_evidence or {}
     license_known = bool(license_evidence.get("premium_detected"))
@@ -77,7 +69,7 @@ def build_capabilities(
             support_level=_support_level(ui.attested, license_known, runtime_ok),
             notes="Graph API availability is not an input to support state.",
         )
-        for name in _CAPABILITIES
+        for name in _planner_capability_names()
     ]
     manifest = load_contract("capability_manifest")
     return {
