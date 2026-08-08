@@ -1,0 +1,108 @@
+{
+  "contract_version": "0.1.0",
+  "tool_catalog_version": "0.1.0",
+  "tools": [
+    {
+      "name": "planner_health",
+      "description": "Liveness of the control plane process.",
+      "category": "system",
+      "read_only": true
+    },
+    {
+      "name": "planner_readiness",
+      "description": "Readiness across SQLite, worker and UIContract attestation.",
+      "category": "system",
+      "read_only": true
+    },
+    {
+      "name": "planner_capabilities",
+      "description": "Dynamic capability model from tenant/license/UI/UIContract/runtime evidence.",
+      "category": "capability",
+      "read_only": true
+    },
+    {
+      "name": "planner_agent_card",
+      "description": "Agent card metadata for portal/agent discovery.",
+      "category": "system",
+      "read_only": true
+    },
+    {
+      "name": "planner_ui_contract_status",
+      "description": "Versioned UIContract status and attestation state.",
+      "category": "ui_contract",
+      "read_only": true
+    },
+    {
+      "name": "planner_auth_status",
+      "description": "Current auth state machine value with sanitized metadata.",
+      "category": "auth",
+      "read_only": true
+    },
+    {
+      "name": "planner_auth_start",
+      "description": "Start an interactive auth attempt on the isolated browser profile.",
+      "category": "auth",
+      "read_only": true
+    },
+    {
+      "name": "planner_auth_resume",
+      "description": "Resume/poll a pending auth attempt (incl. MFA number matching).",
+      "category": "auth",
+      "read_only": true
+    },
+    {
+      "name": "planner_auth_session_info",
+      "description": "Sanitized session info for the persistent browser profile.",
+      "category": "auth",
+      "read_only": true
+    },
+    {
+      "name": "planner_plan_list",
+      "description": "List Planner Premium plans visible to the session.",
+      "category": "planner_read",
+      "read_only": true
+    },
+    {
+      "name": "planner_plan_get",
+      "description": "Read a single plan by id.",
+      "category": "planner_read",
+      "read_only": true
+    },
+    {
+      "name": "planner_task_list",
+      "description": "List tasks for a plan.",
+      "category": "planner_read",
+      "read_only": true
+    },
+    {
+      "name": "planner_task_get",
+      "description": "Read a single task by id.",
+      "category": "planner_read",
+      "read_only": true
+    },
+    {
+      "name": "planner_project_snapshot",
+      "description": "Composite read-only snapshot of a plan.",
+      "category": "planner_read",
+      "read_only": true
+    },
+    {
+      "name": "planner_account_context",
+      "description": "Sanitized account/tenant context of the browser session.",
+      "category": "auth",
+      "read_only": true
+    },
+    {
+      "name": "planner_license_capabilities",
+      "description": "License-derived capability evidence.",
+      "category": "capability",
+      "read_only": true
+    },
+    {
+      "name": "planner_smoke_test",
+      "description": "Isolated end-to-end read-only smoke test (mock-safe).",
+      "category": "system",
+      "read_only": true
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1.7
+# Base image pinned by digest (P-020).
+FROM python:3.12-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2 AS build
+WORKDIR /src
+RUN pip install --no-cache-dir build==1.2.2.post1
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY contracts ./contracts
+RUN python -m build --wheel --outdir /dist
+
+FROM python:3.12-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PLANNER_MODE=mock \
+    PLANNER_MCP_HOST=0.0.0.0 \
+    PLANNER_MCP_PORT=8080 \
+    PLANNER_STATE_PATH=/var/lib/planner-mcp/state.sqlite3
+RUN useradd --create-home --uid 10001 planner \
+ && mkdir -p /var/lib/planner-mcp \
+ && chown -R planner:planner /var/lib/planner-mcp
+COPY --from=build /dist/*.whl /tmp/
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+ && pip install --no-cache-dir /tmp/*.whl \
+ && rm -f /tmp/*.whl \
+ # Drop the installer toolchain from the runtime image (not needed at runtime).
+ && pip uninstall -y pip setuptools wheel \
+ && rm -rf /usr/local/lib/python3.12/site-packages/pip \
+           /usr/local/lib/python3.12/site-packages/pip-*.dist-info
+USER planner
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD ["planner-mcp-healthcheck"]
+ENTRYPOINT ["planner-mcp"]
