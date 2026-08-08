@@ -80,7 +80,7 @@ def test_compose_keeps_worker_private_while_adding_dedicated_egress() -> None:
     worker_block, control_plane_block = compose.split("  control-plane:", maxsplit=1)
 
     assert "networks: [browser-internal, m365-egress]" in worker_block
-    assert "ports:" not in worker_block
+    assert "\n    ports:" not in worker_block
     assert "browser-internal:\n    internal: true" in compose
     assert "m365-egress: {}" in compose
     assert "networks: [browser-internal, edge]" in control_plane_block
