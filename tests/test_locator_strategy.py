@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from m365_browser_worker.locators import LocatorStrategy as WorkerLocatorStrategy
@@ -21,7 +24,11 @@ def test_accessible_semantics_are_prioritized_over_fallbacks() -> None:
     plan = LocatorPlan(
         selector_key="task.title",
         candidates=(
-            LocatorCandidate(LocatorStrategy.CSS, "[data-task-title]", evidence_digest=EVIDENCE),
+            LocatorCandidate(
+                LocatorStrategy.CSS,
+                "[data-task-title]",
+                evidence_digest=EVIDENCE,
+            ),
             LocatorCandidate(LocatorStrategy.PLACEHOLDER, "Task title"),
             LocatorCandidate(LocatorStrategy.LABEL, "Title"),
             LocatorCandidate(LocatorStrategy.ROLE, "textbox", name="Task title"),
@@ -40,7 +47,11 @@ def test_fallback_selector_requires_attested_evidence_digest() -> None:
     with pytest.raises(ValueError, match="requires sha256 evidence digest"):
         LocatorCandidate(LocatorStrategy.CSS, "[data-plan-id]")
     with pytest.raises(ValueError, match="requires sha256 evidence digest"):
-        LocatorCandidate(LocatorStrategy.TEST_ID, "plan-card", evidence_digest="unverified")
+        LocatorCandidate(
+            LocatorStrategy.TEST_ID,
+            "plan-card",
+            evidence_digest="unverified",
+        )
 
 
 def test_xpath_and_javascript_are_not_valid_css_fallbacks() -> None:
@@ -92,3 +103,40 @@ def test_shipped_contract_does_not_invent_live_locators() -> None:
         for fragment in contract_set.fragments
         for metadata in fragment.selectors.values()
     )
+
+
+def test_ui_contract_loader_rejects_fallback_without_evidence(tmp_path: Path) -> None:
+    manifest = {
+        "ui_contract_set_version": "0.1.0",
+        "legacy_ui_contract_version": "0.1.0",
+        "fragments": [
+            {"fragment_id": "common.test", "path": "ui_fragments/common/test.json"}
+        ],
+    }
+    fragment = {
+        "fragment_id": "common.test",
+        "fragment_version": "0.1.0",
+        "scope": "common",
+        "application": None,
+        "surface": None,
+        "capability_keys": [],
+        "attested": False,
+        "attestation_status": "UNVERIFIED_LIVE",
+        "selectors": {
+            "test.selector": {
+                "value": None,
+                "status": "UNVERIFIED_LIVE",
+                "locators": [{"strategy": "css", "value": "[data-test]"}],
+            }
+        },
+    }
+    fragment_path = tmp_path / "ui_fragments" / "common" / "test.json"
+    fragment_path.parent.mkdir(parents=True)
+    (tmp_path / "ui_contract_set.json").write_text(
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+    fragment_path.write_text(json.dumps(fragment), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="requires sha256 evidence digest"):
+        load_ui_contract_set(tmp_path)
