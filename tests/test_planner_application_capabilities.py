@@ -1,6 +1,5 @@
 from m365_mcp.apps.planner import planner_capability_definitions
 
-
 EXPECTED_CAPABILITIES = (
     ("plans.read", "account"),
     ("tasks.read", "plan"),
