@@ -1,11 +1,12 @@
-"""Versioned UIContract handling. Unverified selectors fail closed."""
+"""Planner compatibility view over the fragmented M365 UIContract store."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
 
-from .contracts import load_contract
+from m365_mcp.ui_contract_store import load_ui_contract_set
+
 from .errors import UiContractUnattested, UiDrift
 
 UNVERIFIED = "UNVERIFIED_LIVE"
@@ -14,7 +15,7 @@ ATTESTED = "ATTESTED"
 
 @dataclass(frozen=True)
 class UiContractStatus:
-    """Snapshot of the current UIContract state."""
+    """Compatibility snapshot of the current UIContract set state."""
 
     version: str
     attested: bool
@@ -34,23 +35,25 @@ class UiContractStatus:
 
 
 def load_status() -> UiContractStatus:
-    """Load the packaged UIContract and summarise attestation."""
-    doc = load_contract("ui_contract")
-    selectors: dict[str, Any] = doc.get("selectors", {})
+    """Aggregate the fragmented store into the preserved Planner compatibility view."""
+    contract_set = load_ui_contract_set()
+    selectors = contract_set.selectors()
     unverified = tuple(
         name for name, meta in selectors.items() if meta.get("status") != ATTESTED
     )
+    fragments_attested = all(fragment.attested for fragment in contract_set.fragments)
+    attested = fragments_attested and not unverified
     return UiContractStatus(
-        version=str(doc.get("ui_contract_version", "0.0.0")),
-        attested=bool(doc.get("attested", False)) and not unverified,
-        attestation_status=str(doc.get("attestation_status", UNVERIFIED)),
+        version=contract_set.legacy_version,
+        attested=attested,
+        attestation_status=ATTESTED if attested else UNVERIFIED,
         selector_count=len(selectors),
         unverified_selectors=unverified,
     )
 
 
 def require_attested(operation: str) -> None:
-    """Fail closed when live operations are attempted without attestation."""
+    """Fail closed when live operations are attempted without global compatibility attestation."""
     status = load_status()
     if not status.attested:
         raise UiContractUnattested(
@@ -61,7 +64,7 @@ def require_attested(operation: str) -> None:
 
 
 def assert_no_drift(observed_version: str) -> None:
-    """Raise UI_DRIFT when the worker reports a different contract version."""
+    """Raise UI_DRIFT when the worker reports a different compatibility version."""
     status = load_status()
     if observed_version != status.version:
         raise UiDrift(

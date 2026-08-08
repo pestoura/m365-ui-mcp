@@ -1,0 +1,22 @@
+{
+  "ui_contract_set_version": "0.1.0",
+  "legacy_ui_contract_version": "0.1.0",
+  "fragments": [
+    {
+      "fragment_id": "common.auth",
+      "path": "ui_fragments/common/auth.json"
+    },
+    {
+      "fragment_id": "planner.account",
+      "path": "ui_fragments/apps/planner/account.json"
+    },
+    {
+      "fragment_id": "planner.plan-surface",
+      "path": "ui_fragments/surfaces/planner-premium-web/plan.json"
+    },
+    {
+      "fragment_id": "planner.task-surface",
+      "path": "ui_fragments/surfaces/planner-premium-web/task.json"
+    }
+  ]
+}
