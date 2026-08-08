@@ -1,9 +1,4 @@
-"""Session-bound semantic capability broker for the M365 browser worker.
-
-The broker authorizes closed semantic capabilities against the process-owned
-professional browser session. It never reads, serializes or exports cookies,
-tokens, headers or browser storage state.
-"""
+"""Session-bound semantic capability broker for the M365 browser worker."""
 
 from __future__ import annotations
 
@@ -12,14 +7,15 @@ from dataclasses import dataclass
 
 from m365_mcp.capability_registry import CapabilityRegistry, ScopedCapability
 from planner_mcp.auth import AuthState
-from planner_mcp.errors import AuthRequired, WorkerUnavailable
+from planner_mcp.errors import AuthRequired, PolicyDenied, WorkerUnavailable
 
+from .account_context import AccountContext, unverified_account_context
 from .browser import PersistentBrowser
 
 
 @dataclass(frozen=True)
 class SessionCapabilityGrant:
-    """Content-free proof that one semantic capability is session-bound."""
+    """Bounded proof that one semantic capability is session-bound."""
 
     application: str
     surface: str
@@ -27,6 +23,7 @@ class SessionCapabilityGrant:
     container_scope: str
     capability: str
     session_bound: bool = True
+    account_context_verified: bool = True
     secret_material_exported: bool = False
 
     def to_dict(self) -> dict[str, object]:
@@ -37,12 +34,13 @@ class SessionCapabilityGrant:
             "container_scope": self.container_scope,
             "capability": self.capability,
             "session_bound": self.session_bound,
+            "account_context_verified": self.account_context_verified,
             "secret_material_exported": self.secret_material_exported,
         }
 
 
 class SessionCapabilityBroker:
-    """Bind semantic authorization to an existing authenticated browser session."""
+    """Bind semantic authorization to a verified professional browser context."""
 
     def __init__(
         self,
@@ -50,15 +48,21 @@ class SessionCapabilityBroker:
         browser: PersistentBrowser,
         registry: CapabilityRegistry,
         auth_state_provider: Callable[[], AuthState],
+        account_context_provider: Callable[[], AccountContext] | None = None,
     ) -> None:
         self._browser = browser
         self._registry = registry
         self._auth_state_provider = auth_state_provider
+        self._account_context_provider = account_context_provider or unverified_account_context
 
     @property
     def viable(self) -> bool:
-        """Return whether a live browser and authenticated session are both proven."""
-        return self._browser.started and self._auth_state_provider() is AuthState.AUTHENTICATED
+        """Return whether browser, authentication and account context are proven."""
+        return (
+            self._browser.started
+            and self._auth_state_provider() is AuthState.AUTHENTICATED
+            and self._account_context_provider().valid
+        )
 
     def authorize(self, *, application: str, capability: str) -> SessionCapabilityGrant:
         """Authorize exactly one registered semantic capability, failing closed."""
@@ -66,6 +70,15 @@ class SessionCapabilityBroker:
             raise WorkerUnavailable("session broker requires a process-owned browser")
         if self._auth_state_provider() is not AuthState.AUTHENTICATED:
             raise AuthRequired("session broker requires an authenticated professional session")
+
+        account_context = self._account_context_provider()
+        if not account_context.valid:
+            raise PolicyDenied(
+                "professional account context is not verified",
+                account_context_state=account_context.state.value,
+                professional=account_context.professional,
+                expected_profile=account_context.expected_profile,
+            )
 
         definitions = tuple(
             definition
@@ -90,11 +103,13 @@ class SessionCapabilityBroker:
         )
 
     def snapshot(self) -> dict[str, object]:
-        """Return bounded operational metadata without any session secret material."""
+        """Return bounded operational metadata."""
+        account_context = self._account_context_provider()
         return {
             "viable": self.viable,
             "browser_started": self._browser.started,
             "auth_state": self._auth_state_provider().value,
+            "account_context": account_context.to_dict(),
             "secret_material_exported": False,
         }
 
