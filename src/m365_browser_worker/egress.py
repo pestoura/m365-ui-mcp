@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 # Deliberately bounded to Microsoft/M365 identity, shell and content domains.
 # New domains require reviewed evidence and a policy change.
 _ALLOWED_HOST_SUFFIXES = (
+    "cloud.microsoft",
     "microsoft.com",
     "microsoft365.com",
     "microsoftonline.com",
