@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 from m365_browser_worker.lifecycle import browser_lifespan
+from m365_browser_worker.readiness import evaluate_worker_readiness
 from planner_mcp.auth import AuthState
 from planner_mcp.errors import PlannerMcpError
 from planner_mcp.logging_setup import configure_logging
@@ -26,10 +29,19 @@ def _is_mock() -> bool:
     return _mode() != "live"
 
 
-def create_app(browser: PersistentBrowser | None = None) -> FastAPI:
-    """Build the worker application with explicit ASGI browser ownership."""
+def create_app(
+    browser: PersistentBrowser | None = None,
+    *,
+    auth_state_provider: Callable[[], AuthState] | None = None,
+    broker_viability_provider: Callable[[], bool] | None = None,
+) -> FastAPI:
+    """Build the worker app with separate liveness and live-readiness semantics."""
     configure_logging(os.getenv("PLANNER_LOG_LEVEL", "INFO"))
     worker_browser = browser or PersistentBrowser(BrowserConfig.from_env())
+    current_auth_state = auth_state_provider or (
+        lambda: AuthState.AUTHENTICATED if _is_mock() else AuthState.UNKNOWN
+    )
+    broker_viable = broker_viability_provider or (lambda: False)
     app = FastAPI(
         title="planner-browser-worker",
         version=__version__,
@@ -43,6 +55,24 @@ def create_app(browser: PersistentBrowser | None = None) -> FastAPI:
             worker_browser.ensure_live_allowed(operation)
         except PlannerMcpError as exc:
             raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+    @app.get("/livez")
+    async def livez() -> dict[str, object]:
+        return {"alive": True, "version": __version__}
+
+    @app.get("/readyz")
+    async def readyz() -> JSONResponse:
+        ui = load_status()
+        readiness = evaluate_worker_readiness(
+            browser_started=worker_browser.started,
+            auth_state=current_auth_state(),
+            ui_contract_attested=ui.attested,
+            broker_viable=broker_viable(),
+        )
+        return JSONResponse(
+            status_code=200 if readiness.ready else 503,
+            content=readiness.to_dict(),
+        )
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
