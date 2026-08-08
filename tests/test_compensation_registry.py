@@ -16,7 +16,7 @@ def _mutation_tool(
     source = _first_tool(tool_registry.default_tool_registry())
     return replace(
         source,
-        name="synthetic_mutation",
+        name="planner_synthetic_mutation",
         mutation_class=mutation_class,
         approval_requirement="required",
     )
