@@ -39,7 +39,6 @@ def test_readiness_requires_all_live_subsystems() -> None:
         protocol_compatible=False,
         lock_viable=False,
     )
-
     assert readiness.ready is False
     assert readiness.reasons == (
         ReadinessReason.BROWSER_NOT_STARTED,
@@ -62,23 +61,24 @@ def test_readiness_is_true_only_when_all_signals_are_positive() -> None:
         protocol_compatible=True,
         lock_viable=True,
     )
-
     assert readiness.ready is True
     assert readiness.reasons == ()
-    assert readiness.to_dict()["target"] == "live_m365"
 
 
-def test_liveness_does_not_overclaim_default_mock_readiness() -> None:
+def test_liveness_and_legacy_health_do_not_overclaim_default_readiness() -> None:
     app = create_app()
     with TestClient(app) as client:
         live = client.get("/livez")
         ready = client.get("/readyz")
+        health = client.get("/health")
 
     assert live.status_code == 200
     assert live.json()["alive"] is True
     assert "ready" not in live.json()
     assert ready.status_code == 503
     assert ready.json()["ready"] is False
+    assert health.status_code == 200
+    assert health.json()["live_ready"] is False
     reasons = set(ready.json()["reasons"])
     assert ReadinessReason.BROWSER_NOT_STARTED.value in reasons
     assert ReadinessReason.PROFILE_UNAVAILABLE.value in reasons
@@ -87,13 +87,17 @@ def test_liveness_does_not_overclaim_default_mock_readiness() -> None:
     assert ReadinessReason.LOCK_UNAVAILABLE.value in reasons
 
 
-def test_readyz_returns_200_only_with_proven_signals(
+def test_readyz_and_legacy_health_use_same_proven_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PLANNER_MODE", "live")
     monkeypatch.setattr(
         "planner_browser_worker.app.load_status",
-        lambda: SimpleNamespace(attested=True),
+        lambda: SimpleNamespace(
+            attested=True,
+            version="0.1.0",
+            contract_set_digest="sha256:test",
+        ),
     )
     app = create_app(
         ReadyBrowser(),
@@ -106,10 +110,10 @@ def test_readyz_returns_200_only_with_proven_signals(
 
     with TestClient(app) as client:
         response = client.get("/readyz")
+        health = client.get("/health")
 
     assert response.status_code == 200
-    payload = response.json()
-    assert payload == {
+    assert response.json() == {
         "ready": True,
         "target": "live_m365",
         "browser_started": True,
@@ -121,6 +125,8 @@ def test_readyz_returns_200_only_with_proven_signals(
         "lock_viable": True,
         "reasons": [],
     }
+    assert health.status_code == 200
+    assert health.json()["live_ready"] is True
 
 
 def test_single_negative_signal_keeps_readiness_failed() -> None:
@@ -133,6 +139,5 @@ def test_single_negative_signal_keeps_readiness_failed() -> None:
         protocol_compatible=True,
         lock_viable=False,
     )
-
     assert readiness.ready is False
     assert readiness.reasons == (ReadinessReason.LOCK_UNAVAILABLE,)
