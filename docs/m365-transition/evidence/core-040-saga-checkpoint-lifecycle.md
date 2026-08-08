@@ -1,6 +1,6 @@
 # CORE-040 — Saga/checkpoint generalization
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_039**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -87,6 +87,6 @@ Tests prove:
 - immutable chain bindings;
 - historical Planner checkpoint/saga placeholders remain unchanged.
 
-## Dependency gate
+## Current integration gate
 
-This work is stacked on CORE-039. It must not merge until CORE-039 is merged and post-merge `main` is GREEN. It will then be retargeted to `main` and revalidated through the complete mandatory CI/security/image/Trivy/SBOM/documentation suite.
+CORE-039 is merged and post-merge GREEN on `main` at `2c1f4c59ac26c3d0819045c8f8a593aceb3eb90c`. PR #264 is now based directly on that integration point. Its CORE-040-specific Ruff spacing issue was corrected in advance; this revision deliberately re-triggers the complete mandatory current-base gate suite and does not reuse stacked evidence.
