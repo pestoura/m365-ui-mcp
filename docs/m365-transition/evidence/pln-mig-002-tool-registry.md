@@ -1,6 +1,6 @@
 # PLN-MIG-002 — Planner Tool Registry ownership
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_PLN_MIG_001**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -28,9 +28,9 @@ The generic `m365_mcp.tool_registry` retains only:
 - risk class, implementation state, capability keys, UIContract dependencies, read-back and idempotency metadata remain unchanged;
 - Outlook remains absent from the public Tool Registry.
 
-## Dependency boundary
+## Current integration gate
 
-This work is stacked on PLN-MIG-001 and cannot merge before PLN-MIG-001 is merged and post-merge GREEN. It will then be retargeted to `main` and revalidated with fresh mandatory gates.
+PLN-MIG-001 is merged. PR #253 is now based directly on the current `main` and this revision intentionally re-triggers the full mandatory CI/security/images/SBOM suite before any merge.
 
 ## Acceptance coverage
 
