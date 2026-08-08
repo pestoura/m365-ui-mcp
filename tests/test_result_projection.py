@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from m365_mcp.result_projection import ProjectionKind, ProjectionRequest, project_rows
+import m365_mcp.result_projection as result_projection
 
 
 ROWS = [
@@ -13,9 +13,12 @@ ROWS = [
 
 
 def test_select_reduces_fields_without_mutating_input() -> None:
-    result = project_rows(
+    result = result_projection.project_rows(
         ROWS,
-        ProjectionRequest(ProjectionKind.SELECT, fields=("id", "title")),
+        result_projection.ProjectionRequest(
+            result_projection.ProjectionKind.SELECT,
+            fields=("id", "title"),
+        ),
     )
 
     assert result.data == [
@@ -29,29 +32,62 @@ def test_select_reduces_fields_without_mutating_input() -> None:
 
 
 def test_count_exists_first_and_metadata_only_are_bounded() -> None:
-    assert project_rows(ROWS, ProjectionRequest(ProjectionKind.COUNT)).data == 3
-    assert project_rows(ROWS, ProjectionRequest(ProjectionKind.EXISTS)).data is True
-    assert project_rows([], ProjectionRequest(ProjectionKind.EXISTS)).data is False
-    assert project_rows(ROWS, ProjectionRequest(ProjectionKind.FIRST)).data == ROWS[0]
-    assert project_rows([], ProjectionRequest(ProjectionKind.FIRST)).data is None
-    assert project_rows(ROWS, ProjectionRequest(ProjectionKind.METADATA_ONLY)).data == {
-        "count": 3
-    }
+    count = result_projection.project_rows(
+        ROWS,
+        result_projection.ProjectionRequest(result_projection.ProjectionKind.COUNT),
+    )
+    exists = result_projection.project_rows(
+        ROWS,
+        result_projection.ProjectionRequest(result_projection.ProjectionKind.EXISTS),
+    )
+    missing = result_projection.project_rows(
+        [],
+        result_projection.ProjectionRequest(result_projection.ProjectionKind.EXISTS),
+    )
+    first = result_projection.project_rows(
+        ROWS,
+        result_projection.ProjectionRequest(result_projection.ProjectionKind.FIRST),
+    )
+    empty_first = result_projection.project_rows(
+        [],
+        result_projection.ProjectionRequest(result_projection.ProjectionKind.FIRST),
+    )
+    metadata = result_projection.project_rows(
+        ROWS,
+        result_projection.ProjectionRequest(result_projection.ProjectionKind.METADATA_ONLY),
+    )
+
+    assert count.data == 3
+    assert exists.data is True
+    assert missing.data is False
+    assert first.data == ROWS[0]
+    assert empty_first.data is None
+    assert metadata.data == {"count": 3}
 
 
 def test_latest_uses_explicit_sort_field() -> None:
-    result = project_rows(
+    result = result_projection.project_rows(
         ROWS,
-        ProjectionRequest(ProjectionKind.LATEST, sort_field="updated"),
+        result_projection.ProjectionRequest(
+            result_projection.ProjectionKind.LATEST,
+            sort_field="updated",
+        ),
     )
     assert result.data == ROWS[1]
 
 
 def test_top_n_and_pagination_are_bounded() -> None:
-    top = project_rows(ROWS, ProjectionRequest(ProjectionKind.TOP_N, top_n=2))
-    page = project_rows(
+    top = result_projection.project_rows(
         ROWS,
-        ProjectionRequest(ProjectionKind.PAGINATION, offset=1, limit=1),
+        result_projection.ProjectionRequest(result_projection.ProjectionKind.TOP_N, top_n=2),
+    )
+    page = result_projection.project_rows(
+        ROWS,
+        result_projection.ProjectionRequest(
+            result_projection.ProjectionKind.PAGINATION,
+            offset=1,
+            limit=1,
+        ),
     )
 
     assert top.data == ROWS[:2]
@@ -61,13 +97,16 @@ def test_top_n_and_pagination_are_bounded() -> None:
 
 
 def test_projection_request_rejects_unbounded_or_ambiguous_shapes() -> None:
+    request = result_projection.ProjectionRequest
+    kind = result_projection.ProjectionKind
+
     with pytest.raises(ValueError, match="select projection requires fields"):
-        ProjectionRequest(ProjectionKind.SELECT)
+        request(kind.SELECT)
     with pytest.raises(ValueError, match="latest projection requires sort_field"):
-        ProjectionRequest(ProjectionKind.LATEST)
+        request(kind.LATEST)
     with pytest.raises(ValueError, match="top_n must be between"):
-        ProjectionRequest(ProjectionKind.TOP_N, top_n=101)
+        request(kind.TOP_N, top_n=101)
     with pytest.raises(ValueError, match="limit must be between"):
-        ProjectionRequest(ProjectionKind.PAGINATION, limit=101)
+        request(kind.PAGINATION, limit=101)
     with pytest.raises(ValueError, match="projection fields must be unique"):
-        ProjectionRequest(ProjectionKind.SELECT, fields=("id", "id"))
+        request(kind.SELECT, fields=("id", "id"))
