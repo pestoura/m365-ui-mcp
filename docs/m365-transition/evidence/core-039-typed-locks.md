@@ -1,6 +1,6 @@
 # CORE-039 — Typed locks
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_038**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -80,6 +80,6 @@ Tests prove:
 - account-level state cannot be misused as container/resource lock identity;
 - every historical Planner lock type has an explicit compatibility mapping and unknown values fail closed.
 
-## Dependency gate
+## Current integration gate
 
-This work is stacked on CORE-038. It must not merge until CORE-038 is merged and post-merge `main` is GREEN. It will then be retargeted to `main` and revalidated through the full mandatory CI/security/image/Trivy/SBOM/documentation suite.
+CORE-038 is merged and post-merge GREEN on `main` at `a7178b3417c0907e66388115742443739b2e017e`. PR #263 is now based directly on that integration point. This revision deliberately re-triggers every mandatory CI/security/image/Trivy/SBOM/documentation gate; stacked-branch evidence is not reused for merge.
