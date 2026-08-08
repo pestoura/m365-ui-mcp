@@ -14,7 +14,7 @@ env:
 
 jobs:
   quality:
-    name: compile / lint / type / tests / release contract
+    name: compile / lint / type / contracts / tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +36,12 @@ jobs:
 
       - name: Mypy
         run: mypy
+
+      - name: Canonical documentation gate (P-001)
+        run: python scripts/check_docs.py
+
+      - name: Contract/schema validation gate (P-001)
+        run: python scripts/check_contracts.py
 
       - name: Pytest (mock UI only, never touches real Planner)
         run: pytest -q
