@@ -49,5 +49,11 @@ class WorkerUnavailable(PlannerMcpError):
     code = "WORKER_UNAVAILABLE"
 
 
+class WorkerBusy(PlannerMcpError):
+    """The bounded browser-profile executor has no admission capacity."""
+
+    code = "WORKER_BUSY"
+
+
 class AuthRequired(PlannerMcpError):
     code = "AUTH_REQUIRED"
