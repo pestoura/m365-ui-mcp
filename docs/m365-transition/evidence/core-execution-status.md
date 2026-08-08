@@ -15,7 +15,7 @@ This file is the execution overlay for the `CORE-*` definitions in `../roadmap-a
 | CORE-007 | PASS | Closed Application Registry; PR #221 merged to `d8d46fe9782abc104e6fd5580e7a0c0d269f8cd8`; post-merge docs `31254742904` and CI `31254742912` SUCCESS. |
 | CORE-008 | PASS | Canonical Tool Registry; PR #222 merged to `1a8f182db8727dcc83550a795a01d48a49e120a2`; post-merge docs `31255232889` and CI `31255232909` SUCCESS. |
 | CORE-009 | PASS | Metadata-driven semantic registration; PR #223 merged to `2c250af7763a325df34f53c826adea5c01e61a3d`; post-merge docs `31255688052` and CI `31255688039` SUCCESS. |
-| CORE-010 | PASS | Bounded exposure profiles; PR #224 merged to `ccfb2c0382c1e812abad6517a5d735ddebe5ec62`; PR docs `31256014586` and CI `31256014582` SUCCESS; post-merge docs `31256189742` and CI `31256189728` SUCCESS. Default `full` retains 17 Planner tools; `outlook` exposes none before its phase. |
+| CORE-010 | PASS | Bounded exposure profiles; PR #224 merged to `ccfb2c0382c1e812abad6517a5d735ddebe5ec62`; post-merge docs `31256189742` and CI `31256189728` SUCCESS. |
 
 Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests remain GREEN.
 
@@ -23,8 +23,8 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 
 | Key | Status | Evidence / decision |
 |---|---|---|
-| CORE-011 | IMPLEMENTED_AWAITING_GATES | Scoped Capability Registry adds `application / surface / account_scope / container_scope / capability` identity while preserving all 11 current Planner capability keys. No effective/live support claim is introduced. |
-| CORE-012 | NOT_STARTED | Effective capability projection. |
+| CORE-011 | PASS | Scoped Capability Registry merged through PR #225 to `3a53d44a77254810c701a04535b1ef2065302ab6`; PR docs `31257236487` and CI `31257236512` SUCCESS; post-merge docs `31257452439` and CI `31257452441` SUCCESS. Eleven Planner capability keys retain order and semantics with explicit app/surface/account/container scope. |
+| CORE-012 | IMPLEMENTED_AWAITING_GATES | Effective projection combines registry, auth, account context, UI attestation, runtime health, current policy, licence and live-vs-mock boundary. Registry or mock evidence alone cannot promote support. |
 | CORE-013 | NOT_STARTED | Fragmented UIContract storage. |
 | CORE-014 | NOT_STARTED | Per-fragment attestation. |
 | CORE-015 | NOT_STARTED | Contract-set digest. |
@@ -34,26 +34,26 @@ Phase 1 gate: **PASS / GREEN** — all pre-transition Planner contract/tests rem
 | CORE-019 | NOT_STARTED | Attestation tooling/runbook. |
 | CORE-020 | NOT_STARTED | Capability expiration/revalidation. |
 
-## CORE-011 boundary decision
+## CORE-012 boundary decision
 
-The Capability Registry stores abstract scope classes only. It does not store account IDs, tenant IDs, plan IDs, mailbox IDs or Microsoft 365 content. Current Planner capability output now sources its semantic key list from the scoped registry, preserving output order and support-state semantics.
+Effective support is evidence-derived. Policy/runtime failures block; missing auth/account/UI/licence/live evidence remains `UNVERIFIED_LIVE`; only the complete live evidence set may become `READ_SUPPORTED`. Current global UIContract status is consumed without pretending fragmentation already exists.
 
-Effective support remains a separate concern for CORE-012. UIContract fragmentation remains CORE-013/014, so CORE-011 must not be interpreted as fixing the current global-attestation coupling yet.
+The Planner public compatibility view remains 11 capability rows in the same order. `effective_projection` is additive scoped evidence metadata only.
 
 ## Current compatibility invariants
 
 - all 17 public `planner_*` tools remain `PRESERVE` under default profile;
 - all 11 Planner capability keys are preserved;
+- mock mode cannot be interpreted as live support;
 - Outlook remains `RESERVED`, with zero public tools/capabilities;
-- no live support state is inferred from registry declaration;
 - no raw browser primitive/session-secret export is introduced;
 - `CORE-025` remains mandatory before any live M365 worker egress claim.
 
 ## Next gate
 
 ```text
-CORE-011 PR CI/security/images/SBOM GREEN
+CORE-012 PR CI/security/images/SBOM GREEN
         -> merge
         -> post-merge main GREEN
-        -> CORE-012
+        -> CORE-013
 ```

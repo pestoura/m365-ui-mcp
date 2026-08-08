@@ -1,4 +1,4 @@
-"""Dynamic Planner capability evidence projected from the scoped M365 registry."""
+"""Planner capability evidence projected from scoped registry and effective evidence."""
 
 from __future__ import annotations
 
@@ -6,14 +6,19 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from m365_mcp.capability_registry import default_capability_registry
+from m365_mcp.effective_capabilities import (
+    EffectiveCapabilityEvidence,
+    project_effective_capabilities,
+)
 
+from .auth import AuthState
 from .contracts import load_contract
 from .ui_contract import load_status
 
 
 @dataclass(frozen=True)
 class CapabilityEvidence:
-    """Evidence tuple for one Planner capability."""
+    """Compatibility view for one Planner capability."""
 
     capability: str
     tenant_license_availability: str
@@ -36,40 +41,88 @@ SUPPORT_LEVELS = (
 )
 
 
-def _planner_capability_names() -> tuple[str, ...]:
-    return default_capability_registry().capability_names("planner")
+def _account_context_valid(account_context: dict[str, Any]) -> bool:
+    return (
+        account_context.get("account_kind") == "work_or_school"
+        and account_context.get("profile") == "professional-isolated"
+    )
 
 
-def _support_level(ui_attested: bool, license_known: bool, runtime_ok: bool) -> str:
-    """Return only evidence-backed CAP-030 support states."""
-    if not runtime_ok:
-        return "BLOCKED"
-    if ui_attested and license_known:
-        return "READ_SUPPORTED"
-    return "UNVERIFIED_LIVE"
+def _explicit_live_evidence_present(
+    *,
+    requested: bool,
+    auth_evidence: dict[str, Any],
+    account_context: dict[str, Any],
+    license_evidence: dict[str, Any],
+) -> bool:
+    """Require explicit live-UI provenance; live mode alone is never evidence."""
+    if not requested:
+        return False
+    evidence_sets = (auth_evidence, account_context, license_evidence)
+    return all(
+        str(item.get("evidence_source", "")).strip().lower() == "live_ui"
+        for item in evidence_sets
+    )
 
 
 def build_capabilities(
-    *, license_evidence: dict[str, Any] | None = None, runtime_ok: bool = True
+    *,
+    auth_evidence: dict[str, Any] | None = None,
+    account_context: dict[str, Any] | None = None,
+    license_evidence: dict[str, Any] | None = None,
+    runtime_ok: bool = True,
+    policy_allowed: bool = True,
+    live_evidence: bool = False,
 ) -> dict[str, Any]:
-    """Build the Planner capability view from scoped definitions plus evidence."""
+    """Build capability compatibility output plus effective scoped projection."""
     ui = load_status()
+    auth_evidence = auth_evidence or {}
+    account_context = account_context or {}
     license_evidence = license_evidence or {}
-    license_known = bool(license_evidence.get("premium_detected"))
+
+    evidence = EffectiveCapabilityEvidence(
+        authenticated=(
+            str(auth_evidence.get("state", AuthState.UNKNOWN.value))
+            == AuthState.AUTHENTICATED.value
+        ),
+        account_context_valid=_account_context_valid(account_context),
+        ui_attested=ui.attested,
+        runtime_healthy=runtime_ok,
+        policy_allowed=policy_allowed,
+        license_available=bool(license_evidence.get("premium_detected")),
+        live_evidence=_explicit_live_evidence_present(
+            requested=live_evidence,
+            auth_evidence=auth_evidence,
+            account_context=account_context,
+            license_evidence=license_evidence,
+        ),
+    )
+    registry = default_capability_registry()
+    effective = project_effective_capabilities(
+        registry,
+        application="planner",
+        evidence=evidence,
+    )
+    effective_by_name = {item.definition.capability: item for item in effective}
+
     rows = [
         CapabilityEvidence(
             capability=name,
             tenant_license_availability=(
-                "OBSERVED" if license_known else "UNVERIFIED_LIVE"
+                "OBSERVED" if evidence.license_available else "UNVERIFIED_LIVE"
             ),
             ui_observed="OBSERVED" if ui.attested else "UNVERIFIED_LIVE",
             ui_contract_status=ui.attestation_status,
-            read_attestation="YES" if ui.attested else "NO",
+            read_attestation=(
+                "YES"
+                if effective_by_name[name].state.value == "READ_SUPPORTED"
+                else "NO"
+            ),
             mutation_attestation="NO",
-            support_level=_support_level(ui.attested, license_known, runtime_ok),
+            support_level=effective_by_name[name].state.value,
             notes="Graph API availability is not an input to support state.",
         )
-        for name in _planner_capability_names()
+        for name in registry.capability_names("planner")
     ]
     manifest = load_contract("capability_manifest")
     return {
@@ -79,4 +132,5 @@ def build_capabilities(
         "graph_api_used": False,
         "support_levels": list(SUPPORT_LEVELS),
         "capabilities": [asdict(row) for row in rows],
+        "effective_projection": [item.to_dict() for item in effective],
     }
