@@ -130,4 +130,5 @@ def project_effective_capabilities(
     evidence: EffectiveCapabilityEvidence,
 ) -> tuple[EffectiveCapability, ...]:
     """Compute deterministic effective state for every scoped app capability."""
-    return tuple(_evaluate(definition, evidence) for definition in registry.by_application(application))
+    definitions = registry.by_application(application)
+    return tuple(_evaluate(definition, evidence) for definition in definitions)
