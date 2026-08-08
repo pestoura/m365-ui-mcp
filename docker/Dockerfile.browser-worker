@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1.7
+# Official Playwright image already provides a non-root `pwuser`; no custom user is added.
+# Base image pinned by digest (P-020). Python 3.12 is required by the project.
+FROM mcr.microsoft.com/playwright/python:v1.55.0-noble@sha256:640d578aae63cfb632461d1b0aecb01414e4e020864ac3dd45a868dc0eff3078
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PLANNER_MODE=mock \
+    PLANNER_WORKER_HOST=0.0.0.0 \
+    PLANNER_WORKER_PORT=8090 \
+    PLANNER_BROWSER_PROFILE_DIR=/var/lib/planner-worker/profile \
+    VIRTUAL_ENV=/opt/planner-venv \
+    PATH=/opt/planner-venv/bin:$PATH
+# Apply distro security updates on top of the pinned digest (Trivy CRITICAL/HIGH gate).
+USER root
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends python3-venv \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY contracts ./contracts
+# PEP 668: the base image marks the system Python as externally managed, so install
+# into a dedicated virtualenv instead of using --break-system-packages.
+RUN python3 -m venv "$VIRTUAL_ENV" \
+ && "$VIRTUAL_ENV/bin/pip" install --no-cache-dir --upgrade pip setuptools wheel \
+ && "$VIRTUAL_ENV/bin/pip" install --no-cache-dir . \
+ # Remove the installer toolchain from the runtime image: it is not needed at
+ # runtime and its vendored dependencies would otherwise widen the CVE surface.
+ && "$VIRTUAL_ENV/bin/pip" uninstall -y pip setuptools wheel \
+ && rm -rf /usr/local/lib/python3.12/dist-packages/pip \
+           /usr/local/lib/python3.12/dist-packages/pip-*.dist-info \
+           /usr/local/lib/python3.12/dist-packages/virtualenv \
+           /usr/local/lib/python3.12/dist-packages/virtualenv-*.dist-info \
+           /usr/share/python-wheels \
+ && mkdir -p /var/lib/planner-worker/profile \
+ && chown -R pwuser:pwuser /var/lib/planner-worker "$VIRTUAL_ENV"
+USER pwuser
+EXPOSE 8090
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD ["python", "-c", "import json,urllib.request;d=json.loads(urllib.request.urlopen('http://127.0.0.1:8090/health',timeout=5).read());raise SystemExit(0 if d.get('ok') else 1)"]
+ENTRYPOINT ["planner-browser-worker"]
