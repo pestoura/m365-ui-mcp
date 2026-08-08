@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pestoura/planner-mcp/blob/main/docs/schemas/0.1.0/ui-contract.schema.json",
+  "title": "planner-mcp UIContract 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ui_contract_version",
+    "attested",
+    "attestation_status",
+    "surface",
+    "note",
+    "selectors"
+  ],
+  "properties": {
+    "ui_contract_version": {"const": "0.1.0"},
+    "attested": {"type": "boolean"},
+    "attestation_status": {
+      "enum": [
+        "UNVERIFIED_LIVE",
+        "DISCOVERED",
+        "UI_ATTESTED",
+        "READ_ATTESTED",
+        "MUTATION_ATTESTED",
+        "SUPPORTED",
+        "UI_DRIFT"
+      ]
+    },
+    "surface": {"const": "planner-premium-web"},
+    "note": {"type": "string", "minLength": 1},
+    "selectors": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "status"],
+        "properties": {
+          "value": {"type": ["string", "null"]},
+          "status": {
+            "enum": [
+              "UNVERIFIED_LIVE",
+              "DISCOVERED",
+              "UI_ATTESTED",
+              "READ_ATTESTED",
+              "MUTATION_ATTESTED",
+              "SUPPORTED",
+              "UI_DRIFT"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

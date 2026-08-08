@@ -1,5 +1,5 @@
 """planner-mcp control plane package."""
 
-__version__ = "0.1.0"
-SCHEMA_VERSION = "0.1.0"
-CONTRACT_VERSION = "0.1.0"
+from .version import CONTRACT_VERSION, SCHEMA_VERSION, __version__
+
+__all__ = ["__version__", "SCHEMA_VERSION", "CONTRACT_VERSION"]
