@@ -6,10 +6,13 @@ import m365_mcp.state_identity as state_identity
 
 
 def _identity(application: application_registry.ApplicationKey) -> state_identity.StateIdentity:
+    container_kind = (
+        "plan" if application is application_registry.ApplicationKey.PLANNER else "mailbox"
+    )
     return state_identity.container_state_identity(
         application,
         account_scope="professional_session",
-        container_kind="plan" if application is application_registry.ApplicationKey.PLANNER else "mailbox",
+        container_kind=container_kind,
         external_container_id="same-external-id",
     )
 
@@ -45,16 +48,16 @@ def test_idempotency_key_binds_application_identity_and_request_payload() -> Non
 
 
 def test_request_payload_is_reduced_to_digest_only() -> None:
-    secret_value = "tenant-content-that-must-not-be-retained"
+    tenant_value = "tenant-content-that-must-not-be-retained"
     record = idempotency_v2.reserve_operation(
         "item.update",
         _identity(application_registry.ApplicationKey.PLANNER),
-        {"value": secret_value},
+        {"value": tenant_value},
         read_back_required=True,
     )
 
     assert len(record.request_digest) == 64
-    assert secret_value not in repr(record)
+    assert tenant_value not in repr(record)
 
 
 def test_completed_operation_associates_result_and_replays_result() -> None:
