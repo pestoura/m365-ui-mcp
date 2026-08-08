@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import inspect
 
-from m365_browser_worker.account_context import AccountContext, AccountContextState
+from m365_browser_worker.account_context import (
+    AccountContext,
+    AccountContextState,
+)
 from m365_mcp.apps.outlook.mailbox_context import (
     PrimaryMailboxContextState,
     PrimaryMailboxObservation,
