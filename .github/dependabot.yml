@@ -1,0 +1,35 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "type:chore"
+      - "area:supply-chain"
+    commit-message:
+      prefix: "chore(deps)"
+    # No auto-merge: dependency updates are reviewed (SEC-072).
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "type:chore"
+      - "area:ci"
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "type:chore"
+      - "area:supply-chain"
+    commit-message:
+      prefix: "chore(docker)"

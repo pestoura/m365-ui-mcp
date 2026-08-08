@@ -1,0 +1,13 @@
+# Ownership — every change requires maintainer review.
+* @pestoura
+
+# Security-critical areas: explicit ownership, no exceptions.
+/docs/security.md            @pestoura
+/docs/threat-model.md        @pestoura
+/docs/privacy-boundary.md    @pestoura
+/docs/authentication-and-mfa.md @pestoura
+/docs/governance.md          @pestoura
+/docs/adr/                   @pestoura
+/SECURITY.md                 @pestoura
+/.github/                    @pestoura
+/src/planner_mcp/browser/selectors/ @pestoura

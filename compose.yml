@@ -1,0 +1,77 @@
+# Reference topology. See docs/deployment.md for the full rationale.
+#
+# Invariants encoded here:
+#   - control plane bound to loopback only; public exposure is Cloudflare's job
+#   - worker on an internal network, never published
+#   - non-root, read-only root filesystem, cap_drop ALL, no-new-privileges
+#   - tmpfs for scratch; no Docker socket; no host home mounts
+#   - no credential material in environment
+
+name: planner-mcp
+
+networks:
+  edge:
+    driver: bridge
+  worker-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  browser-profile:
+  control-state:
+
+services:
+  control-plane:
+    build:
+      context: .
+      dockerfile: docker/control-plane.Dockerfile
+    image: planner-mcp/control-plane:0.1.0
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    networks:
+      - edge
+      - worker-net
+    ports:
+      # Loopback only. Exposure to the internet happens through Cloudflare, never here.
+      - "127.0.0.1:8080:8080"
+    environment:
+      PLANNER_MCP_WORKER_URL: "http://browser-worker:8081"
+      PLANNER_MCP_LOG_FORMAT: "json"
+    volumes:
+      - control-state:/state
+      - ./browser/selectors:/app/browser/selectors:ro
+    depends_on:
+      - browser-worker
+
+  browser-worker:
+    build:
+      context: .
+      dockerfile: docker/browser-worker.Dockerfile
+    image: planner-mcp/browser-worker:0.1.0
+    restart: unless-stopped
+    user: "10002:10002"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Chromium needs a larger shared-memory area; provided as tmpfs rather than /dev/shm mount.
+    shm_size: "512m"
+    tmpfs:
+      - /tmp:size=256m,mode=1777,noexec,nosuid,nodev
+    networks:
+      - worker-net
+    # Deliberately no `ports:` — the worker is unreachable from the host and the internet.
+    environment:
+      PLANNER_WORKER_PROFILE_DIR: "/profile"
+      PLANNER_WORKER_LOG_FORMAT: "json"
+    volumes:
+      - browser-profile:/profile
+      - ./browser/selectors:/app/browser/selectors:ro

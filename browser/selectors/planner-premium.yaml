@@ -1,0 +1,23 @@
+version: "0.1.0"
+surface: "planner-premium"
+
+# Selectors are recorded here only after they have been observed in a live UI and an
+# attestation record has been produced. Inventing CSS is prohibited (ADR-007).
+#
+# Example of the required shape — intentionally NOT registered as a usable selector,
+# because no live observation has taken place yet:
+#
+# selectors:
+#   - id: "plan.list.container"
+#     description: "Container listing the plans visible to the signed-in account."
+#     role: "list"
+#     name: "Plans"
+#     fallbacks: []
+#     attestation:
+#       captured_at: "2026-01-01"
+#       evidence_hash: "sha256:<64 hex chars>"
+#       evidence_ref: "evidence/ui/plan-list-container.json"
+#       observer: "operator"
+#       tenant_agnostic: true
+
+selectors: []

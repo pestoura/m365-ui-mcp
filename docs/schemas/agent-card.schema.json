@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pestoura/planner-mcp/schemas/0.1.0/agent-card.json",
+  "title": "AgentCard",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "product_version",
+    "contract_version",
+    "protocol",
+    "supported_mutation_classes",
+    "human_in_loop",
+    "privacy_boundary"
+  ],
+  "properties": {
+    "name": { "const": "planner-mcp" },
+    "product_version": { "type": "string" },
+    "contract_version": { "const": "0.1.0" },
+    "protocol": { "const": "mcp/streamable-http" },
+    "supported_mutation_classes": {
+      "type": "array",
+      "items": { "enum": ["READ", "SAFE_WRITE", "GOVERNED_WRITE", "DESTRUCTIVE"] }
+    },
+    "human_in_loop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authentication", "mfa_approval_surface", "governance_approvals"],
+      "properties": {
+        "authentication": { "const": "interactive-browser-only" },
+        "mfa_approval_surface": { "const": "microsoft-authenticator-only" },
+        "governance_approvals": { "const": "persistent-single-use" }
+      }
+    },
+    "privacy_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device_enrolment", "conditional_access", "credential_storage"],
+      "properties": {
+        "device_enrolment": { "const": "never" },
+        "conditional_access": { "const": "fail-closed" },
+        "credential_storage": { "const": "none" }
+      }
+    },
+    "contact": { "type": "string" }
+  }
+}

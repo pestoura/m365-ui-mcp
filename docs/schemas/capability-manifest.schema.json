@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pestoura/planner-mcp/schemas/0.1.0/capability-manifest.json",
+  "title": "CapabilityManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "ui_contract_version", "capabilities"],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "ui_contract_version": { "type": "string" },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["capability_id", "support_level", "mutation_class"],
+        "properties": {
+          "capability_id": { "type": "string", "pattern": "^[a-z0-9_.]+$" },
+          "support_level": {
+            "enum": [
+              "UNVERIFIED_LIVE",
+              "DISCOVERED",
+              "UI_ATTESTED",
+              "READ_ATTESTED",
+              "MUTATION_ATTESTED",
+              "SUPPORTED",
+              "UI_DRIFT",
+              "BLOCKED_CONDITIONAL_ACCESS",
+              "UNSUPPORTED_TENANT"
+            ]
+          },
+          "mutation_class": {
+            "enum": ["READ", "SAFE_WRITE", "GOVERNED_WRITE", "DESTRUCTIVE"]
+          },
+          "evidence_hash": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+          "blocker_code": { "type": ["string", "null"] },
+          "read_back_strategy": { "type": ["string", "null"] },
+          "updated_at": { "type": ["string", "null"], "format": "date-time" }
+        }
+      }
+    }
+  }
+}

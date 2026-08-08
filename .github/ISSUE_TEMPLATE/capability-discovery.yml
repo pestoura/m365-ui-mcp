@@ -1,0 +1,66 @@
+name: Capability discovery
+description: Record browser-observed evidence for a Planner Premium capability.
+title: "[capability] "
+labels: ["type:capability"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Graph availability is contextual only and never a functional gate (ADR-006).
+        Support is decided by observed browser evidence. Redact all tenant data.
+  - type: input
+    id: capability
+    attributes:
+      label: Capability / domain
+      placeholder: dependencies (FS/SS/SF/FF)
+    validations:
+      required: true
+  - type: dropdown
+    id: target_state
+    attributes:
+      label: Proposed state
+      options:
+        - DISCOVERED
+        - UI_ATTESTED
+        - READ_ATTESTED
+        - MUTATION_ATTESTED
+        - SUPPORTED
+        - UI_DRIFT
+        - BLOCKED_CONDITIONAL_ACCESS
+        - UNSUPPORTED_TENANT
+    validations:
+      required: true
+  - type: textarea
+    id: ui_observation
+    attributes:
+      label: UI observation (sanitized)
+    validations:
+      required: true
+  - type: textarea
+    id: attestation
+    attributes:
+      label: Selector / UIContract attestation reference
+      description: Contract fragment id, evidence hash and capture date. No raw screenshots.
+    validations:
+      required: true
+  - type: textarea
+    id: readback
+    attributes:
+      label: Read-back strategy
+    validations:
+      required: true
+  - type: textarea
+    id: drift
+    attributes:
+      label: Drift / failure behaviour
+    validations:
+      required: true
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Confirmation
+      options:
+        - label: No selector was invented; every locator has captured evidence.
+          required: true
+        - label: No live mutation was performed outside an authorised manual session.
+          required: true

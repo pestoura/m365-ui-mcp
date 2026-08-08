@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pestoura/planner-mcp/schemas/0.1.0/worker-operation-envelope.json",
+  "title": "WorkerOperationEnvelope",
+  "description": "Control plane -> worker. Closed operation enum; no selectors, URLs or JS may be passed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation_id", "operation", "arguments", "ui_contract_version", "deadline_ms"],
+  "properties": {
+    "operation_id": { "type": "string", "pattern": "^op_[A-Za-z0-9_-]+$" },
+    "operation": {
+      "enum": [
+        "probe_auth_state",
+        "start_interactive_auth",
+        "resume_auth",
+        "read_session_info",
+        "read_account_context",
+        "read_license_capabilities",
+        "read_plan_list",
+        "read_plan_detail",
+        "read_task_list",
+        "read_task_detail",
+        "read_bucket_list",
+        "read_dependency_edges",
+        "read_project_snapshot",
+        "smoke_test"
+      ]
+    },
+    "arguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "plan_external_id": { "type": "string", "maxLength": 256 },
+        "task_external_id": { "type": "string", "maxLength": 256 }
+      }
+    },
+    "ui_contract_version": { "type": "string" },
+    "deadline_ms": { "type": "integer", "minimum": 1000, "maximum": 300000 },
+    "evidence": { "enum": ["hash_only", "none"] }
+  }
+}

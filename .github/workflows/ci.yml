@@ -1,0 +1,173 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # G1-G5: compile, lint, types, tests, contract/schema validation.
+  quality:
+    name: compile / lint / type / test / schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: G1 compile
+        run: python -m compileall -q src tests
+
+      - name: G2 lint
+        run: ruff check .
+
+      - name: G3 types
+        run: mypy --strict src
+
+      - name: G4 tests
+        run: pytest -q
+
+      - name: G5 schema validation
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          from jsonschema import Draft202012Validator
+          for p in sorted(pathlib.Path("docs/schemas").glob("*.json")):
+              schema = json.loads(p.read_text())
+              Draft202012Validator.check_schema(schema)
+              print(f"ok {p}")
+          PY
+
+  # G6: secret scanning.
+  secrets:
+    name: secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Repository guardrails that encode ADR-006, ADR-007 and ADR-008.
+  guardrails:
+    name: specification guardrails
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No enrolment automation references (ADR-008)
+        run: |
+          if grep -rInE 'intune-enroll|company-portal install|microsoft-identity-broker install|dsregcmd /join' \
+               --include='*.py' --include='*.sh' --include='*.yml' . ; then
+            echo "::error::enrolment automation is prohibited (ADR-008)"; exit 1
+          fi
+          echo "ok: no enrolment automation found"
+
+      - name: No selectors outside the UI contract (ADR-007)
+        run: |
+          if find src -name '*.py' -not -path 'src/planner_mcp/browser/selectors/*' \
+               -exec grep -lIn 'page\.\(click\|fill\|locator\)(' {} + 2>/dev/null | grep . ; then
+            echo "::error::selectors/navigation must live in browser/selectors (ADR-007)"; exit 1
+          fi
+          echo "ok: no stray selectors"
+
+      - name: No dynamic page.evaluate (SEC-023)
+        run: |
+          if grep -rIn 'page.evaluate(f"' src 2>/dev/null | grep . ; then
+            echo "::error::dynamic evaluate source is prohibited (SEC-023)"; exit 1
+          fi
+          echo "ok"
+
+  # G7: dependency / vulnerability scanning.
+  dependencies:
+    name: dependency vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" pip-audit
+      - name: pip-audit
+        run: pip-audit --strict || (echo "::error::vulnerable dependency"; exit 1)
+
+  # G8-G10, G12: container build, Trivy CRITICAL/HIGH fail, SBOM, digest pinning.
+  # Enabled once Dockerfiles land (backlog P-064, P-065). Declared here so the
+  # gate model in docs/release-process.md has a concrete home.
+  container:
+    name: container build / Trivy / SBOM
+    runs-on: ubuntu-latest
+    if: hashFiles('Dockerfile', '**/Dockerfile') != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: G12 base image digest pinning
+        run: |
+          if grep -rIn '^FROM ' --include='Dockerfile*' . | grep -v '@sha256:' ; then
+            echo "::error::base images must be digest-pinned (SEC-062)"; exit 1
+          fi
+
+      - name: G8 build
+        run: docker build -t planner-mcp:ci .
+
+      - name: G9 Trivy (CRITICAL/HIGH fail)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: planner-mcp:ci
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: G10 CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: planner-mcp:ci
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cyclonedx.json
+
+  # G11: isolated acceptance against the mock Planner UI. NEVER a live tenant.
+  # Enabled once the compose stack and mock UI land (backlog P-017, P-069).
+  isolated-acceptance:
+    name: isolated acceptance (mock UI only)
+    runs-on: ubuntu-latest
+    if: hashFiles('docker-compose.acceptance.yml') != ''
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert no live-tenant target configured
+        run: |
+          if grep -rIn 'planner.cloud.microsoft\|tasks.office.com\|login.microsoftonline.com' \
+               docker-compose.acceptance.yml ; then
+            echo "::error::CI must never target a live tenant (SEC-064)"; exit 1
+          fi
+      - name: Run IA-01..IA-16
+        run: docker compose -f docker-compose.acceptance.yml up --abort-on-container-exit

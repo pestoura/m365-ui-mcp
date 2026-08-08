@@ -1,0 +1,40 @@
+name: UI drift / attestation
+description: Report a Planner UI change that breaks an attested fragment
+title: "drift: "
+labels: ["type:drift", "area:ui-contract"]
+body:
+  - type: input
+    id: fragment
+    attributes:
+      label: Fragment id
+      placeholder: plan_list
+    validations:
+      required: true
+  - type: input
+    id: contract
+    attributes:
+      label: UI contract version in use
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Observed failure
+      description: Error code and which anchors failed. Structural description only.
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Re-attestation plan
+      description: Which anchors need re-observation; who will attest; expected evidence hashes.
+    validations:
+      required: true
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Hygiene
+      options:
+        - label: No screenshots, DOM dumps or tenant data attached (hashes only)
+          required: true

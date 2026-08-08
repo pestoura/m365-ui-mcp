@@ -1,0 +1,46 @@
+name: Bug report
+description: Something behaves incorrectly. Never include tenant data.
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Redact before submitting: no tenant names, plan titles, user names, screenshots of
+        real data, cookies, tokens or passwords.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: ["control-plane", "browser-worker", "ui-contract", "policy/approvals", "ci", "docs"]
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction against the mock UI
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs / evidence
+      render: text
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: Confirmation
+      options:
+        - label: This report contains no credential material and no tenant data.
+          required: true

@@ -1,0 +1,56 @@
+name: Backlog item
+description: Implement a P-key from docs/backlog.md
+title: "P-0XX — "
+labels: ["type:task"]
+body:
+  - type: input
+    id: key
+    attributes:
+      label: Backlog key
+      placeholder: P-014
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Implementation scope
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests / gates
+    validations:
+      required: true
+  - type: input
+    id: depends
+    attributes:
+      label: Depends on
+      placeholder: P-011
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Expected evidence
+    validations:
+      required: true
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Rules
+      options:
+        - label: No secrets, screenshots, DOM dumps or tenant data will be attached here
+          required: true
+        - label: No capability state will be advanced without an evidence hash
+          required: true

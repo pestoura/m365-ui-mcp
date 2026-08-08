@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Secrets and local config — never commit
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+**/credentials.json
+
+# Browser profile: session material, equivalent to a logged-in browser
+profile/
+profiles/
+browser-profile/
+data/profile/
+**/chromium-profile/
+
+# Local state and evidence
+data/state/
+*.sqlite
+*.sqlite3
+*.db
+evidence/
+data/evidence/
+screenshots/
+dom-snapshots/
+*.har
+*.trace.zip
+
+# SBOM / scan outputs (published as release artifacts, not committed)
+sbom*.json
+trivy-report*.json
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
