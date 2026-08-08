@@ -17,18 +17,20 @@ def _write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def test_fragment_set_preserves_legacy_selector_surface() -> None:
+def test_fragment_set_preserves_legacy_selector_surface_and_order() -> None:
     contract_set = load_ui_contract_set()
     legacy = json.loads((contracts_dir() / "ui_contract.json").read_text(encoding="utf-8"))
+    selectors = contract_set.selectors()
 
     assert contract_set.legacy_version == legacy["ui_contract_version"]
-    assert contract_set.selectors() == legacy["selectors"]
+    assert selectors == legacy["selectors"]
+    assert tuple(selectors) == tuple(legacy["selectors"])
     assert len(contract_set.fragments) == 4
     assert tuple(fragment.fragment_id for fragment in contract_set.fragments) == (
         "common.auth",
-        "planner.account",
         "planner.plan-surface",
         "planner.task-surface",
+        "planner.account",
     )
 
 
@@ -44,11 +46,12 @@ def test_fragments_cover_common_application_and_surface_scopes() -> None:
 
 def test_planner_status_remains_fail_closed_and_compatible() -> None:
     status = load_status()
+    legacy = json.loads((contracts_dir() / "ui_contract.json").read_text(encoding="utf-8"))
     assert status.version == "0.1.0"
     assert status.selector_count == 10
     assert status.attested is False
     assert status.attestation_status == "UNVERIFIED_LIVE"
-    assert len(status.unverified_selectors) == 10
+    assert status.unverified_selectors == tuple(legacy["selectors"])
 
 
 def test_duplicate_selector_across_fragments_fails_closed(tmp_path: Path) -> None:
