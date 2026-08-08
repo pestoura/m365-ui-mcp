@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS capability_ui_evidence (
     recorded_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_capability_ui_evidence_fragment
-    ON capability_ui_evidence(fragment_id, contract_set_digest, sequence DESC);
+    ON capability_ui_evidence(fragment_id, contract_set_digest, recorded_at DESC, sequence DESC);
 """
 
 
@@ -125,7 +126,7 @@ class CapabilityEvidenceStore:
 
     def initialise(self) -> None:
         """Create the isolated evidence table without changing Planner resource identity."""
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.executescript(_DDL)
 
     def append(
@@ -137,7 +138,7 @@ class CapabilityEvidenceStore:
         """Append one idempotent record after binding it to the exact contract fragment."""
         self._validate_contract_binding(record, contract_set)
         self.initialise()
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO capability_ui_evidence(
@@ -170,25 +171,26 @@ class CapabilityEvidenceStore:
 
     def latest_records(self, contract_set: UIContractSet) -> tuple[CapabilityEvidenceRecord, ...]:
         """Return at most one latest record per fragment for this exact contract-set digest."""
-        fragment_ids = tuple(fragment.fragment_id for fragment in contract_set.fragments)
+        fragment_ids = {fragment.fragment_id for fragment in contract_set.fragments}
         if not fragment_ids:
             return ()
         self.initialise()
-        placeholders = ",".join("?" for _ in fragment_ids)
-        query = f"""
-            SELECT fragment_id, fragment_version, scope, application, surface,
-                   contract_set_digest, evidence_digest, lifecycle_state, recorded_at
-            FROM capability_ui_evidence
-            WHERE contract_set_digest = ? AND fragment_id IN ({placeholders})
-            ORDER BY sequence DESC
-        """
-        with self._connect() as conn:
-            rows = conn.execute(query, (contract_set.digest(), *fragment_ids)).fetchall()
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                """
+                SELECT fragment_id, fragment_version, scope, application, surface,
+                       contract_set_digest, evidence_digest, lifecycle_state, recorded_at
+                FROM capability_ui_evidence
+                WHERE contract_set_digest = ?
+                ORDER BY recorded_at DESC, sequence DESC
+                """,
+                (contract_set.digest(),),
+            ).fetchall()
 
         latest: dict[str, CapabilityEvidenceRecord] = {}
         for row in rows:
             fragment_id = str(row["fragment_id"])
-            if fragment_id in latest:
+            if fragment_id not in fragment_ids or fragment_id in latest:
                 continue
             latest[fragment_id] = _record_from_row(row)
 
