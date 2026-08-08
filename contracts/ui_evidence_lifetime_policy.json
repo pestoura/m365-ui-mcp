@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "ui-evidence-lifetime-v1",
+  "max_age_seconds": 604800,
+  "expiry_state": "STALE",
+  "missing_evidence_state": "RE_ATTESTATION_REQUIRED",
+  "future_timestamp_state": "RE_ATTESTATION_REQUIRED"
+}
