@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import m365_mcp.capability_registry as capability_registry
+from m365_mcp import capability_registry
 
 
 EXPECTED_PLANNER_CAPABILITIES = (
