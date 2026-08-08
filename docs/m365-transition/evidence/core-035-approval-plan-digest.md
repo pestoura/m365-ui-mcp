@@ -1,6 +1,6 @@
 # CORE-035 — Approval plan digest
 
-Status: **IMPLEMENTED_AWAITING_GATES_AND_PREDECESSOR_POST_MERGE**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -47,6 +47,10 @@ The canonical payload contains only reviewed semantic metadata. It deliberately 
 - cookies, tokens and storage state.
 
 A digest is not an approval. CORE-036 owns persistent, single-use and replay-safe approval consumption. CORE-035 only establishes the immutable value to which that approval will be bound.
+
+## Current integration gate
+
+CORE-034 and PLN-MIG-001 are both merged and post-merge GREEN. This revision re-triggers the full mandatory PR suite against the current integrated `main`; previous branch GREEN evidence is not reused for merge.
 
 ## Acceptance coverage
 
