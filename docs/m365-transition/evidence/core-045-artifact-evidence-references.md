@@ -1,6 +1,6 @@
 # CORE-045 — Artifact/evidence references
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_044**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -59,4 +59,6 @@ Tests prove:
 
 ## Dependency gate
 
-This work is stacked on CORE-044. CORE-044 itself remains blocked from integration until CORE-043 is merged and post-merge GREEN. CORE-045 must therefore remain stacked until CORE-044 is integrated and validated on current `main`.
+CORE-044 is merged at `3b0560d2c6eff7a8d7f11ce6bded086727fd3add` and its post-merge CI plus canonical documentation gates are GREEN. CORE-045 is therefore unblocked for integration.
+
+This revision re-triggers the complete mandatory gate suite against the current `main`; no historical stacked run is accepted as merge evidence.
