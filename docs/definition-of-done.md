@@ -1,166 +1,256 @@
-# Definition of Done
+# Planner MCP Definition of Done
 
-Scope: the completion criteria applied at four levels — task, backlog item, epic, release — for `pestoura/planner-mcp`. Companions: [release-process.md](release-process.md), [testing.md](testing.md), [acceptance.md](acceptance.md), [traceability.md](traceability.md), [governance.md](governance.md).
+For this project, **done means implemented, validated and evidenced**. A statement in documentation,
+a local assumption, an unexecuted CI job or a mock-only capability claim is not sufficient evidence
+for a live-support assertion.
 
-Guiding rule: *done* means evidenced. A statement in a document, a passing local run, or a reviewer's confidence is not evidence. The artifacts named below are.
+This document is normative with [`release-process.md`](release-process.md),
+[`testing.md`](testing.md), [`acceptance.md`](acceptance.md),
+[`traceability.md`](traceability.md) and [`governance.md`](governance.md).
 
-## 1. Level 0 — Task (a single PR)
+## 1. Universal rules
 
-| # | Criterion | Verified by |
-|---|-----------|-------------|
-| T-01 | The change references at least one existing backlog P-key. | PR template + CI check |
-| T-02 | Scope is one logical change; refactors are separated from behaviour changes. | review |
-| T-03 | Compile, lint, format and type gates pass (G1–G3). | CI |
-| T-04 | New behaviour has tests at the lowest layer that can prove it. | review + coverage delta |
-| T-05 | Unit, schema and contract suites pass (G4). | CI |
-| T-06 | Coverage thresholds are met and not lowered. | CI |
-| T-07 | Any new tool has a schema, a catalogue entry, an error taxonomy mapping and a policy rule. | L2/L3 tests |
-| T-08 | Any new selector is registered with a primary strategy, ≥1 fallback, an owner and a semantic assertion. | L5 A–C |
-| T-09 | Any new log field passes the redaction detector; no raw identifiers, content, or selectors. | L1 |
-| T-10 | Any new metric uses only enumerated labels and stays inside the cardinality budget. | startup guard + L1 |
-| T-11 | No prohibited deployment construct is introduced (socket, host mounts, privileged, tag-only image). | G8 |
-| T-12 | Documentation affected by the change is updated in the same PR. | review |
-| T-13 | An ADR accompanies any architectural decision. | review |
-| T-14 | [traceability.md](traceability.md) is updated when requirements, ADRs, or test mappings change. | review + CI check |
-| T-15 | No live-support claim is added without an A3 bundle reference. | CI matrix gate |
-| T-16 | The PR body completes this checklist explicitly. | review |
-| T-17 | At least one reviewer other than the author approves. | branch protection |
-| T-18 | No new flaky test; if a test is quarantined, an owning issue exists. | CI flake report |
+A change is never done when any of these conditions holds:
 
-A PR failing any row is not merged. There is no "merge and follow up" path for T-03..T-11 or T-15.
+- a required gate is red, skipped unexpectedly or unavailable;
+- documentation validation has any error or warning;
+- the public MCP surface exposes a generic browser primitive;
+- a capability is promoted without evidence;
+- a mutation can bypass policy, approval when required, idempotency, typed lock, read-back or
+  checkpoint semantics;
+- a retry can repeat a mutation blindly after an unknown outcome;
+- a UIContract mismatch can lead to exploratory clicks during a mutation;
+- authentication requires storing a password, access token, refresh token or exported cookies;
+- a personal-device enrolment/compliance bypass is attempted;
+- a production base-image digest has been guessed rather than verified from a registry;
+- source, logs, metrics, evidence or reports contain prohibited secrets/session material;
+- CI can mutate a live Planner tenant.
 
-## 2. Level 1 — Backlog item (a P-key)
+## 2. Level 0 — Atomic PR
 
-| # | Criterion | Verified by |
-|---|-----------|-------------|
-| B-01 | All Level 0 criteria hold for every PR that implements it. | CI history |
-| B-02 | The item's acceptance criteria, as written in the backlog, are each mapped to a test or an evidence artifact. | traceability row |
-| B-03 | The behaviour is exercised end to end at least once in the isolated acceptance suite, or a written justification explains why it is not observable there. | bundle A2 |
-| B-04 | Failure paths are tested, not only the happy path. | test review |
-| B-05 | Observability exists: the behaviour is visible in logs, metrics, and — for mutations — the audit trail. | L6 evidence |
-| B-06 | Operational impact is documented: configuration variables, alerts, runbook steps. | docs |
-| B-07 | Security implications are reviewed against [threat-model.md](threat-model.md); new risks are mitigated or explicitly accepted with an owner. | governance log |
-| B-08 | The item is closed only after the merge commit's pipeline is green on `main`. | CI |
+Every implementation PR must satisfy the applicable criteria below.
 
-## 3. Level 2 — Epic (EPIC-01..EPIC-10)
+| ID | Criterion | Evidence |
+| --- | --- | --- |
+| PR-01 | Work is on an atomic branch, not developed directly on `main`. | branch/PR metadata |
+| PR-02 | PR references the canonical P-key(s) and has one coherent purpose. | PR body |
+| PR-03 | Affected canonical documentation and traceability are updated in the same PR. | diff + docs gate |
+| PR-04 | Architectural decisions have an ADR. | ADR diff/review |
+| PR-05 | Compile, ruff and strict mypy pass. | G1 |
+| PR-06 | Unit, schema and contract tests pass. | G2 |
+| PR-07 | Security-sensitive behaviour has negative/fail-closed tests. | G2/G3/G4 |
+| PR-08 | Browser/UI changes are exercised against the mock UI and isolated browser harness. | G3 |
+| PR-09 | No selector/navigation primitive exists outside the UIContract boundary. | repo/static gate |
+| PR-10 | Secret/dependency security gates pass. | G4 |
+| PR-11 | Container/supply-chain gates pass when deployment artifacts change. | G5/G6 |
+| PR-12 | Capability-state upgrades cite evidence of the required level. | capability/evidence review |
+| PR-13 | All applicable required gates are GREEN/PASS on the exact PR head. | GitHub checks |
+| PR-14 | No unresolved security/privacy blocker is hidden by a workaround. | review + blocker record |
 
-| # | Criterion | Verified by |
-|---|-----------|-------------|
-| E-01 | Every P-key in the epic is Level 1 done, or explicitly deferred with a governance note naming the target phase. | backlog |
-| E-02 | The epic's exit gates in [roadmap.md](roadmap.md) are demonstrated, not asserted. | evidence artifacts |
-| E-03 | All requirements mapped to the epic in [traceability.md](traceability.md) §7 have at least one closing evidence artifact. | traceability |
-| E-04 | The isolated acceptance suite includes scenarios covering the epic's user-visible behaviour. | bundle A2 |
-| E-05 | Documentation for the epic's area is complete, cross-linked, and free of placeholders. | link checker + review |
-| E-06 | No open critical or high security finding attributable to the epic. | G6 report |
-| E-07 | Alerts and runbooks exist for the epic's new failure modes. | [observability.md](observability.md) §7 |
-| E-08 | A governance review records the epic as complete, with the evidence references cited. | governance log |
+If a required gate cannot execute because GitHub Actions, billing, quota or another external
+prerequisite is unavailable, PR-13 is not met.
 
-## 4. Level 3 — Release
+## 3. Level 1 — Backlog item P-001..P-074
 
-| # | Criterion | Verified by |
-|---|-----------|-------------|
-| R-01 | Gates G1–G11 are green on the exact release candidate sha. | CI |
-| R-02 | An isolated acceptance bundle (A2) exists for that sha with every criterion `pass` or justified `not_applicable`. | bundle |
-| R-03 | The audit hash chain verifies over the acceptance run. | verifier output |
-| R-04 | The redaction detector reports zero findings across the run's full log stream. | bundle |
-| R-05 | Selector attestation reports zero misses at the level being claimed. | attest |
-| R-06 | All images are digest-pinned; digests are recorded in the release notes and in `environment.json`. | G8 + notes |
-| R-07 | SBOMs are attached and the diff contains no unexplained additions. | G7 |
-| R-08 | The capability matrix is regenerated from evidence, never hand-edited. | CI matrix gate |
-| R-09 | Any live-support claim is backed by an A3 (or A4) bundle; otherwise the notes carry the verbatim mock-only statement. | review |
-| R-10 | The rollback path is documented and the previous digests are known-good. | deployment log |
-| R-11 | Post-deploy health checks and a read-only smoke tool call through the Portal succeed. | deployment log |
-| R-12 | The release record links every evidence artifact by id and hash. | release notes |
+A P-key is done only when:
 
-## 5. Definition of *not* done
+1. all of its explicit acceptance criteria in [`backlog.md`](backlog.md) are met;
+2. its deliverables exist in the canonical branch/main after merge;
+3. its required tests and security acceptance exist and pass;
+4. related requirement IDs and ADRs are traceable;
+5. relevant operational/observability behaviour is documented;
+6. its evidence is bound to the implementing commit/merge SHA;
+7. post-merge verification of the exact `main` SHA passes;
+8. the GitHub issue is closed only after the evidence above exists.
 
-These are the failure patterns this project explicitly refuses to call done.
+A code skeleton can close a skeleton-specific backlog acceptance criterion, but it is not evidence
+that the corresponding live Planner capability is supported.
 
-| Pattern | Why it is not done |
-|---------|--------------------|
-| "It works locally." | No reproducible evidence bound to a sha. |
-| "Mock UI tests pass, so live works." | Mock proves logic, not the real DOM. Requires L5-D/A3. |
-| "Graph confirms the change." | Graph is contextual; only UI read-back verifies. |
-| "The write returned success." | Success without read-back is unverified. |
-| "Tests are skipped for now." | A skipped redaction or attestation test is a failed gate. |
-| "The secret is only in CI." | Live Planner credentials must not exist in CI at all. |
-| "We'll pin the digest later." | Non-reproducible builds invalidate every prior evidence artifact. |
-| "Docs will follow the code." | Behaviour and documentation ship together. |
-| "The operator will remember." | Runbooks and alerts, or it is not operable. |
-| "It's a small change to the compose file." | Deployment constructs are security boundaries; G8 always applies. |
+## 4. Level 2 — EPIC
 
-## 6. Evidence checklist per change type
+An EPIC is done when:
 
-| Change type | Minimum evidence |
-|-------------|------------------|
-| New MCP tool | schema, catalogue entry, policy rule, L2+L3 tests, L4 scenario, A2 scenario, docs |
-| New selector | registry entry with fallback and owner, L5 A–C, mock coverage, drift-report ownership |
-| New mutation path | read-back definition with guard fields, idempotency key derivation, L4 + A2 scenarios, audit row shape |
-| Redaction change | detector cases (positive and negative), full-log scan in A2 |
-| Metric change | label enumeration, cardinality budget update, dashboard/alert review |
-| Deployment change | G8 lint, digest pin, tmpfs/volume declaration, A2 isolation assertions |
-| Dependency bump | SBOM diff, scanner report, A2 re-run |
-| Playwright/Chromium bump | attestation re-run (mock, and live if live support is claimed), A2 re-run |
-| Documentation-only | link check, no capability status upgrade without a bundle reference |
+- every included P-key is Level 1 done, or an explicitly governed deferral identifies the target
+  release and does not invalidate the EPIC exit goal;
+- its architecture/security/privacy requirements are implemented and traceable;
+- isolated acceptance covers the user-visible and failure behaviour introduced by the EPIC;
+- no unresolved HIGH/CRITICAL security finding attributable to the EPIC remains without a valid,
+  dated and approved exception;
+- alerts/runbooks/operational evidence exist where the EPIC introduces an operational failure mode;
+- documentation has no placeholders or contradictory P-key/ADR mappings;
+- the EPIC exit evidence is recorded and reviewable.
 
-## 7. Roles and sign-off
+The canonical EPIC ownership is:
 
-| Role | Signs off on |
-|------|--------------|
-| Author | Level 0 checklist completeness |
-| Reviewer | Level 0 correctness, scope, traceability |
-| Maintainer | Level 1 and Level 2 closure |
-| Operator | Level 3 deployment, rollback readiness, A3 sessions |
-| Governance | Epic completion, exceptions, deferrals, privacy-boundary changes |
+| EPIC | P-keys | Scope |
+| --- | --- | --- |
+| EPIC-01 | P-001..P-010 | Foundation |
+| EPIC-02 | P-011..P-017 | Browser Worker / UI |
+| EPIC-03 | P-018..P-024 | Authentication / MFA |
+| EPIC-04 | P-025..P-030 | Read Model |
+| EPIC-05 | P-031..P-036 | Mutations |
+| EPIC-06 | P-037..P-045 | Scheduling / Project Management |
+| EPIC-07 | P-046..P-053 | Reconciliation / Blueprints |
+| EPIC-08 | P-054..P-060 | Reporting / Portfolio |
+| EPIC-09 | P-061..P-067 | Security / Governance / Observability |
+| EPIC-10 | P-068..P-074 | Acceptance / Release |
 
-Any exception to a criterion requires: a written justification, a named owner, an expiry date, and a governance-log entry. An expired exception fails the next gate automatically — exceptions decay, they do not accumulate.
+## 5. Level 3 — Release 0.1.0
 
-## 8. Backlog mapping
+`0.1.0` is done only when all applicable requirements below are met.
 
-| Level | Backlog keys |
-|-------|--------------|
-| Level 0 tooling (PR template, CI checks) | P-010, P-054 |
-| Level 1 traceability automation | P-010, P-072 |
-| Level 2 epic exit evidence | P-070, P-071 |
-| Level 3 release governance | P-072, P-073, P-074 |
+### Public MCP contract
 
-## 9. Worked examples
+- exactly 17 canonical public tools are registered;
+- every registered 0.1.0 tool is classified `READ`;
+- no task/bucket/dependency/scheduling/sharing/reconciliation mutation tool is exposed;
+- no generic `browser_click`, `browser_type`, `browser_exec`, `navigate` or equivalent primitive is
+  exposed;
+- contracts/manifests/tool metadata and product/schema/contract versions validate.
 
-### 9.1 Adding a "set task priority" tool
+### Read model and capability truthfulness
 
-| Step | Artifact |
-|------|----------|
-| Catalogue entry + schema | `tool-catalog.md` row, JSON schema with `additionalProperties: false` |
-| Policy | Role requirement `operator`, `dry_run` supported |
-| Selectors | `task.detail.priority` registered with fallback and owner, attested A–C |
-| Read-back | `priority` in changed fields; `due_date`, `bucket`, `assignments` as guard fields |
-| Idempotency | Key derived from plan/task id hash + intended priority |
-| Tests | L1 normalization, L2 schema, L3 replay/conflict, L4 mock scenario, L6 A2 scenario |
-| Observability | Counter labels reuse existing enumerations; audit row records field hashes |
-| Docs | Capability matrix row created as `mock-verified` |
-| Live claim | Blocked until an A3 attestation covers the priority control |
+- plan/task/project reads are schema-valid and deterministic in the accepted test environment;
+- a project snapshot has explicit consistency/hash semantics;
+- every UI-dependent operation references a UIContract fragment;
+- an unattested/drifted fragment fails closed;
+- all capability states remain evidence-driven;
+- any capability not validated live remains explicitly non-supported/non-attested as appropriate;
+- Microsoft Graph availability is never used as a capability gate.
 
-### 9.2 Bumping Chromium
+### Authentication/privacy boundary
 
-| Step | Artifact |
-|------|----------|
-| Pin update | Playwright version + base image digest bumped together |
-| SBOM | Regenerated and diffed (G7) |
-| Attestation | Mock attestation re-run; live attestation required if live support is currently claimed |
-| Acceptance | Full A2 re-run on the new digest |
-| Release note | New digests listed; capability statuses unchanged unless re-attested |
+- formal auth states and legal transitions are tested;
+- no password is stored or passed through the system;
+- no access token, refresh token or exported cookie is persisted as application data;
+- MFA number matching can be detected and sanitized, but approval occurs only in Microsoft
+  Authenticator;
+- Conditional Access managed/compliant/enrolled/certificate requirement returns
+  `BLOCKER_CONDITIONAL_ACCESS`;
+- Intune/Company Portal/Identity Broker/Entra registration/MDM/EDR/certificate enrolment paths are
+  not automated;
+- the professional Chromium profile is isolated from personal browser/home/credential material.
 
-## 10. Anti-regression rules
+### Security/governance
 
-| Rule | Enforcement |
-|------|-------------|
-| Coverage thresholds may only rise | CI compares against the stored baseline |
-| A criterion may not be downgraded to `not_applicable` without a written justification | review at G10 |
-| A capability status may never be raised by hand | CI matrix gate |
-| A quarantined test must be fixed or deleted with justification within 14 days | flake report |
-| An expired security exception blocks the next gate | G6 |
-| A doc claim without an artifact id is removed | review |
+- policy fails closed on missing/invalid/inconsistent configuration;
+- approval records, where infrastructure exists, are bound, single-use and non-replayable;
+- logs are structured and redacted;
+- metrics are low-cardinality and exclude task/plan/user/email/title/URL/operation identifiers as
+  labels;
+- container posture is non-root, capability-dropped, no-new-privileges, private for the worker and
+  free of prohibited host mounts;
+- secret and dependency scanning pass.
 
-## 11. Quick reference card
+### Supply chain
 
-Before requesting review, confirm: backlog key referenced; tests at the lowest useful layer; redaction unaffected or extended; metric labels enumerated; no prohibited deployment construct; docs updated; traceability updated; no live claim without an A3 bundle; checklist completed in the PR body.
+- control-plane production image builds;
+- browser-worker production image builds;
+- required base images use **real registry-validated SHA-256 digests**;
+- `BLOCKER_IMAGE_DIGEST_PINNING` is closed only with that evidence;
+- Trivy filesystem/image policy passes for HIGH/CRITICAL findings according to the approved
+  baseline;
+- control-plane CycloneDX SBOM exists and validates with non-empty components;
+- browser-worker CycloneDX SBOM exists and validates with non-empty components;
+- SBOMs and scan outputs are retained as release evidence.
+
+### Test/acceptance/release evidence
+
+- documentation validator: `errors = 0`, `warnings = 0`;
+- compile, ruff, mypy, pytest and contract/schema validation pass;
+- mock UI acceptance passes;
+- isolated acceptance IA-01..IA-16 passes;
+- CI is demonstrably unable to mutate a live Planner tenant;
+- all required PR gates are green on the exact head SHA;
+- post-merge gates are green on the exact `main` merge SHA;
+- P-071 traceability closure passes;
+- P-072 documentation completeness passes;
+- P-073 release process/gates pass;
+- release notes and capability matrix contain no unsupported claim;
+- if live read-only acceptance has not occurred, the release explicitly states that live Planner
+  support is not yet attested.
+
+A release cannot be declared done while a required external gate is unavailable.
+
+## 6. Mutation-specific Definition of Done for later releases
+
+No mutation is promoted merely because its internal framework exists in 0.1.0. When mutation tools
+are introduced later, each tool additionally requires:
+
+- explicit mutation class (`SAFE_WRITE`, `GOVERNED_WRITE` or `DESTRUCTIVE`);
+- policy decision before execution;
+- concrete operation ID and idempotency key;
+- typed resource lock with TTL where applicable;
+- before/requested/after state evidence;
+- approval object when policy requires it;
+- deterministic read-back after execution;
+- no blind automatic retry after timeout;
+- `UNKNOWN_OUTCOME` when the result cannot be verified;
+- saga/checkpoint/compensation handling for multi-step work;
+- live mutation acceptance only in a dedicated isolated test plan, never a production plan;
+- capability promotion to `MUTATION_ATTESTED`/`SUPPORTED` only after the required evidence exists.
+
+## 7. Reconciliation-specific Definition of Done for later releases
+
+A governed live reconciliation/apply path additionally requires:
+
+- stable `source_id` / `external_id` binding rules;
+- current-state read and normalization;
+- deterministic diff;
+- ordered operation plan;
+- policy/approval evaluation;
+- resource locks;
+- per-step checkpoints;
+- read-back after each applied mutation;
+- exact partial/unknown state reporting;
+- compensation only where proven safe;
+- resume semantics that re-read before retrying uncertain work;
+- convergence verification.
+
+The presence of P-050 infrastructure in the 0.1.0 codebase does not satisfy these live-apply
+criteria by itself.
+
+## 8. Evidence quality
+
+Acceptable evidence is reproducible, sanitized, bound to the relevant commit/environment and linked
+from the relevant PR/backlog/release record.
+
+Never use as evidence:
+
+- a password/token/cookie/auth header;
+- a raw browser profile or session export;
+- unredacted tenant/business content;
+- a guessed digest;
+- a screenshot/DOM dump committed merely to make a capability appear attested;
+- a GitHub check that did not actually execute;
+- a previous-SHA result presented as proof for a new SHA;
+- a Graph endpoint presented as proof that a Planner Premium UI capability exists.
+
+## 9. Not-done examples
+
+| Statement | Why it is not done |
+| --- | --- |
+| “The workflow is red only because Actions did not start.” | Required CI is unavailable; status is blocked, not PASS. |
+| “Mock Planner works, therefore live Planner is supported.” | Mock proves implementation logic, not tenant/UI capability. |
+| “The write returned success.” | A mutation is not verified until read-back confirms requested state. |
+| “Retrying is safe because the request timed out.” | Timeout creates unknown outcome; read-back is mandatory first. |
+| “Graph has the endpoint.” | Graph availability never defines support. |
+| “We will pin the Docker digest later.” | Reproducibility/supply-chain evidence is incomplete. |
+| “The selector probably still works.” | UIContract evidence/attestation is mandatory; drift fails closed. |
+| “The operator can approve MFA in Telegram.” | MFA approval is exclusively Microsoft Authenticator. |
+| “Conditional Access can be bypassed by emulating compliance.” | Violates the personal-device boundary and is prohibited. |
+
+## 10. Backlog ownership of completion gates
+
+| Completion concern | P-key(s) |
+| --- | --- |
+| CI pipeline complete | P-068 |
+| Isolated acceptance | P-069 |
+| Live read-only procedure | P-070 |
+| Traceability closure | P-071 |
+| Documentation completeness | P-072 |
+| Release process/gates | P-073 |
+| `0.1.0` release | P-074 |
+
+An issue is closed only after its evidence exists; “merge now, validate later” is not an accepted
+completion path for a blocking control.

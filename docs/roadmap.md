@@ -1,197 +1,208 @@
-# Roadmap
+# Planner MCP Roadmap
 
-Scope: delivery phases for `pestoura/planner-mcp`, aligned one-to-one with EPIC-01..EPIC-10 and the backlog keys P-001..P-074. Companions: [backlog.md](backlog.md), [architecture.md](architecture.md), [release-process.md](release-process.md), [acceptance.md](acceptance.md), [traceability.md](traceability.md).
+This roadmap is normative for delivery sequencing. The canonical backlog is
+[`docs/backlog.md`](backlog.md); this document does not redefine P-keys or EPIC ownership.
 
-Sequencing rule: the browser worker is the product. Phases are ordered so that a *browser-evidenced* Planner mutation exists as early as possible, and every later phase hardens, observes, or governs that path. Microsoft Graph work is contextual enrichment and is deliberately scheduled late and kept optional.
+## 1. Product invariants
 
-## 0. Phase map
+The roadmap must preserve these rules at every release:
 
-| Phase | Epic | Theme | Backlog | Exit artifact |
-|-------|------|-------|---------|---------------|
-| P0 | EPIC-01 | Specification and ADR foundation | P-001..P-010 | Approved doc set + ADRs |
-| P1 | EPIC-02 | Control-plane skeleton (FastMCP) | P-011..P-017 | Discoverable, schema-valid tool surface |
-| P2 | EPIC-03 | Browser worker skeleton | P-018..P-024 | Worker executes a read against the mock UI |
-| P3 | EPIC-04 | Execution semantics: state, read-back, idempotency | P-025..P-030 | Verified mutation on the mock UI |
-| P4 | EPIC-05 | Transport and Portal exposure | P-031..P-036 | Reachable from ChatGPT via the Portal |
-| P5 | EPIC-06 | Hermes notifications and HITL | P-037..P-045 | Sanitized MFA event + working HITL gate |
-| P6 | EPIC-07 | Observability, audit, alerting | P-046..P-053 | Redacted logs, metrics, hash-chained audit |
-| P7 | EPIC-08 | Test architecture and mock Planner UI | P-054..P-060 | Full L1–L5 suites green in CI |
-| P8 | EPIC-09 | Deployment hardening and supply chain | P-061..P-067 | Hardened, digest-pinned compose stack |
-| P9 | EPIC-10 | Acceptance, reporting, release governance | P-068..P-074 | Evidence bundles + capability matrix + live read-only attestation |
+- Planner Premium capabilities are implemented primarily through the private Chromium/Playwright
+  browser worker. Microsoft Graph is optional context/optimisation and never a capability gate.
+- The public MCP surface is semantic project-management API, never generic browser primitives.
+- A capability is not reported as supported without tenant/UI evidence, an attested UIContract
+  fragment and a viable read-back strategy.
+- The personal-device boundary is fail-closed. Conditional Access that requires a managed,
+  compliant, enrolled or certificate-backed device ends in `BLOCKER_CONDITIONAL_ACCESS`.
+- MFA approval occurs only in Microsoft Authenticator.
+- CI never performs a live Planner mutation.
+- A gate that did not execute is not green.
 
-## 1. Phase P0 — Specification foundation (EPIC-01, P-001..P-010)
+See [`vision.md`](vision.md), [`architecture.md`](architecture.md),
+[`privacy-boundary.md`](privacy-boundary.md), [`ui-contract.md`](ui-contract.md) and ADR-001..ADR-008.
 
-Objective: make every subsequent decision cheap by fixing scope, boundaries and contracts first.
+## 2. Canonical EPIC map
 
-| Item | Deliverable |
-|------|-------------|
-| P-001 | Vision, scope and the browser-primary/Graph-contextual principle |
-| P-002 | Architecture and the four-hop chain |
-| P-003 | Threat model |
-| P-004 | Security model and privacy boundary |
-| P-005 | Authentication and MFA policy (Authenticator-only approval) |
-| P-006 | Planner Premium capability inventory |
-| P-007 | Tool catalogue and error taxonomy |
-| P-008 | UI contract and selector registry design |
-| P-009 | State model, reconciliation and idempotency specifications |
-| P-010 | Governance, ADR process, backlog and roadmap |
+| EPIC | Scope | Backlog |
+| --- | --- | --- |
+| EPIC-01 | Foundation | P-001..P-010 |
+| EPIC-02 | Browser Worker / UI | P-011..P-017 |
+| EPIC-03 | Authentication / MFA | P-018..P-024 |
+| EPIC-04 | Read Model | P-025..P-030 |
+| EPIC-05 | Mutations | P-031..P-036 |
+| EPIC-06 | Scheduling / Project Management | P-037..P-045 |
+| EPIC-07 | Reconciliation / Blueprints | P-046..P-053 |
+| EPIC-08 | Reporting / Portfolio | P-054..P-060 |
+| EPIC-09 | Security / Governance / Observability | P-061..P-067 |
+| EPIC-10 | Acceptance / Release | P-068..P-074 |
 
-Exit gates: all documents cross-linked; each ADR has status, context, decision, consequences; backlog keys assigned; critical path published. No code merges before P0 exit.
+This mapping is immutable unless a later ADR explicitly changes the product plan and updates
+backlog, traceability, tests and release evidence in the same change.
 
-## 2. Phase P1 — Control-plane skeleton (EPIC-02, P-011..P-017)
+## 3. Release 0.1.0 — Foundation + read-only
 
-| Item | Deliverable |
-|------|-------------|
-| P-011 | FastMCP application bootstrap, config loading, fail-closed startup assertions |
-| P-012 | Tool registration framework driven by the catalogue |
-| P-013 | Input/output schema layer with `additionalProperties: false` |
-| P-014 | Policy layer: roles, read-only mode, dry-run, denial taxonomy |
-| P-015 | Worker client interface + contract double |
-| P-016 | Health/readiness endpoints on loopback |
-| P-017 | Structured logging skeleton wired to the redaction factory |
+`0.1.0` is the first releasable contract. Its **registered MCP tool surface is read-only**.
+The canonical public tools are:
 
-Exit gates: every catalogued tool discoverable and schema-validated; mutating tools refuse to execute without a worker; L1–L3 suites green.
+1. `planner_health`
+2. `planner_readiness`
+3. `planner_capabilities`
+4. `planner_agent_card`
+5. `planner_ui_contract_status`
+6. `planner_auth_status`
+7. `planner_auth_start`
+8. `planner_auth_resume`
+9. `planner_auth_session_info`
+10. `planner_plan_list`
+11. `planner_plan_get`
+12. `planner_task_list`
+13. `planner_task_get`
+14. `planner_project_snapshot`
+15. `planner_account_context`
+16. `planner_license_capabilities`
+17. `planner_smoke_test`
 
-## 3. Phase P2 — Browser worker skeleton (EPIC-03, P-018..P-024)
+All 17 tools are classified `READ` for this release. No task, bucket, dependency, scheduling,
+sharing or reconciliation-apply mutation may be registered in the public MCP catalogue.
 
-| Item | Deliverable |
-|------|-------------|
-| P-018 | FastAPI worker service, internal-only binding |
-| P-019 | Playwright/Chromium lifecycle with persistent profile volume |
-| P-020 | Navigation layer with URL allowlist and surface model |
-| P-021 | Selector registry implementation with primary + fallback strategies |
-| P-022 | Read operations for plan/bucket/task |
-| P-023 | Session state machine (`cold`→`warming`→`ready`/`mfa_required`/`expired`) |
-| P-024 | Worker error taxonomy and retry policy |
+### 0.1.0 delivery scope
 
-Exit gates: worker performs reads against the mock UI; zero selector misses in mock attestation; worker unreachable from the host.
+The release establishes:
 
-## 4. Phase P3 — Execution semantics (EPIC-04, P-025..P-030)
+- MCP runtime and Streamable HTTP control plane;
+- versioned contracts, manifests and AgentCard;
+- fail-closed configuration, policy and state foundations;
+- structured logging, redaction and low-cardinality metrics;
+- private FastAPI browser worker and Playwright/Chromium lifecycle;
+- isolated persistent professional browser profile;
+- formal authentication and MFA state detection;
+- UIContract registry, attestation model and UI-drift fail-closed behaviour;
+- plan/task/project read model and stable snapshot semantics;
+- mock Planner UI and isolated browser acceptance;
+- CI, dependency/secret/container scanning, CycloneDX SBOM and release evidence;
+- complete canonical documentation and traceability.
 
-The most important phase: it turns navigation into trustworthy mutation.
+### P-031 and P-050 in 0.1.0
 
-| Item | Deliverable |
-|------|-------------|
-| P-025 | Normalized state model implementation for Planner Premium fields |
-| P-026 | Read-back verifier with guard fields and `indeterminate`=failure |
-| P-027 | Mutation pipeline (`plan`→`precondition`→`act`→`read_back`→`finalize`) |
-| P-028 | Reconciliation engine, drift classification |
-| P-029 | Reconciliation reporting |
-| P-030 | Idempotency store, key derivation, replay/conflict semantics |
+The declared program critical path includes P-031 and P-050. This does **not** authorize a write
+surface in 0.1.0.
 
-Exit gates: mutations on the mock UI verified by read-back; replay produces exactly one effect; injected read-back mismatch fails loudly.
+- P-031 may land only as the internal mutation-safety framework (policy → approval → idempotency →
+  typed lock → apply boundary → read-back → checkpoint), exercised against mocks and inaccessible
+  from the 0.1.0 MCP registry.
+- P-050 may land as reconciliation planning/diff/checkpoint infrastructure and mock-only execution.
+  Tenant `apply` remains disabled and no `planner_project_reconcile` mutation is registered in
+  0.1.0.
 
-## 5. Phase P4 — Transport and Portal (EPIC-05, P-031..P-036)
+This distinction lets the safety architecture be proven before writes are exposed. A later release
+must pass its own mutation acceptance gates before either path becomes externally callable.
 
-| Item | Deliverable |
-|------|-------------|
-| P-031 | Streamable HTTP endpoint hardening, timeouts, progress notifications |
-| P-032 | Transport-level authentication independent of the Portal |
-| P-033 | Portal server registration and access policy |
-| P-034 | Cloudflare Tunnel deployment, egress-only connector |
-| P-035 | Role model enforcement matrix |
-| P-036 | Token rotation runbook |
+## 4. Delivery order by EPIC
 
-Exit gates: a read-only tool call succeeds end-to-end from ChatGPT; unauthenticated calls rejected before dispatch; zero inbound host ports beyond loopback admin.
+### EPIC-01 — Foundation (P-001..P-010)
 
-## 6. Phase P5 — Hermes notifications and HITL (EPIC-06, P-037..P-045)
+Close the canonical specification, package/config/contracts/state foundations, Streamable HTTP
+skeleton, redaction/metrics and typed error model. Documentation validation is blocking.
 
-| Item | Deliverable |
-|------|-------------|
-| P-037 | Sanitized MFA event schema (5 fields, closed) |
-| P-038 | MFA event emission wired to the session state machine |
-| P-039 | Notification transport with bearer auth |
-| P-040 | Rate limiting and coalescing |
-| P-041 | HITL request generation from dry-run diffs |
-| P-042 | HITL callback endpoint, loopback-bound |
-| P-043 | Approval binding to a specific diff + expiry default-reject |
-| P-044 | HMAC, timestamp window, nonce replay protection |
-| P-045 | Integration metrics and alerts |
+### EPIC-02 — Browser Worker / UI (P-011..P-017)
 
-Exit gates: no Planner content in any outbound payload during a full scenario run; HITL timeout defaults to reject; Hermes disabled ⇒ gated tools denied, others unaffected.
+Build the internal worker, Playwright runtime, isolated professional profile, UIContract loader,
+attestation/evidence workflow, drift detection and deterministic mock Planner UI. No public browser
+primitive is introduced.
 
-## 7. Phase P6 — Observability and audit (EPIC-07, P-046..P-053)
+### EPIC-03 — Authentication / MFA (P-018..P-024)
 
-| Item | Deliverable |
-|------|-------------|
-| P-046 | Log record schema |
-| P-047 | Redaction factory + detector suite |
-| P-048 | Metrics registry with enumerated labels |
-| P-049 | Cardinality guard failing startup on violation |
-| P-050 | OpenTelemetry propagation across all four hops |
-| P-051 | Audit store, append-only grants |
-| P-052 | Hash chaining + verifier job |
-| P-053 | Alert rules and runbooks |
+Implement the formal auth state machine, interactive browser sign-in, MFA number-matching event,
+Conditional Access blocker, session lifecycle, enrolment-prompt refusal and UI-observed account /
+licence context. The password never enters the system.
 
-Exit gates: redaction suite green with zero skips; audit chain verifies; alerts fire in a fault-injection drill.
+### EPIC-04 — Read Model (P-025..P-030)
 
-## 8. Phase P7 — Test architecture (EPIC-08, P-054..P-060)
+Implement plan list/detail, task list/detail, bucket/dependency reads and project snapshot. Reads are
+normalized, schema-valid and evidence-bound. This EPIC closes the functional read-only surface of
+0.1.0.
 
-| Item | Deliverable |
-|------|-------------|
-| P-054 | Unit/schema harness, injected clock and id factory |
-| P-055 | Fixture management and orphan-fixture check |
-| P-056 | Contract suite for MCP surface |
-| P-057 | Dual-run contract testing (double vs real worker) |
-| P-058 | Mock Planner UI application |
-| P-059 | Mock-UI Playwright suites incl. failure modes |
-| P-060 | Selector attestation sub-layers A–C |
+### EPIC-05 — Mutations (P-031..P-036)
 
-Exit gates: CI proven incapable of reaching a live tenant (egress denial, env guard, allowlist, static grep); coverage thresholds met; zero flakes over three consecutive runs.
+First build the mutation framework in a dormant/mock-tested state. After 0.1.0, progressively expose
+task, bucket, assignment and plan lifecycle mutations plus bulk-safety controls. Every mutation
+requires policy, idempotency, lock, read-back and explicit handling of partial/unknown outcome.
 
-## 9. Phase P8 — Deployment hardening (EPIC-09, P-061..P-067)
+### EPIC-06 — Scheduling / Project Management (P-037..P-045)
 
-| Item | Deliverable |
-|------|-------------|
-| P-061 | Compose topology with `worker-net` internal |
-| P-062 | Loopback vs public boundary enforcement |
-| P-063 | Non-root, read-only FS, `cap_drop: ALL`, `no-new-privileges`, tmpfs sizing |
-| P-064 | Compose-lint CI job (docker socket, host mounts, privileged, tags) |
-| P-065 | Digest pinning for images and Dockerfile bases |
-| P-066 | SBOM generation and diff gate |
-| P-067 | Secrets handling, file mounts, permission assertions |
+Add effort/duration, WBS hierarchy, FS/SS/SF/FF dependencies, milestones, timeline/Gantt, critical
+path reads, people/workload, goals, sprints and backlog semantics only as UI evidence is obtained.
 
-Exit gates: every prohibition in [deployment.md](deployment.md) is machine-enforced; stack starts with all hardening flags; profile volume isolation verified.
+### EPIC-07 — Reconciliation / Blueprints (P-046..P-053)
 
-## 10. Phase P9 — Acceptance, reporting, release governance (EPIC-10, P-068..P-074)
+Add custom fields/formatting/calendar capability work, stable identity bindings, desired-state
+reconciliation, blueprint validation, dry-run planning and resumable runs. Live apply remains gated
+until mutation attestation is complete.
 
-| Item | Deliverable |
-|------|-------------|
-| P-068 | Report generator framework and schemas |
-| P-069 | Operational digest, selector drift report, attestation history |
-| P-070 | Evidence bundle format, manifest, hashing |
-| P-071 | Isolated acceptance harness (A2) |
-| P-072 | Evidence index and release record integration |
-| P-073 | Live read-only mode and operator protocol (A3) |
-| P-074 | Capability matrix automation + CI gate blocking unsupported claims |
+### EPIC-08 — Reporting / Portfolio (P-054..P-060)
 
-Exit gates: A2 passes for every pre-release scenario; a live read-only attestation with zero misses exists before any live-support claim; capability matrix generated, never hand-edited.
+Add portfolio/roadmap reads, snapshot history, project/variance reporting, portfolio rollups,
+sharing/permission governance, controlled export and governance reporting. Reporting consumes the
+semantic read model; it never calls selectors directly.
 
-## 11. Critical path
+### EPIC-09 — Security / Governance / Observability (P-061..P-067)
+
+Complete default-deny policy, persistent single-use approvals, telemetry hygiene, hardened
+containers, SBOM/vulnerability/digest gates, circuit breakers/retry policy and complete audit trail.
+Security controls are required before write capability is promoted.
+
+### EPIC-10 — Acceptance / Release (P-068..P-074)
+
+Wire the complete CI pipeline, isolated acceptance IA-01..IA-16, live read-only acceptance,
+traceability closure, documentation consistency and release gates. P-074 cuts `0.1.0` only when all
+applicable required gates are green and no unsupported capability is presented as supported.
+
+## 5. Critical path
+
+The canonical program critical path is:
 
 `P-001 → P-011 → P-014 → P-018 → P-025 → P-026 → P-027 → P-030 → P-031 → P-050 → P-069 → P-071 → P-073 → P-074`
 
-| Segment | Meaning |
-|---------|---------|
-| P-001 → P-011 | Specification before code. |
-| P-011 → P-014 | A tool surface is worthless without policy. |
-| P-014 → P-018 | Policy needs an executor. |
-| P-018 → P-025 → P-026 → P-027 | Navigation → normalized state → verification → verified mutation. |
-| P-027 → P-030 | Verified mutation must be replay-safe. |
-| P-030 → P-031 | Only then is public exposure responsible. |
-| P-031 → P-050 | Exposure requires end-to-end correlation. |
-| P-050 → P-069 → P-071 | Correlation enables reporting, which enables acceptance. |
-| P-071 → P-073 → P-074 | Isolated acceptance precedes live read-only, which alone permits capability claims. |
+| Key | Gate meaning on the critical path |
+| --- | --- |
+| P-001 | Canonical repository/specification/CI foundation |
+| P-011 | Typed private browser-worker operation boundary |
+| P-014 | Central UIContract and attestation gate |
+| P-018 | Formal authentication state machine |
+| P-025 | Plan/project list read |
+| P-026 | Plan/project detail read |
+| P-027 | Task list/detail read |
+| P-030 | Composite project snapshot with stable hash |
+| P-031 | Mutation-safety framework exists and is mock-tested; no 0.1 public write tool |
+| P-050 | Reconciliation planning/checkpoint engine exists; live apply remains disabled in 0.1 |
+| P-069 | Isolated acceptance IA-01..IA-16 |
+| P-071 | Traceability matrix closure |
+| P-073 | Release process and gates |
+| P-074 | `0.1.0` release |
 
-Any slip on a critical-path item slips the release date one-for-one; non-critical items may be deferred to a later phase with a governance note.
+## 6. Releases after 0.1.0
 
-## 12. Deferred and explicitly out of scope
+Release numbers below are planning bands, not promises; capability promotion is evidence-driven.
 
-| Item | Status | Rationale |
-|------|--------|-----------|
-| Live mutating acceptance automation (A4) | Deferred indefinitely | Manual, per-operation approval by design. |
-| Graph-based write paths | Out of scope | Would violate the browser-primary principle. |
-| Multi-tenant operation | Out of scope for v1 | Single persistent profile per deployment. |
-| Horizontal worker scaling | Deferred | Requires profile-sharing design with unresolved security implications. |
-| Attachment upload/download | Deferred to post-v1 | Content handling expands the privacy boundary materially. |
-| Webhook-driven real-time sync | Deferred | Reconciliation polling is sufficient for v1. |
+| Band | Primary outcome |
+| --- | --- |
+| 0.2.x | authenticated live read, live UI attestation and hardened read operations |
+| 0.3.x | first safe mutations and task/bucket CRUD with read-back |
+| 0.4.x | dependencies, scheduling, milestones, WBS, goals and sprints |
+| 0.5.x | desired-state reconciliation and blueprints with governed apply |
+| 0.6.x | reporting, portfolio, workload and controlled export |
+| 0.7–0.9.x | resilience, governance, observability and operational hardening |
+| 1.0.0 | production-ready semantic Planner Premium MCP with complete evidence and acceptance |
+
+A capability may move earlier or later only if the capability matrix, UI evidence and safety gates
+support that decision. The absence or presence of a Microsoft Graph endpoint does not affect this
+sequence.
+
+## 7. Blockers and advancement rule
+
+Normal implementation decisions do not stop the delivery loop. Work advances automatically while
+its required gates are green. Stop only for a real blocker: manual authentication/MFA, Conditional
+Access, risk approval, unavailable external service, rate limit, destructive operation not already
+authorized, missing evidence, or a privacy/security-boundary conflict.
+
+Known release blockers are recorded explicitly; they are never converted into a false PASS.

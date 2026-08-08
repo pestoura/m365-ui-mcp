@@ -10,8 +10,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 
-# These ten documents were already protected by the original A1 gate. Keep their
-# checks unchanged/strict while extending coverage to A1.3.
 CANONICAL_DOCS = [
     "architecture.md",
     "threat-model.md",
@@ -55,9 +53,12 @@ ADRS = {
 }
 
 TARGETS = CANONICAL_DOCS + A1_3_DOCS
+CANONICAL_CRITICAL_PATH = (
+    "P-001 → P-011 → P-014 → P-018 → P-025 → P-026 → P-027 → P-030 → "
+    "P-031 → P-050 → P-069 → P-071 → P-073 → P-074"
+)
 
-# Stable requirement namespaces. The original namespaces are preserved; A1.3
-# namespaces are recognized without weakening the old definition rules.
+# Original A1 namespaces plus namespaces that A1.3 may define explicitly.
 DEF_PREFIXES = (
     "ARCH", "SEC", "PRIV", "GOV", "THR", "AUTH", "UI", "WORKER", "CAP", "TOOL",
     "REC", "RECON", "IDEM", "STATE", "OBS", "TEST", "ACC", "DEPLOY", "CF",
@@ -70,6 +71,8 @@ DEF_RE = re.compile(
     re.MULTILINE,
 )
 LINK_RE = re.compile(r"\[[^\]]*\]\((?!https?://|mailto:)([^)#]+)(?:#[^)]*)?\)")
+ADR_REF_RE = re.compile(r"\bADR-(\d{3,4})\b")
+LEGACY_R_RE = re.compile(r"\bR-\d{2,3}\b")
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -85,7 +88,6 @@ def validate_text(path: Path, display: str, *, require_vision: bool = False) -> 
     text = path.read_text(encoding="utf-8")
 
     for target in LINK_RE.findall(text):
-        # Ignore pure anchors and URI-like schemes not handled above.
         if not target or ":" in target.split("/", 1)[0]:
             continue
         resolved = (path.parent / target).resolve()
@@ -114,16 +116,29 @@ def validate_text(path: Path, display: str, *, require_vision: bool = False) -> 
         if bad in text:
             errors.append(f"POSSIBLE SECRET IN DOC: {display} contains {bad!r}")
 
-    # Detect the ADR numbering used by the parallel specification branch. The
-    # canonical mapping is 006=UIContract, 007=professional/privacy boundary,
-    # 008=Graph non-dependency.
+    # A1 has exactly ADR-001..ADR-008. Four-digit ADR-000x references came from a
+    # parallel/non-canonical specification and must never re-enter A1.
+    for number in ADR_REF_RE.findall(text):
+        if len(number) != 3 or not 1 <= int(number) <= 8:
+            errors.append(f"INVALID ADR REFERENCE: {display} contains ADR-{number}")
+
+    # R-nn was an unrelated traceability namespace introduced by the parallel
+    # specification. Canonical requirements retain their named namespaces.
+    for legacy in sorted(set(LEGACY_R_RE.findall(text))):
+        errors.append(f"LEGACY REQUIREMENT REFERENCE: {display} contains {legacy}")
+
+    # Detect the old semantic numbering from the parallel branch even when the
+    # numeric shape itself is valid.
     for lineno, line in enumerate(text.splitlines(), start=1):
         low = line.lower()
         if "adr-006" in low and "graph" in low:
             errors.append(f"LEGACY ADR MAPPING: {display}:{lineno} maps Graph to ADR-006; use ADR-008")
         if "adr-007" in low and ("ui contract" in low or "uicontract" in low or "ui-contract" in low):
             errors.append(f"LEGACY ADR MAPPING: {display}:{lineno} maps UIContract to ADR-007; use ADR-006")
-        if "adr-008" in low and any(term in low for term in ("personal device", "privacy boundary", "enrolment", "enrollment", "managed device")):
+        if "adr-008" in low and any(
+            term in low
+            for term in ("personal device", "privacy boundary", "enrolment", "enrollment", "managed device")
+        ):
             errors.append(f"LEGACY ADR MAPPING: {display}:{lineno} maps profile/privacy to ADR-008; use ADR-007")
 
 
@@ -147,7 +162,7 @@ if adr_dir.is_dir():
     for extra in sorted(actual - expected):
         errors.append(f"UNEXPECTED ADR FILE: docs/adr/{extra}")
 
-# Every recognized requirement reference must resolve to exactly one definition.
+# Every recognized requirement reference must resolve to a definition.
 for rid, where in sorted(referenced.items()):
     if rid not in defined:
         warnings.append(f"UNDEFINED ID REFERENCE: {rid} (referenced in {', '.join(sorted(where))})")
@@ -177,6 +192,12 @@ if backlog.is_file():
         if len(raw) != 3:
             errors.append(f"NON-ZERO-PADDED BACKLOG REFERENCE: P-{raw}")
 
+# The same critical path must be present in the three canonical planning surfaces.
+for rel in ("backlog.md", "roadmap.md", "traceability.md"):
+    path = DOCS / rel
+    if path.is_file() and CANONICAL_CRITICAL_PATH not in path.read_text(encoding="utf-8"):
+        errors.append(f"CRITICAL PATH MISMATCH: docs/{rel}")
+
 print(f"files checked      : {len(TARGETS) + len(ADRS)}")
 print(f"requirement IDs    : {len(defined)} defined, {len(referenced)} distinct referenced")
 print(f"errors             : {len(errors)}")
@@ -186,5 +207,5 @@ for e in errors:
 for w in warnings:
     print(f"  WARN    {w}")
 
-# The A1 gate is GREEN only with errors=0 AND warnings=0.
+# A1 is GREEN only with errors=0 AND warnings=0.
 sys.exit(1 if errors or warnings else 0)

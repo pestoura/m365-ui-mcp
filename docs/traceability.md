@@ -1,155 +1,177 @@
-# Traceability
+# Planner MCP Traceability
 
-Scope: the mapping from requirements → architecture/ADR → backlog keys → tests and evidence for `pestoura/planner-mcp`. This document is the audit surface for "why does this code exist and what proves it works". Companions: [roadmap.md](roadmap.md), [backlog.md](backlog.md), [testing.md](testing.md), [acceptance.md](acceptance.md), [release-process.md](release-process.md).
+This document maps the canonical specification to architectural decisions, backlog ownership,
+testing and evidence. It is an audit index; it **does not redefine requirement IDs**. Normative
+requirement IDs remain defined in their source documents.
 
-Maintenance rule: any PR that changes a requirement, adds an ADR, adds a tool, or changes a test mapping must update this table in the same PR (gate G10 of the release process).
+Companions: [`backlog.md`](backlog.md), [`roadmap.md`](roadmap.md),
+[`testing.md`](testing.md), [`acceptance.md`](acceptance.md),
+[`release-process.md`](release-process.md) and [`definition-of-done.md`](definition-of-done.md).
 
-## 1. Legend
+## 1. Traceability rules
 
-| Column | Meaning |
-|--------|---------|
-| Req | Requirement id, `R-nn`. |
-| Requirement | Normative statement. |
-| Architecture / ADR | Where the decision lives. |
-| Backlog | P-keys implementing it. |
-| Tests | Layers per [testing.md](testing.md): L1 unit, L2 schema, L3 contract, L4 mock UI, L5 attestation, L6 isolated acceptance, L7 live. |
-| Evidence | Artifact proving satisfaction. |
+Every material product requirement must be traceable through as many of these layers as apply:
 
-Evidence types: `bundle` = acceptance evidence bundle; `attest` = selector attestation report; `ci` = pipeline artifact; `audit` = audit export; `matrix` = capability matrix row.
+`requirement ID → canonical document → ADR → P-key → implementation → test → evidence → release`
 
-## 2. Core product requirements
+A PR that adds or changes a product requirement, architectural decision, security control,
+capability claim or test obligation updates this file in the same change.
 
-| Req | Requirement | Architecture / ADR | Backlog | Tests | Evidence |
-|-----|-------------|--------------------|---------|-------|----------|
-| R-01 | Planner operations are performed primarily by a private Chromium/Playwright browser worker. | [architecture.md](architecture.md) §chain; ADR-0001 | P-001, P-018, P-019 | L4, L6 | bundle A2 |
-| R-02 | Microsoft Graph is contextual only and never gates functionality. | ADR-0002 | P-001, P-022 | L1, L3, L6 (Graph-disabled run) | bundle A2 |
-| R-03 | Exposure to ChatGPT is via the Cloudflare MCP Server Portal over a tunnel with zero inbound host ports. | [cloudflare-mcp-portal.md](cloudflare-mcp-portal.md); ADR-0003 | P-031..P-036 | L3, L6 | bundle A2, deployment record |
-| R-04 | The control plane speaks MCP over FastMCP Streamable HTTP. | [architecture.md](architecture.md); ADR-0004 | P-011, P-031 | L3 | ci |
-| R-05 | The browser worker is reachable only from the internal network. | [deployment.md](deployment.md) §2; ADR-0005 | P-018, P-061 | L6 (reachability assertion) | bundle A2 |
-| R-06 | Every mutation is verified by a UI read-back and fails on divergence. | [acceptance.md](acceptance.md) §5; ADR-0006 | P-026, P-027 | L1, L4, L6 | bundle A2, audit |
-| R-07 | Every mutating tool is idempotent under key replay. | [idempotency.md](idempotency.md); ADR-0007 | P-030 | L1, L3, L6 | bundle A2 |
-| R-08 | Every mutating tool supports `dry_run` with zero side effects. | [tool-catalog.md](tool-catalog.md) | P-014, P-027 | L3, L6 | bundle A2 |
-| R-09 | State is normalized before comparison. | [state-model.md](state-model.md) | P-025 | L1, L4 | ci |
-| R-10 | Drift is classified exhaustively and reported. | [reconciliation.md](reconciliation.md) | P-028, P-029 | L1, L6 | bundle A2, report |
+Evidence rules:
 
-## 3. Security and privacy requirements
+- mock evidence proves implementation behaviour, not live Planner capability;
+- live capability promotion requires browser/UI evidence;
+- no capability may be marked supported solely from Microsoft documentation or Graph availability;
+- no gate that failed to run may be recorded as PASS;
+- sensitive tenant content, credentials, cookies, tokens and raw session material are not evidence
+  artifacts suitable for the repository.
 
-| Req | Requirement | Architecture / ADR | Backlog | Tests | Evidence |
-|-----|-------------|--------------------|---------|-------|----------|
-| R-11 | No credential, PII, or business content appears in logs, metrics, traces, or reports. | [privacy-boundary.md](privacy-boundary.md); ADR-0008 | P-046, P-047 | L1 (detector), L6 | bundle A2 |
-| R-12 | Metrics labels are drawn from closed enumerations; cardinality is bounded. | [observability.md](observability.md) §4 | P-048, P-049 | L1, startup assertion | ci |
-| R-13 | The audit trail is append-only and hash-chained. | [observability.md](observability.md) §6; ADR-0009 | P-051, P-052 | L1, L6 (chain verify) | audit |
-| R-14 | MFA approval occurs only in Microsoft Authenticator. | [authentication-and-mfa.md](authentication-and-mfa.md); ADR-0010 | P-037, P-038 | L2, L6 | bundle A2 |
-| R-15 | The sanitized MFA event carries exactly five fields. | [hermes-integration.md](hermes-integration.md) §3 | P-037 | L2 (closed schema) | ci |
-| R-16 | Hermes is limited to notifications and HITL and cannot mutate Planner. | [hermes-integration.md](hermes-integration.md) | P-039..P-045 | L3, L6 | bundle A2 |
-| R-17 | HITL fails closed: no answer means no mutation. | [hermes-integration.md](hermes-integration.md) §4 | P-043 | L3 | ci |
-| R-18 | HITL responses are replay-protected. | [security.md](security.md) | P-044 | L1, L3 | ci |
-| R-19 | Secrets are file-mounted, never baked into images or logged. | [deployment.md](deployment.md) §8 | P-067 | L1, G8 lint | ci |
-| R-20 | Session profile material never leaves the worker volume. | [security.md](security.md); ADR-0011 | P-019, P-063 | L6 (mount assertions) | bundle A2 |
-| R-21 | Every request is authorized at the control plane independently of the Portal. | [cloudflare-mcp-portal.md](cloudflare-mcp-portal.md) §4 | P-014, P-032, P-035 | L3 (role matrix) | ci |
-| R-22 | Threat-model mitigations are implemented or explicitly accepted. | [threat-model.md](threat-model.md) | P-003, P-063..P-067 | review | governance log |
+## 2. Requirement namespaces and canonical sources
 
-## 4. Runtime and deployment requirements
+| Namespace | Canonical source | Primary concern |
+| --- | --- | --- |
+| `ARCH-*` | [`architecture.md`](architecture.md) | system boundaries, execution chain, control-plane/worker split |
+| `THR-*` | [`threat-model.md`](threat-model.md) | threats, abuse cases and mitigations |
+| `SEC-*` | [`security.md`](security.md) | security controls and fail-closed rules |
+| `GOV-*` | [`governance.md`](governance.md) | policy, approval and governance decisions |
+| `PRIV-*` | [`privacy-boundary.md`](privacy-boundary.md) | personal-device and data boundary |
+| `AUTH-*` | [`authentication-and-mfa.md`](authentication-and-mfa.md) | browser authentication, state machine and MFA |
+| `UI-*` | [`ui-contract.md`](ui-contract.md) | selector contract, evidence, attestation and drift |
+| `WORKER-*` | [`browser-worker.md`](browser-worker.md) | private browser-worker runtime and operation boundary |
+| `CAP-*` | [`planner-premium-capabilities.md`](planner-premium-capabilities.md) | evidence-driven Planner Premium capability state |
+| `TOOL-*` | [`tool-catalog.md`](tool-catalog.md) | semantic MCP tool contract and metadata |
 
-| Req | Requirement | Architecture / ADR | Backlog | Tests | Evidence |
-|-----|-------------|--------------------|---------|-------|----------|
-| R-23 | All containers run non-root with a read-only root filesystem. | [deployment.md](deployment.md) §4 | P-063 | G8 lint, L6 | ci, bundle A2 |
-| R-24 | All containers drop every capability and set `no-new-privileges`. | [deployment.md](deployment.md) §4 | P-063 | G8 lint | ci |
-| R-25 | Writable paths are explicit tmpfs or named volumes with size limits. | [deployment.md](deployment.md) §5 | P-063 | G8 lint | ci |
-| R-26 | No Docker socket or host home/root mounts anywhere. | [deployment.md](deployment.md) §4 | P-064 | G8 lint | ci |
-| R-27 | Only the loopback admin port is published on the host. | [deployment.md](deployment.md) §3 | P-062 | G8 lint, L6 | bundle A2 |
-| R-28 | All images and Dockerfile bases are digest-pinned; CI enforces it. | [deployment.md](deployment.md) §7 | P-065 | G8 lint | ci |
-| R-29 | An SBOM is produced and diffed per release. | [release-process.md](release-process.md) §6 | P-066 | G7 | SBOM artifact |
-| R-30 | The stack fails closed on invalid configuration. | [deployment.md](deployment.md) §9 | P-011, P-063 | L1, L6 | ci |
+A1.3 documents add detailed state, reconciliation, testing, deployment, observability, reporting and
+release obligations. They reference the canonical namespaces above and may define additional stable
+IDs where the document explicitly establishes them. IDs are never invented in this traceability file
+to make a coverage table appear complete.
 
-## 5. Quality and governance requirements
+## 3. Architectural decisions
 
-| Req | Requirement | Architecture / ADR | Backlog | Tests | Evidence |
-|-----|-------------|--------------------|---------|-------|----------|
-| R-31 | CI never mutates a live Planner tenant. | [testing.md](testing.md) §0; ADR-0012 | P-057, P-058 | G4 safety assertions | ci |
-| R-32 | Browser-level CI testing runs against a mock Planner UI. | [testing.md](testing.md) §5 | P-058, P-059 | L4 | ci |
-| R-33 | Every logical selector is attested structurally and semantically. | [testing.md](testing.md) §6 | P-060 | L5 A–C | attest |
-| R-34 | Live verification is manual and read-only initially. | [acceptance.md](acceptance.md) §6 | P-073 | L7 | attest, bundle A3 |
-| R-35 | Live support is never claimed without live browser evidence. | [release-process.md](release-process.md) §11 | P-074 | CI matrix gate | matrix |
-| R-36 | Isolated acceptance passes before every release. | [acceptance.md](acceptance.md) §4 | P-071 | L6 | bundle A2 |
-| R-37 | Evidence bundles are immutable and hash-verified. | [acceptance.md](acceptance.md) §3 | P-070 | L2, L6 | bundle manifest |
-| R-38 | Every PR references a backlog key and updates traceability. | [governance.md](governance.md) | P-010 | review | PR record |
-| R-39 | Reports never exceed the redaction boundary. | [reporting.md](reporting.md) | P-068, P-069 | L1, L6 | ci |
-| R-40 | Alerts exist for every failure mode that requires human action. | [observability.md](observability.md) §7 | P-053 | fault-injection drill | drill record |
+| ADR | Decision | Main specification | Primary backlog ownership |
+| --- | --- | --- | --- |
+| ADR-001 | Browser automation is the primary Planner implementation path | architecture, vision | P-011..P-017, P-025..P-030 |
+| ADR-002 | Control plane and browser worker are separate trust/runtime boundaries | architecture, browser-worker | P-007, P-011, P-064 |
+| ADR-003 | Reconciliation-first desired-state architecture | reconciliation, state-model | P-049..P-053 |
+| ADR-004 | MFA is human-in-loop and approval occurs only in Microsoft Authenticator | authentication-and-mfa | P-018..P-023 |
+| ADR-005 | `hermes-mcp-bridge` is a pattern baseline, not a fork or execution dependency | hermes-integration | cross-cutting foundation/governance |
+| ADR-006 | UIContract is centralized, versioned, attested and fail-closed on drift | ui-contract, browser-worker | P-014..P-017 |
+| ADR-007 | Dedicated professional browser profile preserves the personal-device privacy boundary | privacy-boundary, browser-worker | P-013, P-021, P-023, P-064 |
+| ADR-008 | Microsoft Graph API is a non-dependency and never a functional capability gate | architecture, capabilities | P-024 and all capability discovery |
+
+Only ADR-001..ADR-008 are canonical at A1 closure. A later ADR uses the next sequential identifier
+and must update this table.
+
+## 4. EPIC ↔ specification ↔ evidence map
+
+| EPIC | P-keys | Canonical specification | Minimum proving layers |
+| --- | --- | --- | --- |
+| EPIC-01 Foundation | P-001..P-010 | vision, architecture, threat-model, security, governance, contracts, state foundations | docs validation, compile, lint/type, unit/schema/contract, secret scan |
+| EPIC-02 Browser Worker / UI | P-011..P-017 | browser-worker, ui-contract, ADR-002, ADR-006, ADR-007 | unit/contract, mock UI, isolated browser, selector-attestation evidence |
+| EPIC-03 Authentication / MFA | P-018..P-024 | authentication-and-mfa, privacy-boundary, ADR-004, ADR-007, ADR-008 | auth-state tests, MFA/CA/enrolment fixtures, live operator evidence when applicable |
+| EPIC-04 Read Model | P-025..P-030 | tool-catalog, capabilities, state-model | schema/contract, mock UI, isolated acceptance, live read-only attestation for live claims |
+| EPIC-05 Mutations | P-031..P-036 | idempotency, governance, reconciliation, security | policy/approval/idempotency/lock/read-back tests; live mutation acceptance only in isolated test plan and later release |
+| EPIC-06 Scheduling / PM | P-037..P-045 | capabilities, reconciliation, state-model | semantic/unit tests, mock UI, capability-specific live evidence before promotion |
+| EPIC-07 Reconciliation / Blueprints | P-046..P-053 | reconciliation, idempotency, state-model | diff/plan/checkpoint/saga tests, dry-run evidence, isolated acceptance |
+| EPIC-08 Reporting / Portfolio | P-054..P-060 | reporting, capabilities, state-model | report-schema tests, freshness/provisional-state tests, telemetry hygiene |
+| EPIC-09 Security / Governance / Observability | P-061..P-067 | security, governance, observability, deployment | policy/approval tests, secret scan, Trivy, SBOM, container posture, audit reconstruction |
+| EPIC-10 Acceptance / Release | P-068..P-074 | testing, acceptance, release-process, definition-of-done, this file | complete CI, IA-01..IA-16, traceability/docs gates, post-merge evidence, live read-only evidence where claimed |
+
+## 5. 0.1.0 public contract traceability
+
+Release `0.1.0` is read-only. The public contract contains exactly 17 tools and every tool is
+classified `READ` in this release.
+
+| Capability group | Public tools | Primary P-keys | Evidence before release |
+| --- | --- | --- | --- |
+| Service/contract | `planner_health`, `planner_readiness`, `planner_agent_card` | P-004, P-005, P-007 | schema/contract + isolated smoke |
+| Capability/UI status | `planner_capabilities`, `planner_ui_contract_status`, `planner_license_capabilities` | P-014..P-017, P-024 | contract + mock evidence; live state remains unverified until live attestation |
+| Authentication state | `planner_auth_status`, `planner_auth_start`, `planner_auth_resume`, `planner_auth_session_info` | P-018..P-023 | auth-state/MFA/CA/enrolment tests; no credentials stored |
+| Plan reads | `planner_plan_list`, `planner_plan_get` | P-025, P-026 | schema + mock/isolated read evidence; live evidence for live claim |
+| Task reads | `planner_task_list`, `planner_task_get` | P-027 | schema + mock/isolated read evidence; live evidence for live claim |
+| Composite read | `planner_project_snapshot` | P-028..P-030 | consistent composite snapshot + stable hash evidence |
+| Context/smoke | `planner_account_context`, `planner_smoke_test` | P-024, P-069 | ambiguity/blocker tests + isolated smoke |
+
+P-031 and P-050 may supply internal safety/reconciliation infrastructure on the program critical
+path, but no public mutation or tenant `apply` operation is registered in 0.1.0. Their presence in
+code is not evidence of exposed write capability.
 
 ## 6. Critical-path traceability
 
-The critical path from [roadmap.md](roadmap.md), with the requirement each hop satisfies and the evidence that closes it.
+The canonical path is fixed by the backlog:
 
-| Order | Key | Requirement(s) | Deliverable | Closing evidence |
-|-------|-----|----------------|-------------|------------------|
-| 1 | P-001 | R-01, R-02 | Specification: browser-primary, Graph-contextual | Approved docs + ADR-0001/0002 |
-| 2 | P-011 | R-04, R-30 | FastMCP control plane bootstrap | ci (G1–G4) |
-| 3 | P-014 | R-08, R-21 | Policy layer: roles, read-only, dry-run | L3 role matrix |
-| 4 | P-018 | R-05 | Worker service, internal-only | L6 reachability assertion |
-| 5 | P-025 | R-09 | Normalized state model | L1 + L4 |
-| 6 | P-026 | R-06 | Read-back verifier | L4 + injected-mismatch scenario |
-| 7 | P-027 | R-06, R-08 | Mutation pipeline | bundle A2 |
-| 8 | P-030 | R-07 | Idempotency store and replay semantics | bundle A2 replay scenario |
-| 9 | P-031 | R-03 | Streamable HTTP + tunnel exposure | deployment record + smoke call |
-| 10 | P-050 | R-12, R-13 | Trace propagation across all hops | ci + bundle A2 traces |
-| 11 | P-069 | R-39, R-40 | Operational and drift reporting | report artifacts |
-| 12 | P-071 | R-36 | Isolated acceptance harness | bundle A2 |
-| 13 | P-073 | R-34 | Live read-only protocol | bundle A3 + attest (miss == 0) |
-| 14 | P-074 | R-35 | Capability matrix automation and gate | matrix + CI gate |
+`P-001 → P-011 → P-014 → P-018 → P-025 → P-026 → P-027 → P-030 → P-031 → P-050 → P-069 → P-071 → P-073 → P-074`
 
-Interpretation: hops 1–8 build a *trustworthy* mutation; hop 9 exposes it; hop 10 makes it explainable; hops 11–14 make claims about it provable. A claim of live support that skips hops 12–14 is invalid by construction.
+| Order | Key | Canonical meaning | Closing evidence |
+| ---: | --- | --- | --- |
+| 1 | P-001 | Repository, specification and CI foundation | canonical docs + validation evidence |
+| 2 | P-011 | FastAPI worker skeleton with typed operation envelope | schema/negative tests + private topology evidence |
+| 3 | P-014 | Centralized UIContract loader with attestation gating | contract tests + unattested refusal |
+| 4 | P-018 | Formal auth state machine | exhaustive transition tests |
+| 5 | P-025 | Plan/project list read | schema-valid deterministic read evidence |
+| 6 | P-026 | Plan/project detail read | schema-valid detail read evidence |
+| 7 | P-027 | Task list and task detail reads | normalized task-read evidence |
+| 8 | P-030 | Project snapshot with stable hash | repeat-read hash equality |
+| 9 | P-031 | Mutation framework safety boundary | policy/approval/idempotency/lock/read-back framework tests; not a 0.1 write claim |
+| 10 | P-050 | Desired-state reconciliation engine | deterministic diff/checkpoint/mock execution evidence; live apply disabled in 0.1 |
+| 11 | P-069 | Isolated acceptance IA-01..IA-16 | acceptance evidence bundle |
+| 12 | P-071 | Traceability matrix closure | zero orphan requirement/test mapping gate |
+| 13 | P-073 | Release process and gates | release workflow/gate evidence |
+| 14 | P-074 | `0.1.0` release | exact-SHA release evidence, SBOMs, known blockers, truthful capability matrix |
 
-## 7. Epic ↔ requirement coverage
+## 7. Security/privacy control traceability
 
-| Epic | Backlog | Requirements covered |
-|------|---------|----------------------|
-| EPIC-01 | P-001..P-010 | R-01, R-02, R-22, R-38 |
-| EPIC-02 | P-011..P-017 | R-04, R-08, R-21, R-30 |
-| EPIC-03 | P-018..P-024 | R-05, R-20 |
-| EPIC-04 | P-025..P-030 | R-06, R-07, R-09, R-10 |
-| EPIC-05 | P-031..P-036 | R-03, R-21 |
-| EPIC-06 | P-037..P-045 | R-14..R-18 |
-| EPIC-07 | P-046..P-053 | R-11, R-12, R-13, R-40 |
-| EPIC-08 | P-054..P-060 | R-31, R-32, R-33 |
-| EPIC-09 | P-061..P-067 | R-19, R-23..R-30 |
-| EPIC-10 | P-068..P-074 | R-34..R-37, R-39 |
+| Control objective | Sources / ADRs | Backlog | Required proof |
+| --- | --- | --- | --- |
+| No generic browser primitives exposed | architecture, browser-worker, tool-catalog; ADR-001/002 | P-007, P-011 | registry/schema negative tests |
+| No Intune/MDM/Entra-device enrolment or compliance spoofing | privacy-boundary, security; ADR-007 | P-013, P-021, P-023, P-064 | refusal fixtures + static/runtime posture checks |
+| Password/tokens/cookies are not system data | authentication-and-mfa, privacy-boundary | P-018..P-024, P-063 | schema/storage/log negative tests |
+| MFA approval only in Microsoft Authenticator | authentication-and-mfa; ADR-004 | P-020 | MFA fixture + event-schema test |
+| UI drift fails closed | ui-contract; ADR-006 | P-014..P-017 | drift fixture + zero mutation after mismatch |
+| Policy fails closed | governance, security | P-031, P-061 | invalid/missing policy denial tests |
+| Approval is persistent, single-use and bound to the exact operation | governance | P-062 | replay/change/expiry negative tests |
+| Mutation retry never occurs blindly | idempotency, reconciliation | P-031, P-066 | timeout/read-back/unknown-outcome tests |
+| Container boundary is hardened | deployment, privacy-boundary | P-064 | non-root/read-only/cap-drop/no-new-privileges/no-host-mount checks |
+| Supply chain is evidenced | deployment, release-process | P-065, P-068 | Trivy, real digest pinning, CycloneDX SBOM validation |
+| Telemetry is redacted and low-cardinality | observability, security | P-008, P-009, P-063 | adversarial redaction + metric-label tests |
 
-Every requirement maps to at least one epic, and every epic carries at least one requirement; a gap in either direction is a governance defect and blocks the release.
+## 8. Capability claim traceability
 
-## 8. Verification of this document
+A capability state advances only when the evidence required by
+[`planner-premium-capabilities.md`](planner-premium-capabilities.md) exists.
 
-| Check | Mechanism |
-|-------|-----------|
-| Every P-key referenced here exists in the backlog | CI script |
-| Every backlog key appears in at least one row of §2–§5 or §7 | CI script |
-| Every relative doc link resolves | link checker (G2) |
-| Every evidence type referenced is produced by a real gate | review at G10 |
-| Critical path here matches the roadmap | CI string comparison |
+| State | Minimum meaning |
+| --- | --- |
+| `UNVERIFIED_LIVE` | specified only; no tenant evidence |
+| `DISCOVERED` | observed in the real tenant/UI |
+| `READ_ATTESTED` | read path and UIContract evidence validated |
+| `MUTATION_ATTESTED` | governed mutation and read-back validated in an authorized isolated plan |
+| `SUPPORTED` | all product, security, UIContract, evidence and release gates for that capability pass |
+| `DEGRADED` | capability remains bounded but an expected dependency/condition is degraded |
+| `UI_DRIFT` | contract mismatch; fail closed until re-attested |
+| `BLOCKED_CONDITIONAL_ACCESS` | tenant policy requires an unacceptable/unsupported device condition |
 
-## 9. Coverage gaps and accepted risks
+Microsoft Graph availability is not an evidence column and never promotes or blocks these states.
 
-| Gap | Requirement affected | Status | Owner action |
-|-----|----------------------|--------|--------------|
-| Live mutating acceptance is manual only | R-06, R-34 | accepted | Documented in [roadmap.md](roadmap.md) §12; no automation planned |
-| Real Planner DOM may change without notice | R-33 | mitigated | Selector drift report + freeze procedure |
-| Single browser profile is a single point of failure | R-01 | accepted | Documented capacity limit; re-auth runbook |
-| Graph schema drift | R-02 | low impact | Contextual only; degrades to `available=false` |
-| Attachment handling not implemented | — | out of scope | Deferred post-v1 |
+## 9. Release evidence mapping
 
-Accepted risks carry an owner and are re-reviewed at each epic closure; an accepted risk that gains a viable mitigation becomes a backlog item rather than remaining accepted.
+| Release concern | Backlog owner | Evidence |
+| --- | --- | --- |
+| Complete CI | P-068 | exact-SHA workflow/check results |
+| Isolated acceptance | P-069 | IA-01..IA-16 result bundle |
+| Live read-only protocol | P-070 | sanitized operator record or explicit blocker |
+| Traceability closure | P-071 | traceability validator output |
+| Documentation completeness | P-072 | docs validator output with `errors=0`, `warnings=0` |
+| Release gates | P-073 | release gate record + post-merge verification |
+| 0.1.0 release | P-074 | tag/release, SBOMs, image digests, capability matrix, known blockers |
 
-## 10. How to use this document
+If GitHub Actions or another required external gate is unavailable, the evidence state is
+`BLOCKED/UNAVAILABLE`, not PASS, and merge/release waits for restoration.
 
-| Question | Where to look |
-|----------|---------------|
-| "Why does this module exist?" | Find the P-key in §2–§5; read the requirement. |
-| "What proves this works?" | Read the Evidence column, then open the referenced bundle or CI artifact. |
-| "Can we claim capability X?" | Check the capability matrix status and the bundle level (A2 vs A3/A4). |
-| "What breaks if we delay item Y?" | Check §6; if Y is on the critical path, the release slips one-for-one. |
-| "Is requirement Z covered?" | Every requirement in §2–§5 has at least one test layer and one evidence type; an empty cell is a defect. |
-| "Which epic owns this?" | §7 maps epics to requirements bidirectionally. |
+## 10. Change discipline
 
-## 11. Change log discipline
-
-Each modification to this table records, in the PR description: the requirement ids touched, whether coverage increased or decreased, and the evidence artifact that justifies any new `pass` claim. Coverage may never decrease silently — a removed test mapping requires either a replacement mapping or an explicit governance-approved risk acceptance added to §9.
+Any new requirement discussed during development must end up in the repository as a requirement ID
+and/or canonical documentation, backlog ownership, implementation, tests and release evidence as
+appropriate. Architectural decisions receive an ADR; capability additions update the capability
+matrix and backlog; security controls update the threat/security model plus tests. Important product
+knowledge must not exist only in chat history.

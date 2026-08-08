@@ -1,166 +1,330 @@
-# Release Process
+# Planner MCP Release Process
 
-Scope: the gate sequence a change must pass to reach `main` and then a tagged release of `pestoura/planner-mcp`. Companions: [testing.md](testing.md), [acceptance.md](acceptance.md), [deployment.md](deployment.md), [governance.md](governance.md), [traceability.md](traceability.md), [definition-of-done.md](definition-of-done.md).
+This document defines the blocking path from an atomic feature branch to `main` and from `main` to a
+versioned Planner MCP release. It is normative and must be read with
+[`testing.md`](testing.md), [`acceptance.md`](acceptance.md),
+[`deployment.md`](deployment.md), [`traceability.md`](traceability.md) and
+[`definition-of-done.md`](definition-of-done.md).
 
-Two absolute rules:
+## 1. Absolute release rules
 
-1. **CI never mutates a live Planner tenant.** Every automated gate runs against the mock UI.
-2. **No release note, README line, capability matrix row, or tool description may claim live Planner support without a live browser-evidenced attestation.** Mock-UI evidence proves logic, not reality.
+1. **Merge only on GREEN/PASS.** A required gate that fails, is cancelled, is skipped unexpectedly,
+   or cannot run because an external service is unavailable is not green.
+2. **CI never performs a mutation against a live Planner tenant.** Browser-level CI uses the mock
+   Planner UI and isolated environments only.
+3. **Release 0.1.0 exposes only the canonical 17 `READ` tools.** Internal mutation/reconciliation
+   safety infrastructure may exist but no public mutation tool or tenant `apply` path is enabled.
+4. **No live capability claim without live browser evidence.** Mock evidence proves logic, not the
+   Microsoft Planner Premium UI in the target tenant.
+5. **No invented image digest.** Base-image digest pinning is resolved only from a real registry
+   digest and recorded as evidence. Until then `BLOCKER_IMAGE_DIGEST_PINNING` remains open.
+6. **Security/privacy boundaries fail closed.** Conditional Access, UI drift, invalid policy,
+   ambiguous identity/session or an unsafe personal-device path stop the affected operation.
+7. **Post-merge verification is mandatory.** A green PR head does not replace verification of the
+   exact merge commit on `main`.
 
-## 1. Gate sequence
+## 2. Git workflow
 
-| # | Gate | Trigger | Blocking | Evidence |
-|---|------|---------|----------|----------|
-| G1 | Compile / import | every push | yes | build log |
-| G2 | Lint / format / link check | every push | yes | lint report |
-| G3 | Type check | every push | yes | type report |
-| G4 | Unit + schema + contract tests | every push | yes | junit + coverage |
-| G5 | Mock-UI tests + selector attestation (A/B/C) | every PR | yes | junit + attestation JSON |
-| G6 | Security scanning | every PR | yes | scanner report |
-| G7 | SBOM generation + diff | every PR | yes | SBOM artifact |
-| G8 | Compose / digest lint | every PR touching deploy | yes | lint report |
-| G9 | Isolated acceptance (A2) | nightly + pre-release | yes for release | evidence bundle |
-| G10 | PR review + traceability | before merge | yes | review record |
-| G11 | Post-merge verification | after merge to main | yes | main pipeline + deploy smoke |
-| G12 | Live read-only attestation (A3) | before any live-support claim | yes for such claims | attestation + bundle |
+```text
+main
+  ↓
+feat/<atomic-block>
+  ↓
+implement
+  ↓
+local/static validation where available
+  ↓
+PR
+  ↓
+required CI/security/acceptance gates
+  ↓
+GREEN/PASS only
+  ↓
+merge
+  ↓
+post-merge verification on exact main SHA
+  ↓
+next block
+```
 
-A gate is either green or the change does not advance. There is no "warn" state, and a gate that did not run is reported as *unavailable with a reason* — never as passed.
+No normal development is committed directly to `main`. Implementation continues automatically while
+all applicable gates are green; only a real blocker interrupts the loop.
 
-## 2. G1–G3 — Compile, lint, type
+## 3. Required gate model
 
-| Check | Tool class | Failure policy |
-|-------|-----------|----------------|
-| Import graph loads without side effects | build step | fail |
-| Formatting | formatter `--check` | fail; no auto-fix commits on protected branches |
-| Lint | project ruleset; per-file ignores require an inline justification | fail |
-| Types | strict mode; `Any` escapes require an inline justification | fail |
-| Dead code / unused dependencies | analyzer | fail |
-| Documentation links | relative-link checker across `docs/` | fail |
+### G0 — Canonical documentation and traceability
 
-## 3. G4 — Unit, schema, contract
+Blocking checks:
 
-Runs layers L1–L3 of [testing.md](testing.md). Thresholds: 100 % pass; control-plane coverage ≥ 90 % lines / 85 % branches; worker logic ≥ 85 %; redaction suite green with **zero skips**; schema backward-compatibility check against the previous release.
+- `scripts/check_docs.py` completes with `errors = 0` and `warnings = 0`;
+- every canonical A1/A1.3 document exists;
+- ADR-001..ADR-008 use the canonical names/decisions;
+- no legacy/parallel ADR numbering is referenced;
+- `docs/backlog.md` contains exactly P-001..P-074 and EPIC-01..EPIC-10 with zero-padded keys;
+- relative documentation links resolve;
+- requirement references resolve to their definitions;
+- capability documentation contains no unsupported live claim.
 
-Additional CI-safety assertions executed here, not optional:
+Primary backlog ownership: P-001, P-071, P-072.
 
-| Assertion | Failure meaning |
-|-----------|-----------------|
-| `PLANNER_ENV=ci` enforced | A job could otherwise run in live mode |
-| No Planner secret names present in the environment | Credentials leaked into CI scope |
-| Navigation allowlist resolves to loopback only | A test could reach the internet |
-| Static grep for live Planner/login hostnames outside `docs/` and the allowlist module | Hard-coded live target |
-| Egress denied except loopback and the package proxy | Network isolation broken |
+### G1 — Compile, lint and typing
 
-## 4. G5 — Mock UI and selector attestation
+Blocking checks:
 
-Playwright suites against the local mock Planner UI, plus selector attestation sub-layers A (registry integrity), B (mock resolution) and C (semantic assertion). Requirements: 100 % pass, retries disabled, zero flakes across three consecutive scheduled runs, and no raw selector strings outside the registry.
+- `python -m compileall -q src tests`;
+- `ruff check .`;
+- `mypy --strict src`;
+- import/package sanity checks.
 
-The pipeline summary must contain, verbatim: *"Mock-UI evidence; does not constitute live Planner verification."* This prevents the artifact from being misread later as live proof.
+Primary backlog ownership: P-002, P-068.
 
-## 5. G6 — Security
+### G2 — Unit, schema and contract validation
 
-| Check | Blocking condition |
-|-------|--------------------|
-| Dependency vulnerability scan | any critical, or high without an approved dated exception |
-| Secret scanning (repo + diff) | any finding |
-| Static analysis (security rules) | any high-confidence finding |
-| Container image scan | any critical |
-| Hardening assertions | any prohibited compose construct |
-| Redaction detector over fixture logs | any finding |
+Blocking checks:
 
-Exceptions are recorded in the governance log with an owner and an expiry date; an expired exception fails the gate automatically.
+- `pytest` unit/integration suites;
+- JSON Schema validation;
+- MCP tool-contract validation;
+- manifest completeness and version consistency;
+- 0.1.0 read-only contract assertion: exactly 17 canonical tools and no registered mutation tool;
+- policy/default-deny, auth-state, redaction, UIContract and idempotency invariants.
 
-## 6. G7 — SBOM
+Primary backlog ownership: P-004, P-005, P-061..P-063, P-068.
 
-An SBOM is generated for each image and for the Python environment, attached as a build artifact, and diffed against the previous release. Unexpected package additions, a license change into a disallowed class, or a package without a corresponding lockfile entry block the release. The SBOM digest is recorded in the release record and in the acceptance bundle's `environment.json`.
+### G3 — Mock UI and isolated browser validation
 
-## 7. G8 — Compose and digest lint
+Blocking checks:
 
-Enforces [deployment.md](deployment.md): every `image:` and `FROM` pinned by `@sha256:`; no `:latest`; no Docker socket, host `$HOME` or `/` mounts; no `privileged`; no `network_mode: host`; `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges` and a non-root user on every service; no host publication other than the loopback admin port; `worker-net` declared `internal: true`; tmpfs entries present with size limits; secrets referenced as files.
+- browser tests execute against the deterministic local mock Planner UI;
+- login/MFA/session-expiry/Conditional-Access/enrolment/UI-drift fixtures are exercised;
+- no live-tenant hostname/credential is available to the CI job;
+- UIContract tests prove unattested/drifted fragments fail closed;
+- isolated browser acceptance completes without external Planner mutation.
 
-## 8. G9 — Isolated acceptance (A2)
+Primary backlog ownership: P-014..P-017, P-018..P-024, P-069.
 
-Full compose stack with the mock UI, per the procedure in [acceptance.md](acceptance.md). Produces an evidence bundle whose manifest maps every global acceptance criterion to `pass`, `fail`, or a justified `not_applicable`. The release blocks unless every criterion resolves.
+### G4 — Secret and dependency security
 
-Runs nightly on `main` and mandatorily on the release-candidate commit. A bundle is bound to a git sha; a bundle from a different sha is never accepted as evidence.
+Blocking checks:
 
-## 9. G10 — PR review
+- repository/diff secret scanning;
+- filesystem secret-pattern scanning where configured;
+- dependency vulnerability scanning;
+- security/static checks required by the repository baseline;
+- no password, access token, refresh token, cookie, auth header, browser-session secret or tenant
+  content is present in source, fixtures, logs or committed evidence.
 
-| Requirement | Detail |
-|-------------|--------|
-| Scope | One logical change; refactors separated from behaviour changes |
-| Backlog linkage | PR references at least one existing P-key |
-| Traceability | [traceability.md](traceability.md) updated when a requirement, ADR, or test mapping changes |
-| ADR | Any architectural decision carries an ADR in the same PR |
-| Docs | Behaviour changes update the relevant document in the same PR |
-| Evidence claims | Any capability-status upgrade cites a bundle id |
-| Reviewer | At least one reviewer who did not author the change |
-| Checklist | The [definition-of-done.md](definition-of-done.md) Level 0 checklist is completed in the PR body |
+Primary backlog ownership: P-063, P-065, P-068.
 
-## 10. G11 — Post-merge
+### G5 — Container build and hardening
 
-On merge to `main`: full pipeline re-run on the merge commit (not merely the PR head), image build and push by digest, nightly isolated acceptance scheduled, deploy to the operator host by digest, health checks, a read-only smoke tool call through the Portal, and recording of the running digests in the deployment log. Failure at any step triggers rollback to the previous digests per [deployment.md](deployment.md).
+Build both production images:
 
-## 11. G12 — Live read-only attestation
+- control plane;
+- browser worker.
 
-Required **only** when a change would upgrade a capability status to `live-read-verified` or higher, or when the release notes would describe live Planner behaviour.
+Blocking posture checks include:
 
-| Step | Requirement |
-|------|-------------|
-| Precondition | G1–G11 green on the exact release-candidate sha |
-| Mode | `PLANNER_MODE=read_only`; mutating handlers not registered at all |
-| Operator | A named human present for the whole session |
-| Output | Selector attestation with `miss == 0`, redacted logs, sanitized screenshots |
-| Verification | Audit export shows zero mutating operations |
-| Recording | Bundle id referenced by every capability row it upgrades |
+- non-root runtime;
+- read-only root filesystem where supported by the runtime design;
+- `cap_drop: ALL`;
+- `no-new-privileges`;
+- explicit tmpfs/state/profile volumes only;
+- no Docker socket;
+- no host home or personal credential mounts;
+- browser-worker network private/internal and no published worker port;
+- control-plane exposure constrained to the documented ingress model;
+- every required base image pinned by a **real** `@sha256:` digest.
 
-If G12 has not been run, the release notes must state, verbatim: *"Verified against the mock Planner UI only; live Planner support is not claimed."*
+Primary backlog ownership: P-064, P-065.
 
-## 12. Versioning and release artifacts
+### G6 — Trivy and supply-chain evidence
 
-Semantic versioning. Major on any breaking tool-schema or audit-schema change; minor on new tools or capability upgrades; patch on fixes with no contract change.
+Blocking checks:
 
-| Artifact | Content |
-|----------|---------|
-| Git tag | `vX.Y.Z`, signed |
-| Release notes | Changes, backlog keys, capability-matrix delta, evidence bundle ids, explicit live-support statement |
-| Images | Pushed by digest; digests listed in the notes |
-| SBOMs | Attached |
-| Evidence bundles | A2 (mandatory), A3 (when applicable) |
-| Deployment record | Digests, compose hash, deployed-at timestamp |
+- Trivy filesystem scan;
+- Trivy scan of the control-plane image;
+- Trivy scan of the browser-worker image;
+- HIGH and CRITICAL findings fail unless an explicitly approved, dated baseline/exception applies;
+- `ignore-unfixed` may be used only according to the approved repository baseline, never to hide a
+  fixed exploitable issue;
+- CycloneDX SBOM generated for control plane;
+- CycloneDX SBOM generated for browser worker;
+- SBOM validation confirms valid format and non-empty component sets;
+- SBOMs are retained as release evidence.
 
-## 13. Rollback
+Primary backlog ownership: P-065, P-068.
 
-| Trigger | Action |
-|---------|--------|
-| Post-deploy health failure | Redeploy previous digests, verify health, record |
-| Read-back mismatch surge | Set `PLANNER_MODE=read_only` immediately, then roll back |
-| Selector drift | Freeze mutating tools, attest, patch the registry, re-accept |
-| Security finding in a shipped image | Roll back, patch, re-run G6–G9 |
-| Audit chain anomaly | Stop the stack, preserve volumes, open an incident |
+### G7 — Isolated acceptance
 
-State volumes are backward-compatible within a minor version; a major version documents its migration and the reverse procedure.
+Run IA-01..IA-16 against the isolated/mock stack defined by
+[`acceptance.md`](acceptance.md). The suite must prove normal and fail-closed paths, including at
+least UI drift, Conditional Access, enrolment refusal, MFA detection, policy denial, approval
+replay protection, timeout/read-back behaviour, container posture and telemetry hygiene.
 
-## 14. Hotfix path
+No live Planner mutation is allowed. The evidence bundle is bound to the exact git SHA.
 
-Hotfixes follow the same gates with two compressions: G9 may run a reduced scenario subset covering the affected area plus the full read-back and idempotency scenarios, and G12 is skipped only when the hotfix makes no live-support claim. Nothing else may be skipped; G6 and G8 are never waived.
+Primary backlog ownership: P-069.
 
-## 15. Communication rules
+### G8 — PR review and merge gate
 
-- Never present an unverified capability as supported.
-- Never mark a gate "passed" that did not run; report it as unavailable with the reason.
-- A blocker in the release notes is preferable to a false claim in the documentation.
-- Every claim in the notes cites an artifact id; claims without artifacts are removed during review.
-- Known limitations are listed explicitly, including deferred items from [roadmap.md](roadmap.md) §12.
+Before merge:
 
-## 16. Backlog mapping
+- the PR references the relevant P-key(s);
+- scope is atomic;
+- affected documentation and traceability are updated;
+- architectural changes include an ADR;
+- no security control is weakened silently;
+- capability status upgrades cite valid evidence;
+- all required G0..G7 gates are GREEN/PASS on the exact PR head;
+- known unavailable/non-applicable gates are explicitly distinguished; a required unavailable gate
+  blocks merge.
 
-| Gate cluster | Backlog keys |
-|--------------|--------------|
-| G1–G4 pipeline | P-054, P-055, P-056 |
-| G5 mock UI + attestation | P-058, P-059, P-060 |
-| G6–G7 security + SBOM | P-065, P-066 |
-| G8 compose lint | P-063, P-064 |
-| G9 isolated acceptance | P-071, P-072 |
-| G10–G11 review + post-merge | P-010, P-070 |
-| G12 live read-only | P-073, P-074 |
+Primary backlog ownership: P-071..P-073.
+
+### G9 — Post-merge verification
+
+After merge to `main`:
+
+- rerun all applicable required checks on the exact merge SHA;
+- verify `main` points to the intended merge commit;
+- verify package/contracts/tool catalogue again;
+- rebuild/re-scan images as required by the workflow;
+- retain exact-SHA evidence;
+- for deployment candidates, perform health/readiness and read-only smoke validation through the
+  supported ingress path.
+
+Failure means the block is not closed. Correct or revert; do not continue as though the merge were
+healthy.
+
+Primary backlog ownership: P-068, P-073.
+
+### G10 — Live read-only acceptance
+
+Required before any release note or capability matrix row claims real Planner Premium read support.
+
+Conditions:
+
+- operator-controlled session;
+- read-only mode;
+- no registered mutation tool;
+- UIContract observation/attestation against the target tenant;
+- sanitized evidence only;
+- zero mutation audit evidence;
+- missing/unsupported tenant capability remains `UNVERIFIED_LIVE`, `DISCOVERED`, `DEGRADED`,
+  `UI_DRIFT` or `BLOCKED_CONDITIONAL_ACCESS` as evidence dictates; never promoted by assumption.
+
+Primary backlog ownership: P-070, P-074.
+
+Live mutation acceptance is not part of 0.1.0. When introduced later it runs only in an isolated test
+plan specifically created for destructive/safe-write validation, never in production plans.
+
+## 4. CI target inventory
+
+The target GitHub Actions pipeline contains, at minimum:
+
+- compile;
+- ruff;
+- mypy;
+- pytest;
+- contract validation;
+- docs validation;
+- mock UI acceptance;
+- isolated acceptance;
+- container build — control plane;
+- container build — browser worker;
+- secret scanning;
+- dependency scanning;
+- Trivy filesystem;
+- Trivy images;
+- SBOM control plane;
+- SBOM browser worker;
+- SBOM validation;
+- release evidence publication.
+
+A missing target gate is backlog work, not evidence that the requirement passed.
+
+## 5. Branch protection target
+
+`main` should require PR-based changes and the repository's blocking CI checks once those checks are
+stable and runnable. Protection must not be configured to create an impossible merge deadlock while
+required checks do not yet exist, but the release process itself still forbids merging a block whose
+required gates are not green.
+
+When GitHub Actions is unavailable because of billing, account, platform or quota state, the correct
+status is `BLOCKED_EXTERNAL_CI`. The solution is restoration of the external prerequisite — never a
+manual reinterpretation of red/skipped checks as PASS.
+
+## 6. 0.1.0 release gate
+
+P-074 may close and tag `v0.1.0` only when:
+
+- G0..G9 are green on the release candidate and merge SHA as applicable;
+- the public registry contains exactly the canonical 17 read-only tools;
+- all capability states are truthful and evidence-backed;
+- any live read claim has G10 evidence; otherwise the release explicitly states that live Planner
+  support has not yet been attested;
+- `BLOCKER_IMAGE_DIGEST_PINNING` is resolved with real registry digests for required production
+  images;
+- both image SBOMs are valid CycloneDX and retained;
+- HIGH/CRITICAL Trivy policy is satisfied;
+- known blockers/limitations are documented;
+- rollback/runbook information is present for any deployed candidate.
+
+## 7. Versioning
+
+- product version, schema version, contract version, capability-manifest version and UIContract
+  version are independently explicit;
+- `0.1.0` establishes the initial read-only product contract;
+- backward-incompatible MCP/schema changes require the appropriate semantic-version change;
+- capability attestation changes do not silently change contract semantics;
+- a UIContract change is versioned and re-attested for affected fragments.
+
+## 8. Release artifacts
+
+A production-candidate release record includes as applicable:
+
+- git tag and exact commit SHA;
+- PR/merge references and P-keys;
+- gate results;
+- container image digests;
+- control-plane CycloneDX SBOM;
+- browser-worker CycloneDX SBOM;
+- vulnerability/security scan summaries;
+- isolated acceptance evidence;
+- live read-only evidence or an explicit statement that live support is not claimed;
+- capability matrix state/delta;
+- known blockers and accepted limitations;
+- deployment/rollback evidence when deployed.
+
+Evidence must not contain credentials, tokens, cookies, raw browser profile material or unnecessary
+tenant/business content.
+
+## 9. Failure and rollback
+
+| Failure | Required response |
+| --- | --- |
+| CI/security gate fails | diagnose, correct and rerun; no merge |
+| Required gate cannot run | mark blocked/unavailable; no merge/release |
+| UIContract mismatch | `UI_DRIFT`, freeze affected capability, re-attest |
+| Conditional Access requires managed/compliant device | `BLOCKER_CONDITIONAL_ACCESS`; no bypass |
+| Unknown mutation outcome in later releases | read-back; if unverifiable, `UNKNOWN_OUTCOME`, no blind retry |
+| Post-merge verification fails | correct or revert exact merge; block next dependent step |
+| Vulnerable shipped image | roll back/pin corrected image, rebuild, rescan, regenerate SBOM/evidence |
+| Audit/evidence integrity failure | stop affected release/deployment and preserve evidence for investigation |
+
+## 10. Backlog ownership
+
+| Release concern | Canonical P-key(s) |
+| --- | --- |
+| CI pipeline complete | P-068 |
+| Isolated acceptance IA-01..IA-16 | P-069 |
+| Live read-only acceptance procedure | P-070 |
+| Traceability matrix closure | P-071 |
+| Documentation completeness gate | P-072 |
+| Release process and gates | P-073 |
+| 0.1.0 release | P-074 |
+| Container hardening | P-064 |
+| SBOM/vulnerability/digest gates | P-065 |
+
+This mapping must remain consistent with [`backlog.md`](backlog.md).
