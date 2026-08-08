@@ -1,9 +1,10 @@
-"""Cross-application saga/checkpoint lifecycle for CORE-040.
+"""Cross-application saga/checkpoint lifecycle for CORE-040/CORE-042.
 
 The lifecycle binds checkpoints to semantic application/node identity,
 CORE-037 state identity, CORE-038 idempotency keys and CORE-039 lock keys.
 Only digests and bounded metadata are projected; tenant content is not stored.
-Compensation strategy belongs to CORE-041 and INDETERMINATE belongs to CORE-042.
+CORE-042 adds INDETERMINATE for mutations whose resulting Microsoft state
+cannot be proven. Compensation strategy remains owned by CORE-041.
 """
 
 from __future__ import annotations
@@ -19,19 +20,21 @@ from m365_mcp.typed_locks import TypedLock, canonical_lock_order
 
 
 class ExecutionLifecycleState(StrEnum):
-    """Closed lifecycle states before compensation/indeterminate extensions."""
+    """Closed cross-application execution lifecycle states."""
 
     PLANNED = "PLANNED"
     ACTIVE = "ACTIVE"
     CHECKPOINTED = "CHECKPOINTED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    INDETERMINATE = "INDETERMINATE"
 
 
 _TERMINAL_STATES = frozenset(
     {
         ExecutionLifecycleState.COMPLETED,
         ExecutionLifecycleState.FAILED,
+        ExecutionLifecycleState.INDETERMINATE,
     }
 )
 
@@ -47,6 +50,7 @@ _ALLOWED_TRANSITIONS: dict[ExecutionLifecycleState, frozenset[ExecutionLifecycle
             ExecutionLifecycleState.CHECKPOINTED,
             ExecutionLifecycleState.COMPLETED,
             ExecutionLifecycleState.FAILED,
+            ExecutionLifecycleState.INDETERMINATE,
         }
     ),
     ExecutionLifecycleState.CHECKPOINTED: frozenset(
@@ -55,10 +59,12 @@ _ALLOWED_TRANSITIONS: dict[ExecutionLifecycleState, frozenset[ExecutionLifecycle
             ExecutionLifecycleState.CHECKPOINTED,
             ExecutionLifecycleState.COMPLETED,
             ExecutionLifecycleState.FAILED,
+            ExecutionLifecycleState.INDETERMINATE,
         }
     ),
     ExecutionLifecycleState.COMPLETED: frozenset(),
     ExecutionLifecycleState.FAILED: frozenset(),
+    ExecutionLifecycleState.INDETERMINATE: frozenset(),
 }
 
 
@@ -94,6 +100,7 @@ class ExecutionCheckpoint:
     lock_keys: tuple[str, ...]
     state_identity_digest: str | None = None
     result_digest: str | None = None
+    uncertainty_code: str | None = None
 
     def __post_init__(self) -> None:
         _validate_digest(self.saga_id_digest, field_name="saga_id_digest")
@@ -112,10 +119,18 @@ class ExecutionCheckpoint:
             )
         if self.result_digest is not None:
             _validate_digest(self.result_digest, field_name="result_digest")
-        if self.state is ExecutionLifecycleState.COMPLETED and self.result_digest is None:
-            raise ValueError("completed checkpoint requires result_digest")
-        if self.state is not ExecutionLifecycleState.COMPLETED and self.result_digest is not None:
+        if self.state is ExecutionLifecycleState.COMPLETED:
+            if self.result_digest is None:
+                raise ValueError("completed checkpoint requires result_digest")
+        elif self.result_digest is not None:
             raise ValueError("only completed checkpoint may carry result_digest")
+
+        if self.state is ExecutionLifecycleState.INDETERMINATE:
+            if self.uncertainty_code is None:
+                raise ValueError("indeterminate checkpoint requires uncertainty_code")
+            _semantic_token(self.uncertainty_code, field_name="uncertainty_code")
+        elif self.uncertainty_code is not None:
+            raise ValueError("only indeterminate checkpoint may carry uncertainty_code")
 
     @property
     def terminal(self) -> bool:
@@ -136,6 +151,8 @@ class ExecutionCheckpoint:
             payload["state_identity_digest"] = self.state_identity_digest
         if self.result_digest is not None:
             payload["result_digest"] = self.result_digest
+        if self.uncertainty_code is not None:
+            payload["uncertainty_code"] = self.uncertainty_code
         encoded = json.dumps(
             payload,
             sort_keys=True,
@@ -179,6 +196,7 @@ def transition_checkpoint(
     next_state: ExecutionLifecycleState,
     *,
     result_digest: str | None = None,
+    uncertainty_code: str | None = None,
 ) -> ExecutionCheckpoint:
     """Advance one checkpoint monotonically through the closed lifecycle."""
     if next_state not in _ALLOWED_TRANSITIONS[checkpoint.state]:
@@ -190,6 +208,7 @@ def transition_checkpoint(
         checkpoint_index=checkpoint.checkpoint_index + 1,
         state=next_state,
         result_digest=result_digest,
+        uncertainty_code=uncertainty_code,
     )
 
 
