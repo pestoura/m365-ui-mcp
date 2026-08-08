@@ -27,7 +27,7 @@ def _definition(name: str, mutation_class: MutationClass) -> ToolDefinition:
         input_schema={"type": "object", "properties": {}, "additionalProperties": False},
         output_schema={"type": "object", "properties": {}},
         mutation_class=mutation_class,
-        risk_class="TEST",
+        risk_class="READ_ONLY",
         implementation_state=ImplementationState.SPECIFIED_ONLY,
         capability_keys=("test.capability",),
         ui_contract_dependencies=(),
