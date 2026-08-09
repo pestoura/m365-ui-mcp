@@ -48,17 +48,27 @@ def test_default_registry_preserves_planner_capability_order_and_scope() -> None
     assert {item.container_scope for item in definitions} == {"account", "plan"}
 
 
-def test_outlook_discovery_capabilities_are_declared_without_execution_promotion() -> None:
+def test_outlook_discovery_capabilities_are_reserved_without_execution_promotion() -> None:
     capabilities = capability_registry.default_capability_registry()
-    definitions = capabilities.by_application("outlook")
+    active = capabilities.by_application("outlook")
+    declared = capabilities.declared_by_application("outlook")
     applications = application_registry.default_application_registry()
 
-    assert capabilities.capability_names("outlook") == EXPECTED_OUTLOOK_DISCOVERY_CAPABILITIES
-    assert len(definitions) == 5
-    assert all(item.application == "outlook" for item in definitions)
-    assert all(item.surface == "outlook_web" for item in definitions)
-    assert all(item.account_scope == "professional_session" for item in definitions)
-    assert all(item.container_scope == "account" for item in definitions)
+    assert active == ()
+    assert capabilities.capability_names("outlook") == ()
+    assert (
+        capabilities.declared_capability_names("outlook")
+        == EXPECTED_OUTLOOK_DISCOVERY_CAPABILITIES
+    )
+    assert len(declared) == 5
+    assert all(item.application == "outlook" for item in declared)
+    assert all(item.surface == "outlook_web" for item in declared)
+    assert all(item.account_scope == "professional_session" for item in declared)
+    assert all(item.container_scope == "account" for item in declared)
+    assert all(
+        capabilities.has_capability("outlook", key)
+        for key in EXPECTED_OUTLOOK_DISCOVERY_CAPABILITIES
+    )
     outlook = applications.get(application_registry.ApplicationKey.OUTLOOK)
     assert outlook.state is application_registry.ApplicationState.RESERVED
     assert tool_registry.default_tool_registry().by_application("outlook") == ()

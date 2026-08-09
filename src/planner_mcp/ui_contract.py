@@ -39,7 +39,12 @@ class UiContractStatus:
 
 def load_status() -> UiContractStatus:
     """Aggregate only common + Planner fragments into the compatibility view."""
-    contract_set = project_ui_contract_set(load_ui_contract_set(), "planner")
+    source = load_ui_contract_set()
+    contract_set = project_ui_contract_set(
+        source,
+        "planner",
+        set_version=source.legacy_version,
+    )
     selectors = contract_set.selectors()
     unverified = tuple(
         name for name, meta in selectors.items() if meta.get("status") != ATTESTED

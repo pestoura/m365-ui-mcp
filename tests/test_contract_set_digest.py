@@ -86,8 +86,13 @@ def test_digest_payload_contains_no_runtime_identity_fields() -> None:
         assert forbidden not in payload
 
 
-def test_planner_status_exposes_exact_planner_projection_digest() -> None:
-    expected = project_ui_contract_set(load_ui_contract_set(), "planner").digest()
+def test_planner_status_exposes_exact_legacy_projection_digest() -> None:
+    source = load_ui_contract_set()
+    expected = project_ui_contract_set(
+        source,
+        "planner",
+        set_version=source.legacy_version,
+    ).digest()
     status = load_status()
     assert status.contract_set_digest == expected
     assert status.to_dict()["ui_contract_set_digest"] == expected

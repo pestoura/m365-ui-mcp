@@ -1,12 +1,9 @@
 """Scoped capability definitions for the Microsoft 365 control plane.
 
 CORE-011 introduces scope-aware capability identity only. Effective support is
-computed later from auth/account/UI/runtime/policy evidence by CORE-012; this
-registry therefore contains no tenant content and makes no live-support claim.
-PLN-MIG-003 moves Planner-owned capability declarations out of this generic core
-while retaining the application-neutral registry schema and composition boundary.
-Outlook discovery identities may also be declared here while the application
-remains RESERVED; declaration is not execution or live-support promotion.
+computed later from auth/account/UI/runtime/policy evidence by CORE-012. Active
+runtime definitions remain separate from reserved semantic declarations so a
+future application can prepare contracts without being promoted for execution.
 """
 
 from __future__ import annotations
@@ -54,9 +51,14 @@ class ScopedCapability:
 
 
 class CapabilityRegistry:
-    """Closed deterministic registry of scoped capability definitions."""
+    """Deterministic active registry with optional reserved declarations."""
 
-    def __init__(self, definitions: tuple[ScopedCapability, ...]) -> None:
+    def __init__(
+        self,
+        definitions: tuple[ScopedCapability, ...],
+        *,
+        reserved_definitions: tuple[ScopedCapability, ...] = (),
+    ) -> None:
         by_identity: dict[tuple[str, str, str, str, str], ScopedCapability] = {}
         for definition in definitions:
             if definition.identity in by_identity:
@@ -64,33 +66,64 @@ class CapabilityRegistry:
             by_identity[definition.identity] = definition
         if not by_identity:
             raise ValueError("capability registry must not be empty")
+
+        declared_by_identity = dict(by_identity)
+        for definition in reserved_definitions:
+            if definition.identity in declared_by_identity:
+                raise ValueError(
+                    f"duplicate declared scoped capability: {definition.identity!r}"
+                )
+            declared_by_identity[definition.identity] = definition
+
         self._definitions = by_identity
+        self._declared_definitions = declared_by_identity
 
     def definitions(self) -> tuple[ScopedCapability, ...]:
-        """Return definitions in deterministic insertion order."""
+        """Return active runtime definitions in deterministic insertion order."""
         return tuple(self._definitions.values())
 
+    def declared_definitions(self) -> tuple[ScopedCapability, ...]:
+        """Return active plus reserved semantic declarations."""
+        return tuple(self._declared_definitions.values())
+
     def by_application(self, application: str) -> tuple[ScopedCapability, ...]:
-        """Return all definitions for one application."""
+        """Return active runtime definitions for one application."""
         return tuple(
             definition
             for definition in self._definitions.values()
             if definition.application == application
         )
 
+    def declared_by_application(self, application: str) -> tuple[ScopedCapability, ...]:
+        """Return active plus reserved declarations for one application."""
+        return tuple(
+            definition
+            for definition in self._declared_definitions.values()
+            if definition.application == application
+        )
+
     def capability_names(self, application: str) -> tuple[str, ...]:
-        """Return deterministic unique semantic keys for an application."""
+        """Return deterministic active semantic keys for an application."""
         return tuple(
             dict.fromkeys(
                 definition.capability for definition in self.by_application(application)
             )
         )
 
+    def declared_capability_names(self, application: str) -> tuple[str, ...]:
+        """Return deterministic active plus reserved semantic keys."""
+        return tuple(
+            dict.fromkeys(
+                definition.capability
+                for definition in self.declared_by_application(application)
+            )
+        )
+
     def has_capability(self, application: str, capability: str) -> bool:
-        """Return whether the semantic capability exists in any declared scope."""
+        """Return whether a semantic capability is declared in any scope."""
         return any(
             definition.capability == capability
-            for definition in self.by_application(application)
+            for definition in self.declared_by_application(application)
         )
 
     def get_scoped(
@@ -102,13 +135,13 @@ class CapabilityRegistry:
         container_scope: str,
         capability: str,
     ) -> ScopedCapability:
-        """Resolve one exact scoped definition, failing closed when absent."""
+        """Resolve one active exact scoped definition, failing closed when absent."""
         return self._definitions[
             (application, surface, account_scope, container_scope, capability)
         ]
 
     def snapshot(self) -> tuple[dict[str, str], ...]:
-        """Return scope-class metadata only; no tenant identifiers/content."""
+        """Return active scope-class metadata only; no tenant identifiers/content."""
         return tuple(
             {
                 "application": definition.application,
@@ -122,10 +155,11 @@ class CapabilityRegistry:
 
 
 def default_capability_registry() -> CapabilityRegistry:
-    """Compose current scoped definitions from application-owned modules."""
+    """Compose active definitions plus reserved semantic declarations."""
     from m365_mcp.apps.outlook.capability_registry import outlook_capability_definitions
     from m365_mcp.apps.planner.capability_registry import planner_capability_definitions
 
     return CapabilityRegistry(
-        planner_capability_definitions() + outlook_capability_definitions()
+        planner_capability_definitions(),
+        reserved_definitions=outlook_capability_definitions(),
     )

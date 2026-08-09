@@ -14,6 +14,8 @@ from m365_mcp.ui_contract_store import UIContractSet
 def project_ui_contract_set(
     contract_set: UIContractSet,
     application: str,
+    *,
+    set_version: str | None = None,
 ) -> UIContractSet:
     """Return common plus application-owned fragments in manifest order."""
     if (
@@ -22,6 +24,12 @@ def project_ui_contract_set(
         or any(char.isspace() for char in application)
     ):
         raise ValueError("application must be a non-empty semantic token")
+    if set_version is not None and (
+        not set_version
+        or set_version != set_version.strip()
+        or any(char.isspace() for char in set_version)
+    ):
+        raise ValueError("set_version must be a non-empty semantic version token")
 
     fragments = tuple(
         fragment
@@ -35,7 +43,7 @@ def project_ui_contract_set(
         raise ValueError(f"UIContract has no fragments for application: {application}")
 
     return UIContractSet(
-        set_version=contract_set.set_version,
+        set_version=contract_set.set_version if set_version is None else set_version,
         legacy_version=contract_set.legacy_version,
         fragments=fragments,
     )
