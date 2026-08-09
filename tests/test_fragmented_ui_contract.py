@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from m365_mcp.contracts import contracts_dir
+from m365_mcp.ui_contract_projection import project_ui_contract_set
 from m365_mcp.ui_contract_store import load_ui_contract_set
 from planner_mcp.ui_contract import load_status
 
@@ -17,8 +18,12 @@ def _write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _planner_contract_set():
+    return project_ui_contract_set(load_ui_contract_set(), "planner")
+
+
 def test_fragment_set_preserves_legacy_selector_surface_and_order() -> None:
-    contract_set = load_ui_contract_set()
+    contract_set = _planner_contract_set()
     legacy = json.loads((contracts_dir() / "ui_contract.json").read_text(encoding="utf-8"))
     selectors = contract_set.selectors()
 
@@ -35,7 +40,7 @@ def test_fragment_set_preserves_legacy_selector_surface_and_order() -> None:
 
 
 def test_fragments_cover_common_application_and_surface_scopes() -> None:
-    contract_set = load_ui_contract_set()
+    contract_set = _planner_contract_set()
     assert {fragment.scope for fragment in contract_set.fragments} == {
         "common",
         "application",

@@ -1,0 +1,18 @@
+{
+  "fragment_id": "outlook.todo-surface",
+  "fragment_version": "0.1.0",
+  "scope": "surface",
+  "application": "outlook",
+  "surface": "outlook-web",
+  "capability_keys": [
+    "todo.read"
+  ],
+  "attested": false,
+  "attestation_status": "UNVERIFIED_LIVE",
+  "selectors": {
+    "outlook.shell.todo": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    }
+  }
+}

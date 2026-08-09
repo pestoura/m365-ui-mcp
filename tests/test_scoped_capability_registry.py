@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+application_registry: Any = importlib.import_module("m365_mcp.application_registry")
 capability_registry: Any = importlib.import_module("m365_mcp.capability_registry")
 tool_registry: Any = importlib.import_module("m365_mcp.tool_registry")
 planner_capabilities: Any = importlib.import_module("planner_mcp.capabilities")
@@ -26,18 +27,51 @@ EXPECTED_PLANNER_CAPABILITIES = (
     "project_snapshot.read",
 )
 
+EXPECTED_OUTLOOK_DISCOVERY_CAPABILITIES = (
+    "mail.read",
+    "calendar.read",
+    "people.read",
+    "todo.read",
+    "settings.read",
+)
+
 
 def test_default_registry_preserves_planner_capability_order_and_scope() -> None:
     registry = capability_registry.default_capability_registry()
     definitions = registry.by_application("planner")
 
     assert registry.capability_names("planner") == EXPECTED_PLANNER_CAPABILITIES
-    assert registry.by_application("outlook") == ()
     assert len(definitions) == 11
     assert all(item.application == "planner" for item in definitions)
     assert all(item.surface == "planner_web" for item in definitions)
     assert all(item.account_scope == "professional_session" for item in definitions)
     assert {item.container_scope for item in definitions} == {"account", "plan"}
+
+
+def test_outlook_discovery_capabilities_are_reserved_without_execution_promotion() -> None:
+    capabilities = capability_registry.default_capability_registry()
+    active = capabilities.by_application("outlook")
+    declared = capabilities.declared_by_application("outlook")
+    applications = application_registry.default_application_registry()
+
+    assert active == ()
+    assert capabilities.capability_names("outlook") == ()
+    assert (
+        capabilities.declared_capability_names("outlook")
+        == EXPECTED_OUTLOOK_DISCOVERY_CAPABILITIES
+    )
+    assert len(declared) == 5
+    assert all(item.application == "outlook" for item in declared)
+    assert all(item.surface == "outlook_web" for item in declared)
+    assert all(item.account_scope == "professional_session" for item in declared)
+    assert all(item.container_scope == "account" for item in declared)
+    assert all(
+        capabilities.has_capability("outlook", key)
+        for key in EXPECTED_OUTLOOK_DISCOVERY_CAPABILITIES
+    )
+    outlook = applications.get(application_registry.ApplicationKey.OUTLOOK)
+    assert outlook.state is application_registry.ApplicationState.RESERVED
+    assert tool_registry.default_tool_registry().by_application("outlook") == ()
 
 
 def test_scoped_identity_uses_all_required_dimensions() -> None:

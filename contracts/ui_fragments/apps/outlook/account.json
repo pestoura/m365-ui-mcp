@@ -1,0 +1,16 @@
+{
+  "fragment_id": "outlook.account",
+  "fragment_version": "0.1.0",
+  "scope": "application",
+  "application": "outlook",
+  "surface": null,
+  "capability_keys": [],
+  "attested": false,
+  "attestation_status": "UNVERIFIED_LIVE",
+  "selectors": {
+    "outlook.account.context": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    }
+  }
+}

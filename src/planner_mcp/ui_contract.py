@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from m365_mcp.ui_contract_projection import project_ui_contract_set
 from m365_mcp.ui_contract_store import load_ui_contract_set
 
 from .errors import UiContractUnattested, UiDrift
@@ -37,8 +38,13 @@ class UiContractStatus:
 
 
 def load_status() -> UiContractStatus:
-    """Aggregate the fragmented store into the preserved Planner compatibility view."""
-    contract_set = load_ui_contract_set()
+    """Aggregate only common + Planner fragments into the compatibility view."""
+    source = load_ui_contract_set()
+    contract_set = project_ui_contract_set(
+        source,
+        "planner",
+        set_version=source.legacy_version,
+    )
     selectors = contract_set.selectors()
     unverified = tuple(
         name for name, meta in selectors.items() if meta.get("status") != ATTESTED
@@ -56,7 +62,7 @@ def load_status() -> UiContractStatus:
 
 
 def require_attested(operation: str) -> None:
-    """Fail closed when live operations are attempted without global compatibility attestation."""
+    """Fail closed when live operations are attempted without Planner attestation."""
     status = load_status()
     if not status.attested:
         raise UiContractUnattested(
