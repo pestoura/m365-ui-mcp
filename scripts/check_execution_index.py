@@ -3,13 +3,18 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 INDEX_PATH = Path("docs/m365-transition/execution-index.json")
 SCHEMA = "m365.execution-index/v1"
-KEY_PATTERN = re.compile(r"^(?:M365-(?:SETUP|JDS|CONTROL)-\d{3}|CORE-\d{3}|PLN-MIG-\d{3}|OUT-\d{3}|XAPP-\d{3}|REL-\d{3})$")
+KEY_PATTERN = re.compile(
+    r"^(?:M365-(?:SETUP|JDS|CONTROL)-\d{3}|CORE-\d{3}|PLN-MIG-\d{3}|"
+    r"OUT-\d{3}|XAPP-\d{3}|REL-\d{3})$"
+)
 STATES = {
     "DEFERRED",
     "READY",
@@ -18,6 +23,21 @@ STATES = {
     "ACCEPTED",
     "BLOCKED",
     "SUPERSEDED",
+}
+ALLOWED_TRANSITIONS = {
+    "DEFERRED": {"DEFERRED", "READY", "BLOCKED", "SUPERSEDED"},
+    "READY": {"READY", "IN_PROGRESS", "BLOCKED", "SUPERSEDED"},
+    "IN_PROGRESS": {"IN_PROGRESS", "INTEGRATING", "BLOCKED", "SUPERSEDED"},
+    "INTEGRATING": {
+        "INTEGRATING",
+        "IN_PROGRESS",
+        "ACCEPTED",
+        "BLOCKED",
+        "SUPERSEDED",
+    },
+    "ACCEPTED": {"ACCEPTED", "SUPERSEDED"},
+    "BLOCKED": {"BLOCKED", "READY", "IN_PROGRESS", "SUPERSEDED"},
+    "SUPERSEDED": {"SUPERSEDED"},
 }
 IMPLEMENTATION_STATES = {
     "PLANNED",
@@ -43,20 +63,66 @@ def _fail(message: str) -> None:
     raise SystemExit(f"EXECUTION_INDEX_INVALID: {message}")
 
 
-def _load() -> dict[str, object]:
-    if not INDEX_PATH.is_file():
-        _fail(f"missing {INDEX_PATH}")
+def _load(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        _fail(f"missing {path}")
     try:
-        document = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+        document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        _fail(f"cannot parse index: {exc}")
+        _fail(f"cannot parse {path}: {exc}")
     if not isinstance(document, dict):
-        _fail("top-level document must be an object")
+        _fail(f"{path} top-level document must be an object")
     return document
 
 
+def _items_by_key(document: dict[str, Any], *, label: str) -> dict[str, dict[str, Any]]:
+    items = document.get("items")
+    if not isinstance(items, list):
+        _fail(f"{label} items must be a list")
+    result: dict[str, dict[str, Any]] = {}
+    for position, item in enumerate(items):
+        if not isinstance(item, dict):
+            _fail(f"{label} item {position} must be an object")
+        key = item.get("key")
+        if not isinstance(key, str):
+            _fail(f"{label} item {position} has invalid key")
+        if key in result:
+            _fail(f"{label} contains duplicate canonical key {key}")
+        result[key] = item
+    return result
+
+
+def _validate_transitions(
+    previous: dict[str, Any],
+    current: dict[str, Any],
+) -> None:
+    previous_items = _items_by_key(previous, label="previous")
+    current_items = _items_by_key(current, label="current")
+
+    for key, old_item in previous_items.items():
+        new_item = current_items.get(key)
+        old_state = old_item.get("state")
+        if new_item is None:
+            if old_state not in {"ACCEPTED", "SUPERSEDED"}:
+                _fail(f"active/nonterminal key {key} cannot disappear from the index")
+            continue
+        new_state = new_item.get("state")
+        if old_state not in ALLOWED_TRANSITIONS:
+            _fail(f"previous {key} has unknown state {old_state!r}")
+        if new_state not in ALLOWED_TRANSITIONS[old_state]:
+            _fail(f"illegal state transition for {key}: {old_state} -> {new_state}")
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--index", type=Path, default=INDEX_PATH)
+    parser.add_argument("--previous", type=Path)
+    return parser.parse_args()
+
+
 def main() -> int:
-    document = _load()
+    args = _parse_args()
+    document = _load(args.index)
     if document.get("schema") != SCHEMA:
         _fail(f"schema must be {SCHEMA}")
 
@@ -142,6 +208,12 @@ def main() -> int:
 
     if feature_wip > max_wip:
         _fail(f"active OUT WIP {feature_wip} exceeds bounded maximum {max_wip}")
+
+    if args.previous is not None and args.previous.is_file():
+        previous = _load(args.previous)
+        if previous.get("schema") != SCHEMA:
+            _fail(f"previous schema must be {SCHEMA}")
+        _validate_transitions(previous, document)
 
     print(
         "EXECUTION_INDEX_OK "
