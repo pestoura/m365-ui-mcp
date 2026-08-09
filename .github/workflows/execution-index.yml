@@ -1,0 +1,63 @@
+name: M365 Execution Index
+
+on:
+  pull_request:
+    branches:
+      - main
+      - "integration/**"
+    paths:
+      - "docs/m365-transition/execution-index.json"
+      - "scripts/check_execution_index.py"
+      - ".github/workflows/execution-index.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/m365-transition/execution-index.json"
+      - "scripts/check_execution_index.py"
+      - ".github/workflows/execution-index.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: bounded WIP / canonical key / state transition
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve previous index when available
+        id: previous
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          previous="${RUNNER_TEMP}/execution-index.previous.json"
+          if [[ -n "${BASE_SHA}" ]] && \
+             git show "${BASE_SHA}:docs/m365-transition/execution-index.json" > "$previous" 2>/dev/null; then
+            echo "path=$previous" >> "$GITHUB_OUTPUT"
+            echo "previous index resolved from $BASE_SHA"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "no previous index exists; bootstrap validation only"
+          fi
+
+      - name: Validate execution index
+        shell: bash
+        env:
+          PREVIOUS_INDEX: ${{ steps.previous.outputs.path }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$PREVIOUS_INDEX" ]]; then
+            python scripts/check_execution_index.py --previous "$PREVIOUS_INDEX"
+          else
+            python scripts/check_execution_index.py
+          fi
