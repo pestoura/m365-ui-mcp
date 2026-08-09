@@ -36,4 +36,4 @@ Tests prove determinism, synthetic provenance, absence of identity/routing/sessi
 
 ## Current integration gate
 
-OUT-001 is merged. The current cross-lane `main` also contains the Planner migrations through PLN-MIG-002 and CORE through CORE-041, and is post-merge GREEN at `5469821deab86505e51b19dfab3905ae35295eee`. This revision deliberately re-triggers OUT-002 so the complete mandatory suite executes against that current integration base; earlier GREEN evidence is not reused for merge.
+OUT-001 is merged. The current cross-lane `main` is post-merge GREEN at `cd64ad70c4a1608f1948d46be51eeef3506c3124`, including CORE through CORE-048 and Planner through PLN-MIG-002. This revision deliberately re-triggers OUT-002 so the complete mandatory suite executes against that exact integration base; earlier GREEN evidence is not reused for merge.
