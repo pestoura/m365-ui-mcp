@@ -44,7 +44,10 @@ def test_safe_quick_step_applies_synthetic_state_with_readback() -> None:
     )
     assert updated.folder_key == "archive"
     assert updated.is_read is True
-    assert result.disposition is quick_step_execution.QuickStepExecutionDisposition.APPLIED_SYNTHETIC
+    assert (
+        result.disposition
+        is quick_step_execution.QuickStepExecutionDisposition.APPLIED_SYNTHETIC
+    )
     assert result.read_back == updated
     assert result.verified is True
 
@@ -86,7 +89,10 @@ def test_outbound_quick_step_is_prepare_only_and_never_partial() -> None:
     assert unchanged == _state()
     assert unchanged.is_read is False
     assert result.changed is False
-    assert result.disposition is quick_step_execution.QuickStepExecutionDisposition.PREPARED_OUTBOUND
+    assert (
+        result.disposition
+        is quick_step_execution.QuickStepExecutionDisposition.PREPARED_OUTBOUND
+    )
     assert result.prepared_action_kinds == ("FORWARD_TO_RECIPIENT",)
 
 
