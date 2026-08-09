@@ -209,7 +209,8 @@ def collect_metrics(
 
 
 def _api_json(url: str, token: str) -> dict[str, Any]:
-    request = urllib.request.Request(
+    # All call sites are read-only GitHub REST API URLs; no user/tenant URL is accepted.
+    request = urllib.request.Request(  # noqa: S310
         url,
         headers={
             "Authorization": f"Bearer {token}",
