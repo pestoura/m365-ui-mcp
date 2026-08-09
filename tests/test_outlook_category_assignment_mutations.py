@@ -4,8 +4,11 @@ import hashlib
 
 import pytest
 
-from m365_mcp.application_registry import ApplicationKey, ApplicationState
-from m365_mcp.application_registry import default_application_registry
+from m365_mcp.application_registry import (
+    ApplicationKey,
+    ApplicationState,
+    default_application_registry,
+)
 from m365_mcp.apps.outlook import (
     category_assignment_mutations,
     category_reads,
