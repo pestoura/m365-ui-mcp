@@ -1,6 +1,6 @@
 # PLN-MIG-009 — Planner policy parity suite
 
-Status: **IMPLEMENTED_LOCAL_GATES_GREEN**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -43,3 +43,9 @@ This branch is cut from remote `main` at `96cee6d` (OUT-010 message list merged,
 ## Downstream readiness
 
 See [`pln-mig-010-012-readiness.md`](pln-mig-010-012-readiness.md) for the truthful PLN-MIG-010/011/012 assessment and the exact live-authentication blockers.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

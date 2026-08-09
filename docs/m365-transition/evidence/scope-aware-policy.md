@@ -1,6 +1,6 @@
 # CORE-033 — Scope-aware policy
 
-Status: **IMPLEMENTED_AWAITING_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -60,3 +60,9 @@ Tests prove:
 - unknown container classes rejected;
 - scope cannot weaken mutation disablement;
 - all 17 preserved Planner tools continue to receive bounded policy scope and remain compatible.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

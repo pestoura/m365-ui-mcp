@@ -1,6 +1,6 @@
 # CORE-034 — Per-node BATCH/DAG/RUNBOOK policy
 
-Status: **IMPLEMENTED_AWAITING_GATES_AND_PREDECESSOR_POST_MERGE**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -57,3 +57,9 @@ This module performs policy simulation only. It does not execute, schedule, retr
 ## Acceptance coverage
 
 Tests cover independent node evaluation, unknown-tool denial, scope mismatch isolation, per-node approval retention, mutation-disablement preservation and invalid dependency structures.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

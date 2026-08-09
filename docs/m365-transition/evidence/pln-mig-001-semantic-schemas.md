@@ -1,6 +1,6 @@
 # PLN-MIG-001 — Planner semantic schemas in the application module
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -37,3 +37,9 @@ This phase extracts schema ownership only. `PLN-MIG-002` moves Planner Tool Regi
 Tests prove full 17-tool schema parity, deterministic order, fresh-object isolation and fail-closed rejection of unreviewed identifier schema kinds.
 
 The branch was re-triggered after the CORE-032 and OUT-001 merges. It is now re-triggered again after CORE-033 reached full post-merge GREEN, so the mandatory PR gates prove compatibility against the latest scope-aware policy integration base.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

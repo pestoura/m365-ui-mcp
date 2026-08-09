@@ -1,6 +1,6 @@
 # CORE-049 — UI execution metrics
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -31,3 +31,9 @@ Tests prove bounded projection, rejection of invalid numeric counters, determini
 ## Dependency gate
 
 CORE-048 is merged and the current `main` is post-merge GREEN at `cd64ad70c4a1608f1948d46be51eeef3506c3124`. This revision re-triggers the complete mandatory gate suite against that exact integration base; historical stacked/preventive GREEN evidence is not reused for merge.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

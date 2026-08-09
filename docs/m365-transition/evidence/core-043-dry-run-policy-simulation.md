@@ -1,6 +1,6 @@
 # CORE-043 — Dry-run / policy simulation
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -72,3 +72,9 @@ Tests prove:
 ## Current integration gate
 
 CORE-042 is merged into `main` at `b897077f01bd7a13428c36f479bd222f228a7a18`. This revision deliberately re-triggers the complete mandatory CI/security/image/Trivy/SBOM/documentation suite against that current integration base. CORE-043 will merge only after CORE-042 post-merge `main` is GREEN and these fresh PR gates are GREEN. Its completion closes Phase 4 and unlocks CORE-044 integration.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

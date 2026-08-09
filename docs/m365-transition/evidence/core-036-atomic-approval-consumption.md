@@ -1,6 +1,6 @@
 # CORE-036 — Atomic approval consumption
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -56,3 +56,9 @@ The generated approval handle is opaque and URL-safe. No public MCP approval too
 ## Current integration gate
 
 CORE-035 is merged and post-merge GREEN on `main`, together with the completed Planner schema and Tool Registry migrations. PR #258 is now based directly on that integrated `main`. This revision deliberately re-triggers the complete mandatory suite; stacked-branch evidence is not reused for merge.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

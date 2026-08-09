@@ -1,6 +1,6 @@
 # CORE-042 — `INDETERMINATE` terminal state
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -64,3 +64,9 @@ Tests prove:
 ## Current integration gate
 
 CORE-041 is merged and post-merge GREEN on `main` at `5469821deab86505e51b19dfab3905ae35295eee`. PR #266 now targets that current integration base. This revision deliberately re-triggers the complete mandatory CI/security/image/Trivy/SBOM/documentation suite; stacked evidence is not reused for merge.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

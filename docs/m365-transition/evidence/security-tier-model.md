@@ -1,6 +1,6 @@
 # CORE-032 — Security tier model
 
-Status: **IMPLEMENTED_AWAITING_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -36,3 +36,9 @@ Unregistered tools remain denied and are not assigned an invented tier.
 ## Acceptance coverage
 
 Tests prove stable T0..T4 ordering, risk-class mapping, mutation dominance, fail-closed unknown-risk behavior, policy projection, and denial of unregistered tools without fabricated classification.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

@@ -1,6 +1,6 @@
 # CORE-041 — Compensation registry
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -80,3 +80,9 @@ Tests prove:
 ## Current integration gate
 
 CORE-040 is merged and post-merge GREEN on `main` at `2bfa50b2f6c58196f1079e026de0c13b921368fd`. PR #265 is now based directly on that integration point. The CORE-041-specific line-length issue was corrected in advance. This revision deliberately re-triggers the complete mandatory current-base CI/security/image/Trivy/SBOM/documentation suite; stacked evidence is not reused for merge.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

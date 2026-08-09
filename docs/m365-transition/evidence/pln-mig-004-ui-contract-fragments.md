@@ -1,6 +1,6 @@
 # PLN-MIG-004 — Planner UIContract fragment ownership
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -44,3 +44,9 @@ All existing placeholder/attestation status remains authoritative. This migratio
 ## Current integration gate
 
 PLN-MIG-003 is merged and `main` is post-merge GREEN at `1e39c1df496dc69e9b18ab02d56381e99e400794`. This clean revision is based directly on that integration point and contains only the Planner UIContract ownership declaration, tests and evidence. Merge only after all mandatory CI/security/documentation/image/Trivy/SBOM gates are GREEN.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

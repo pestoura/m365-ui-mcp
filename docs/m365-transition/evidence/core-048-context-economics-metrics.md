@@ -1,6 +1,6 @@
 # CORE-048 — Token/context economics metrics
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -58,3 +58,9 @@ Tests prove:
 CORE-047 is merged at `7816bbd97828ad960b79c6981bd594cb926d080e` and its complete post-merge `main` suite is GREEN, including functional gates, filesystem/dependency/secret scanning, both image builds, Trivy HIGH/CRITICAL scans and CycloneDX SBOM validation.
 
 CORE-048 is therefore formally unblocked for integration. This revision creates a fresh head and re-triggers the complete mandatory gate suite against the current `main`; historical stacked/preventive runs are invalid as merge evidence.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

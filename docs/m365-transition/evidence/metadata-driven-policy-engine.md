@@ -1,6 +1,6 @@
 # CORE-031 — Metadata-driven policy engine
 
-Status: **IMPLEMENTED_AWAITING_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -39,3 +39,9 @@ Tests prove that:
 - mutation metadata maps to approval when tested against an explicitly permissive policy context;
 - unknown tools remain denied even in a permissive context;
 - the compatibility mutation override can only tighten policy.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

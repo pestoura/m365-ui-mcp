@@ -1,6 +1,6 @@
 # CORE-045 — Artifact/evidence references
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -62,3 +62,9 @@ Tests prove:
 CORE-044 is merged at `3b0560d2c6eff7a8d7f11ce6bded086727fd3add` and its post-merge CI plus canonical documentation gates are GREEN. CORE-045 is therefore unblocked for integration.
 
 This revision re-triggers the complete mandatory gate suite against the current `main`; no historical stacked run is accepted as merge evidence.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

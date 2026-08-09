@@ -1,6 +1,6 @@
 # PLN-MIG-007 — Planner requirement reconciliation
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -27,3 +27,9 @@ This clean migration contains only the reconciliation checker, its focused tests
 ## Current integration gate
 
 PLN-MIG-006 is merged and `main` is post-merge GREEN at `6386fefd226e6267bc0c11dab2a8b6c1314718cb`. Merge only after standalone and pull-request CI/security/documentation/image/Trivy/SBOM gates are GREEN against that exact integration base.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.
