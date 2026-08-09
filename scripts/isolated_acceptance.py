@@ -20,6 +20,8 @@ os.environ["PLANNER_MODE"] = "mock"
 
 import httpx  # noqa: E402
 
+from m365_mcp.config import Settings as ControlPlaneSettings  # noqa: E402
+from m365_mcp.policy import evaluate as evaluate_policy  # noqa: E402
 from planner_browser_worker.app import create_app  # noqa: E402
 from planner_mcp.config import Settings  # noqa: E402
 from planner_mcp.tools import TOOL_NAMES, PlannerTools  # noqa: E402
@@ -43,12 +45,50 @@ class InProcessWorkerClient(WorkerClient):
             return data
 
 
+# REL-011: every check is mapped to the canonical IA scenario family in
+# docs/acceptance.md so isolated acceptance coverage is machine-verifiable.
+SCENARIO_MAP: dict[str, str] = {
+    "tool_catalog_has_17": "IA-01",
+    "versions_are_0_1_0": "IA-01",
+    "no_graph_backend": "IA-01",
+    "readiness_true": "IA-01",
+    "sqlite_healthy": "IA-01",
+    "ui_contract_fails_closed": "IA-05",
+    "extended_manifest_complete": "IA-16",
+    "capabilities_evidence_based": "IA-16",
+    "mfa_sanitized_authenticator_only": "IA-06",
+    "no_secrets_in_session": "IA-14",
+    "plan_list_ok": "IA-03",
+    "plan_get_ok": "IA-03",
+    "task_list_ok": "IA-03",
+    "task_get_ok": "IA-03",
+    "snapshot_ok": "IA-04",
+    "account_context_ok": "IA-03",
+    "license_evidence_ok": "IA-16",
+    "ui_contract_status_ok": "IA-05",
+    "auth_status_ok": "IA-06",
+    "auth_resume_ok": "IA-06",
+    "smoke_passed": "IA-01",
+    "zero_mutations": "IA-11",
+    "mock_mode_enforced": "IA-02",
+    "snapshot_deterministic": "IA-04",
+    "policy_denies_unregistered_tool": "IA-09",
+}
+
+
 async def run() -> dict[str, Any]:
     """Execute the acceptance checks and return a report."""
     checks: list[dict[str, Any]] = []
 
     def record(name: str, ok: bool, detail: Any = None) -> None:
-        checks.append({"check": name, "ok": bool(ok), "detail": detail})
+        checks.append(
+            {
+                "check": name,
+                "scenario": SCENARIO_MAP.get(name, "UNMAPPED"),
+                "ok": bool(ok),
+                "detail": detail,
+            }
+        )
 
     with tempfile.TemporaryDirectory() as tmp:
         settings = Settings(mode="mock", state_path=Path(tmp) / "state.sqlite3")
@@ -137,7 +177,35 @@ async def run() -> dict[str, Any]:
         record("smoke_passed", smoke["passed"] is True)
         record("zero_mutations", smoke["mutations_performed"] == 0)
 
-    return {"passed": all(c["ok"] for c in checks), "checks": checks}
+        # REL-011 additions: isolation, determinism and fail-closed policy.
+        record(
+            "mock_mode_enforced",
+            settings.mode == "mock" and os.environ.get("PLANNER_MODE") == "mock",
+            settings.mode,
+        )
+        repeat = (await tools.planner_project_snapshot(plan_id))["data"]
+        record(
+            "snapshot_deterministic",
+            json.dumps(repeat, sort_keys=True) == json.dumps(snapshot, sort_keys=True),
+        )
+        decision = evaluate_policy(
+            "planner_not_a_real_tool", ControlPlaneSettings(mode="mock")
+        )
+        record(
+            "policy_denies_unregistered_tool",
+            decision.decision.value == "DENY" and decision.reason == "TOOL_NOT_REGISTERED",
+            decision.reason,
+        )
+
+    unmapped = sorted(c["check"] for c in checks if c["scenario"] == "UNMAPPED")
+    scenarios = sorted({c["scenario"] for c in checks})
+    return {
+        "passed": all(c["ok"] for c in checks) and not unmapped,
+        "requirement": "REL-011",
+        "scenarios_covered": scenarios,
+        "unmapped_checks": unmapped,
+        "checks": checks,
+    }
 
 
 def main() -> None:

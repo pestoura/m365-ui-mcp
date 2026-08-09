@@ -1,6 +1,6 @@
 # OUT-007 — Outlook readiness/smoke extension
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_OUT_006**
+Status: **IMPLEMENTED_ON_CURRENT_MAIN**
 
 ## Objective
 
@@ -63,4 +63,4 @@ Tests prove:
 
 ## Dependency gate
 
-This work is stacked on OUT-006. It must not merge until OUT-006 is merged and post-merge `main` is GREEN. It will then be retargeted to `main` and fully revalidated with the mandatory CI/security/image/Trivy/SBOM/documentation gates.
+OUT-006 is merged and integrated on current `main`, so this dependency is satisfied. The work is integrated on `main` and fully revalidated against the current integration base with the mandatory CI/security/image/Trivy/SBOM/documentation gates.

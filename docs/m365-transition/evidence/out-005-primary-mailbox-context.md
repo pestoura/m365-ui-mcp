@@ -1,6 +1,6 @@
 # OUT-005 — Primary-mailbox context verification
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_OUT_004**
+Status: **IMPLEMENTED_ON_CURRENT_MAIN**
 
 ## Objective
 
@@ -72,4 +72,4 @@ Tests prove:
 
 ## Dependency gate
 
-This work is stacked on OUT-004. It must not merge until OUT-004 is merged and post-merge `main` is GREEN. It will then be retargeted to `main` and all mandatory CI/security/image/Trivy/SBOM/documentation gates will rerun against the current integration base.
+OUT-004 is merged and integrated on current `main`, so this dependency is satisfied. The work is integrated on `main` and revalidated against the current integration base with the mandatory CI/security/image/Trivy/SBOM/documentation gates.
