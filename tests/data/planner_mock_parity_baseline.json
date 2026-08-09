@@ -1,0 +1,1298 @@
+{
+  "description": "PLN-MIG-008 frozen Planner mock parity baseline (normalized). Mock-only; no live support claimed.",
+  "mode": "mock",
+  "live_support_claimed": false,
+  "digest": "sha256:fdd974d0f8d07a1d4c999d5ba2216c6fdd9e87ca75c535fa73560a900195501a",
+  "tools": {
+    "planner_health": {
+      "contract_version": "0.1.0",
+      "data": {
+        "mode": "mock",
+        "status": "ok",
+        "versions": {
+          "contract_version": "0.1.0",
+          "mutation_tools": 0,
+          "product_version": "0.1.0",
+          "read_tools": 17,
+          "schema_version": "0.1.0",
+          "tool_catalog_version": "0.1.0",
+          "ui_contract_version": "0.1.0"
+        }
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_health"
+    },
+    "planner_readiness": {
+      "contract_version": "0.1.0",
+      "data": {
+        "configuration": {
+          "allow_mutations": false,
+          "host": "[REDACTED]",
+          "log_level": "INFO",
+          "mode": "mock",
+          "port": 8080,
+          "request_timeout_s": 30.0,
+          "require_ui_contract_attestation": true,
+          "state_path": "[REDACTED]",
+          "tool_profile": "full",
+          "worker_base_url": "[REDACTED]"
+        },
+        "live_reads_blocked": false,
+        "ready": true,
+        "sqlite": {
+          "foreign_keys": true,
+          "integrity": "ok",
+          "journal_mode": "wal",
+          "ok": true
+        },
+        "ui_contract": {
+          "attestation_status": "UNVERIFIED_LIVE",
+          "attested": false,
+          "fail_closed_error": "UI_CONTRACT_UNATTESTED",
+          "selector_count": 10,
+          "ui_contract_set_digest": "sha256:b0cb5790245fedc9b7f4dc299388287e8912dcaf3fd773c7490ee27c97e41147",
+          "ui_contract_version": "0.1.0",
+          "unverified_selectors": [
+            "auth.login_email_input",
+            "auth.mfa_number_display",
+            "plan.list_container",
+            "plan.list_item",
+            "plan.title",
+            "task.list_container",
+            "task.list_item",
+            "task.title",
+            "task.bucket",
+            "account.context_menu"
+          ]
+        },
+        "worker": {
+          "live_ready": false,
+          "mode": "mock",
+          "ok": true,
+          "ui_contract_attested": false,
+          "ui_contract_set_digest": "sha256:b0cb5790245fedc9b7f4dc299388287e8912dcaf3fd773c7490ee27c97e41147",
+          "ui_contract_version": "0.1.0",
+          "version": "0.1.0"
+        }
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_readiness"
+    },
+    "planner_capabilities": {
+      "contract_version": "0.1.0",
+      "data": {
+        "capabilities": [
+          {
+            "capability": "plans.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "tasks.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "buckets.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "dependencies.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "scheduling.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "goals.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "sprints.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "resources.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "custom_fields.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "portfolios.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          },
+          {
+            "capability": "project_snapshot.read",
+            "mutation_attestation": "NO",
+            "notes": "Graph API availability is not an input to support state.",
+            "read_attestation": "NO",
+            "support_level": "UNVERIFIED_LIVE",
+            "tenant_license_availability": "OBSERVED",
+            "ui_contract_status": "UNVERIFIED_LIVE",
+            "ui_observed": "UNVERIFIED_LIVE"
+          }
+        ],
+        "contract_version": "0.1.0",
+        "effective_projection": [
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "plans.read",
+            "container_scope": "account",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "tasks.read",
+            "container_scope": "plan",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "buckets.read",
+            "container_scope": "plan",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "dependencies.read",
+            "container_scope": "plan",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "scheduling.read",
+            "container_scope": "plan",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "goals.read",
+            "container_scope": "plan",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "sprints.read",
+            "container_scope": "plan",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "resources.read",
+            "container_scope": "plan",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "custom_fields.read",
+            "container_scope": "plan",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "portfolios.read",
+            "container_scope": "account",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          },
+          {
+            "account_scope": "professional_session",
+            "application": "planner",
+            "capability": "project_snapshot.read",
+            "container_scope": "plan",
+            "evidence": {
+              "account_context_valid": true,
+              "authenticated": true,
+              "license_available": true,
+              "live_evidence": false,
+              "policy_allowed": true,
+              "runtime_healthy": true,
+              "ui_attested": false,
+              "ui_drifted": false,
+              "ui_reattestation_required": false,
+              "ui_stale": false
+            },
+            "reasons": [
+              "LIVE_EVIDENCE_ABSENT",
+              "UI_NOT_ATTESTED"
+            ],
+            "state": "UNVERIFIED_LIVE",
+            "supported": false,
+            "surface": "planner_web"
+          }
+        ],
+        "evidence_dimensions": [
+          "tenant",
+          "license",
+          "ui_observed",
+          "ui_contract",
+          "runtime"
+        ],
+        "graph_api_used": false,
+        "runtime_ok": true,
+        "support_levels": [
+          "UNVERIFIED_LIVE",
+          "DISCOVERED",
+          "READ_SUPPORTED",
+          "MUTATION_SUPPORTED",
+          "DEGRADED",
+          "BLOCKED",
+          "OUT_OF_SCOPE"
+        ],
+        "ui_contract_set_digest": "sha256:b0cb5790245fedc9b7f4dc299388287e8912dcaf3fd773c7490ee27c97e41147",
+        "ui_fragment_attestation": [
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "plans.read",
+            "dependency_fragments": [
+              "planner.plan-surface"
+            ],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_FRAGMENT_UNATTESTED:planner.plan-surface"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "tasks.read",
+            "dependency_fragments": [
+              "planner.task-surface"
+            ],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_FRAGMENT_UNATTESTED:planner.task-surface"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "buckets.read",
+            "dependency_fragments": [
+              "planner.task-surface"
+            ],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_FRAGMENT_UNATTESTED:planner.task-surface"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "dependencies.read",
+            "dependency_fragments": [],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_DEPENDENCY_UNDECLARED"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "scheduling.read",
+            "dependency_fragments": [],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_DEPENDENCY_UNDECLARED"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "goals.read",
+            "dependency_fragments": [],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_DEPENDENCY_UNDECLARED"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "sprints.read",
+            "dependency_fragments": [],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_DEPENDENCY_UNDECLARED"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "resources.read",
+            "dependency_fragments": [],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_DEPENDENCY_UNDECLARED"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "custom_fields.read",
+            "dependency_fragments": [],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_DEPENDENCY_UNDECLARED"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "portfolios.read",
+            "dependency_fragments": [],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_DEPENDENCY_UNDECLARED"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          },
+          {
+            "application": "planner",
+            "attested": false,
+            "capability": "project_snapshot.read",
+            "dependency_fragments": [
+              "planner.plan-surface",
+              "planner.task-surface"
+            ],
+            "drifted": false,
+            "lifecycle_states": [],
+            "reasons": [
+              "UI_FRAGMENT_UNATTESTED:planner.plan-surface",
+              "UI_FRAGMENT_UNATTESTED:planner.task-surface"
+            ],
+            "reattestation_required": false,
+            "stale": false
+          }
+        ]
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_capabilities"
+    },
+    "planner_agent_card": {
+      "contract_version": "0.1.0",
+      "data": {
+        "agent_card": {
+          "contract_version": "0.1.0",
+          "description": "Read-only Foundation 0.1.0 MCP for Microsoft Planner Premium via private browser worker.",
+          "execution_backend": "playwright-chromium-browser-worker",
+          "exposure": "ChatGPT -> Cloudflare MCP Server Portal -> planner-mcp control plane -> planner-browser-worker",
+          "graph_api_backend": false,
+          "mutations_supported": false,
+          "name": "planner-mcp",
+          "safety": {
+            "fail_closed": true,
+            "live_mutations": false,
+            "selector_fabrication": false
+          },
+          "transport": "streamable-http",
+          "version": "0.1.0"
+        },
+        "extended_tool_manifest": {
+          "contract_version": "0.1.0",
+          "tools": [
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "system",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_health",
+              "reversible": "yes",
+              "trust_level": "system_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "system",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_readiness",
+              "reversible": "yes",
+              "trust_level": "system_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "capability",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_capabilities",
+              "reversible": "yes",
+              "trust_level": "system_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "system",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_agent_card",
+              "reversible": "yes",
+              "trust_level": "system_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "ui_contract",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_ui_contract_status",
+              "reversible": "yes",
+              "trust_level": "system_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "auth",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_auth_status",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "auth",
+              "idempotency_class": "key_required",
+              "mutation_class": "READ",
+              "name": "planner_auth_start",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "auth",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_auth_resume",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "auth",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_auth_session_info",
+              "reversible": "yes",
+              "trust_level": "system_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "planner_read",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_plan_list",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "planner_read",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_plan_get",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "planner_read",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_task_list",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "planner_read",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_task_get",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "planner_read",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_project_snapshot",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "auth",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_account_context",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "capability",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_license_capabilities",
+              "reversible": "yes",
+              "trust_level": "untrusted_ui_derived"
+            },
+            {
+              "approval_requirement": "none",
+              "attestation_status": "UNVERIFIED_LIVE",
+              "category": "system",
+              "idempotency_class": "naturally_idempotent",
+              "mutation_class": "READ",
+              "name": "planner_smoke_test",
+              "reversible": "yes",
+              "trust_level": "system_derived"
+            }
+          ]
+        },
+        "tool_manifest": {
+          "contract_version": "0.1.0",
+          "tool_catalog_version": "0.1.0",
+          "tools": [
+            {
+              "category": "system",
+              "description": "Liveness of the control plane process.",
+              "name": "planner_health",
+              "read_only": true
+            },
+            {
+              "category": "system",
+              "description": "Readiness across SQLite, worker and UIContract attestation.",
+              "name": "planner_readiness",
+              "read_only": true
+            },
+            {
+              "category": "capability",
+              "description": "Dynamic capability model from tenant/license/UI/UIContract/runtime evidence.",
+              "name": "planner_capabilities",
+              "read_only": true
+            },
+            {
+              "category": "system",
+              "description": "Agent card metadata for portal/agent discovery.",
+              "name": "planner_agent_card",
+              "read_only": true
+            },
+            {
+              "category": "ui_contract",
+              "description": "Versioned UIContract status and attestation state.",
+              "name": "planner_ui_contract_status",
+              "read_only": true
+            },
+            {
+              "category": "auth",
+              "description": "Current auth state machine value with sanitized metadata.",
+              "name": "planner_auth_status",
+              "read_only": true
+            },
+            {
+              "category": "auth",
+              "description": "Start an interactive auth attempt on the isolated browser profile.",
+              "name": "planner_auth_start",
+              "read_only": true
+            },
+            {
+              "category": "auth",
+              "description": "Resume/poll a pending auth attempt (incl. MFA number matching).",
+              "name": "planner_auth_resume",
+              "read_only": true
+            },
+            {
+              "category": "auth",
+              "description": "Sanitized session info for the persistent browser profile.",
+              "name": "planner_auth_session_info",
+              "read_only": true
+            },
+            {
+              "category": "planner_read",
+              "description": "List Planner Premium plans visible to the session.",
+              "name": "planner_plan_list",
+              "read_only": true
+            },
+            {
+              "category": "planner_read",
+              "description": "Read a single plan by id.",
+              "name": "planner_plan_get",
+              "read_only": true
+            },
+            {
+              "category": "planner_read",
+              "description": "List tasks for a plan.",
+              "name": "planner_task_list",
+              "read_only": true
+            },
+            {
+              "category": "planner_read",
+              "description": "Read a single task by id.",
+              "name": "planner_task_get",
+              "read_only": true
+            },
+            {
+              "category": "planner_read",
+              "description": "Composite read-only snapshot of a plan.",
+              "name": "planner_project_snapshot",
+              "read_only": true
+            },
+            {
+              "category": "auth",
+              "description": "Sanitized account/tenant context of the browser session.",
+              "name": "planner_account_context",
+              "read_only": true
+            },
+            {
+              "category": "capability",
+              "description": "License-derived capability evidence.",
+              "name": "planner_license_capabilities",
+              "read_only": true
+            },
+            {
+              "category": "system",
+              "description": "Isolated end-to-end read-only smoke test (mock-safe).",
+              "name": "planner_smoke_test",
+              "read_only": true
+            }
+          ]
+        }
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_agent_card"
+    },
+    "planner_ui_contract_status": {
+      "contract_version": "0.1.0",
+      "data": {
+        "attestation_status": "UNVERIFIED_LIVE",
+        "attested": false,
+        "fail_closed_error": "UI_CONTRACT_UNATTESTED",
+        "selector_count": 10,
+        "ui_contract_set_digest": "sha256:b0cb5790245fedc9b7f4dc299388287e8912dcaf3fd773c7490ee27c97e41147",
+        "ui_contract_version": "0.1.0",
+        "unverified_selectors": [
+          "auth.login_email_input",
+          "auth.mfa_number_display",
+          "plan.list_container",
+          "plan.list_item",
+          "plan.title",
+          "task.list_container",
+          "task.list_item",
+          "task.title",
+          "task.bucket",
+          "account.context_menu"
+        ]
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_ui_contract_status"
+    },
+    "planner_auth_status": {
+      "contract_version": "0.1.0",
+      "data": {
+        "detail": {
+          "mode": "mock",
+          "state": "AUTHENTICATED"
+        },
+        "state": "AUTHENTICATED"
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_auth_status"
+    },
+    "planner_auth_start": {
+      "contract_version": "0.1.0",
+      "data": {
+        "mfa": {
+          "approval_channel": "microsoft_authenticator",
+          "description": "Sign in to Microsoft Planner",
+          "expires_at": "[VOLATILE]",
+          "mfa_number": "42",
+          "operation_id": "[VOLATILE]",
+          "service": "microsoft-entra-id"
+        },
+        "state": "MFA_REQUIRED"
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_auth_start"
+    },
+    "planner_auth_resume": {
+      "contract_version": "0.1.0",
+      "data": {
+        "mode": "mock",
+        "state": "AUTHENTICATED"
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_auth_resume"
+    },
+    "planner_auth_session_info": {
+      "contract_version": "0.1.0",
+      "data": {
+        "broker": {
+          "account_context": {
+            "expected_profile": false,
+            "professional": false,
+            "state": "UNVERIFIED",
+            "valid": false
+          },
+          "auth_state": "AUTHENTICATED",
+          "browser_started": false,
+          "secret_material_exported": false,
+          "viable": false
+        },
+        "mode": "mock",
+        "persistent_profile": true,
+        "profile": "professional-isolated",
+        "secrets_stored_in_state": false
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_auth_session_info"
+    },
+    "planner_plan_list": {
+      "contract_version": "0.1.0",
+      "data": {
+        "plans": [
+          {
+            "buckets": [
+              "Backlog",
+              "In Progress",
+              "Done"
+            ],
+            "external_id": "plan-alpha",
+            "id": "plan-alpha",
+            "premium": true,
+            "source_id": "mock:plan:1",
+            "title": "Alpha Programme"
+          },
+          {
+            "buckets": [
+              "Todo",
+              "Doing"
+            ],
+            "external_id": "plan-beta",
+            "id": "plan-beta",
+            "premium": true,
+            "source_id": "mock:plan:2",
+            "title": "Beta Rollout"
+          }
+        ]
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_plan_list"
+    },
+    "planner_plan_get": {
+      "contract_version": "0.1.0",
+      "data": {
+        "plan": {
+          "buckets": [
+            "Backlog",
+            "In Progress",
+            "Done"
+          ],
+          "external_id": "plan-alpha",
+          "id": "plan-alpha",
+          "premium": true,
+          "source_id": "mock:plan:1",
+          "title": "Alpha Programme"
+        }
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_plan_get"
+    },
+    "planner_task_list": {
+      "contract_version": "0.1.0",
+      "data": {
+        "plan_id": "plan-alpha",
+        "tasks": [
+          {
+            "bucket": "In Progress",
+            "dependencies": [],
+            "external_id": "task-1",
+            "id": "task-1",
+            "percent_complete": 50,
+            "plan_id": "plan-alpha",
+            "source_id": "mock:task:1",
+            "title": "Define UIContract attestation procedure"
+          },
+          {
+            "bucket": "Backlog",
+            "dependencies": [
+              "task-1"
+            ],
+            "external_id": "task-2",
+            "id": "task-2",
+            "percent_complete": 0,
+            "plan_id": "plan-alpha",
+            "source_id": "mock:task:2",
+            "title": "Draft threat model"
+          }
+        ]
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_task_list"
+    },
+    "planner_task_get": {
+      "contract_version": "0.1.0",
+      "data": {
+        "task": {
+          "bucket": "In Progress",
+          "dependencies": [],
+          "external_id": "task-1",
+          "id": "task-1",
+          "percent_complete": 50,
+          "plan_id": "plan-alpha",
+          "source_id": "mock:task:1",
+          "title": "Define UIContract attestation procedure"
+        }
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_task_get"
+    },
+    "planner_project_snapshot": {
+      "contract_version": "0.1.0",
+      "data": {
+        "buckets": [
+          "Backlog",
+          "In Progress",
+          "Done"
+        ],
+        "counts": {
+          "tasks": 2
+        },
+        "plan": {
+          "buckets": [
+            "Backlog",
+            "In Progress",
+            "Done"
+          ],
+          "external_id": "plan-alpha",
+          "id": "plan-alpha",
+          "premium": true,
+          "source_id": "mock:plan:1",
+          "title": "Alpha Programme"
+        },
+        "read_only": true,
+        "tasks": [
+          {
+            "bucket": "In Progress",
+            "dependencies": [],
+            "external_id": "task-1",
+            "id": "task-1",
+            "percent_complete": 50,
+            "plan_id": "plan-alpha",
+            "source_id": "mock:task:1",
+            "title": "Define UIContract attestation procedure"
+          },
+          {
+            "bucket": "Backlog",
+            "dependencies": [
+              "task-1"
+            ],
+            "external_id": "task-2",
+            "id": "task-2",
+            "percent_complete": 0,
+            "plan_id": "plan-alpha",
+            "source_id": "mock:task:2",
+            "title": "Draft threat model"
+          }
+        ]
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_project_snapshot"
+    },
+    "planner_account_context": {
+      "contract_version": "0.1.0",
+      "data": {
+        "account_kind": "work_or_school",
+        "device_enrolment": "none",
+        "profile": "professional-isolated",
+        "tenant_display": "mock-tenant",
+        "user_identifier": "[REDACTED]"
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_account_context"
+    },
+    "planner_license_capabilities": {
+      "contract_version": "0.1.0",
+      "data": {
+        "evidence": "mock-ui-license-banner",
+        "graph_api_used": false,
+        "premium_detected": true
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_license_capabilities"
+    },
+    "planner_smoke_test": {
+      "contract_version": "0.1.0",
+      "data": {
+        "mutations_performed": 0,
+        "passed": true,
+        "steps": [
+          {
+            "ok": true,
+            "step": "readiness"
+          },
+          {
+            "count": 2,
+            "ok": true,
+            "step": "plan_list"
+          },
+          {
+            "count": 2,
+            "ok": true,
+            "step": "task_list"
+          },
+          {
+            "ok": true,
+            "step": "project_snapshot"
+          }
+        ]
+      },
+      "graph_api_used": false,
+      "product_version": "0.1.0",
+      "read_only": true,
+      "schema_version": "0.1.0",
+      "tool": "planner_smoke_test"
+    }
+  }
+}
