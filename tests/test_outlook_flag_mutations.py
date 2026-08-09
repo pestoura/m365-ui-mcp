@@ -57,7 +57,7 @@ def test_flag_unflag_and_complete_are_verified() -> None:
     unflagged, third = flag_mutations.apply_fixture_flag_mutation(
         fixture,
         flag_mutations.FlagMutationRequest(
-            flag_mutations.PinMutationAction.UNPIN,
+            flag_mutations.FlagMutationAction.UNFLAG,
             "msg-001",
         ),
         readiness=_ready(),
