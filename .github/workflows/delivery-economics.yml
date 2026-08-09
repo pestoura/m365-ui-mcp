@@ -1,0 +1,75 @@
+name: Delivery Economics
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+jobs:
+  collect:
+    name: trusted low-cardinality delivery metrics
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted default branch only
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve matching successful JDS Audit run
+        id: jds
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$(python scripts/collect_delivery_metrics.py \
+            --event "$GITHUB_EVENT_PATH" \
+            --resolve-jds-run)"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download matching JDS effective plan
+        if: steps.jds.outputs.run_id != '0'
+        uses: actions/download-artifact@v4
+        with:
+          name: jds-effective-plan
+          path: artifacts/jds
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.jds.outputs.run_id }}
+
+      - name: Collect delivery metrics
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/delivery-economics
+          args=(
+            --event "$GITHUB_EVENT_PATH"
+            --output artifacts/delivery-economics/metrics.json
+            --summary artifacts/delivery-economics/summary.md
+          )
+          if [[ -f artifacts/jds/effective-plan.json ]]; then
+            args+=(--jds-plan artifacts/jds/effective-plan.json)
+          fi
+          python scripts/collect_delivery_metrics.py "${args[@]}"
+          cat artifacts/delivery-economics/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload delivery economics evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-economics-${{ github.event.workflow_run.id }}
+          path: artifacts/delivery-economics/
+          if-no-files-found: error
