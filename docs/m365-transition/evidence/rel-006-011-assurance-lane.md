@@ -36,14 +36,14 @@ No feature implementation module was modified. No product behaviour changed.
 | --- | --- |
 | `compileall src tests scripts` | PASS |
 | `ruff check .` | PASS |
-| `mypy` | PASS (124 source files) |
+| `mypy` | PASS (125 source files) |
 | `scripts/check_docs.py` | PASS (0 errors, 0 warnings) |
 | `scripts/check_contracts.py` | PASS |
 | `scripts/check_policy_metadata.py` | PASS (17 tools, 0 violations) |
 | `scripts/check_no_secrets.py` | PASS |
 | `scripts/check_base_image_pinning.py` | PASS |
 | `scripts/isolated_acceptance.py` | PASS (25 checks, 10 IA families, 0 unmapped) |
-| `pytest` | 493 passed (baseline on `main` @ 23660fa: 457) |
+| `pytest` | 498 passed (baseline on `main` @ 00bf92c: 462) |
 
 Negative controls were exercised locally for the REL-010 detector: injected
 `{"token": ...}`, `Bearer ...` and `{"cookie": ...}` payloads all fail the
