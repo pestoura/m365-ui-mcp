@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Cumulative revalidation trigger: current Wave G integration baseline.
+
 import pytest
 
 from m365_mcp.application_registry import (
