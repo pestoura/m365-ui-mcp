@@ -33,6 +33,7 @@ class FollowUpFlag:
     state: FollowUpState
     start_day_offset: int | None = None
     due_day_offset: int | None = None
+    reminder_day_offset: int | None = None
     completed_day_offset: int | None = None
 
     def __post_init__(self) -> None:
@@ -46,7 +47,12 @@ class FollowUpFlag:
         if not isinstance(self.state, FollowUpState):
             raise ValueError("state must be a closed FollowUpState")
 
-        for field_name in ("start_day_offset", "due_day_offset", "completed_day_offset"):
+        for field_name in (
+            "start_day_offset",
+            "due_day_offset",
+            "reminder_day_offset",
+            "completed_day_offset",
+        ):
             value = getattr(self, field_name)
             if value is None:
                 continue
@@ -58,6 +64,7 @@ class FollowUpFlag:
         if self.state is FollowUpState.NOT_FLAGGED and (
             self.start_day_offset is not None
             or self.due_day_offset is not None
+            or self.reminder_day_offset is not None
             or self.completed_day_offset is not None
         ):
             raise ValueError("an unflagged message must not carry follow-up scheduling")
@@ -65,12 +72,26 @@ class FollowUpFlag:
             raise ValueError("a completed follow-up requires completed_day_offset")
         if self.state is not FollowUpState.COMPLETED and self.completed_day_offset is not None:
             raise ValueError("completed_day_offset is only valid for a completed follow-up")
+        if self.state is FollowUpState.COMPLETED and self.reminder_day_offset is not None:
+            raise ValueError("a completed follow-up must not retain a reminder")
         if (
             self.start_day_offset is not None
             and self.due_day_offset is not None
             and self.due_day_offset < self.start_day_offset
         ):
             raise ValueError("due_day_offset must not precede start_day_offset")
+        if (
+            self.start_day_offset is not None
+            and self.reminder_day_offset is not None
+            and self.reminder_day_offset < self.start_day_offset
+        ):
+            raise ValueError("reminder_day_offset must not precede start_day_offset")
+        if (
+            self.reminder_day_offset is not None
+            and self.due_day_offset is not None
+            and self.reminder_day_offset > self.due_day_offset
+        ):
+            raise ValueError("reminder_day_offset must not follow due_day_offset")
 
 
 @dataclass(frozen=True)
@@ -83,6 +104,7 @@ class FollowUpReadState:
     is_completed: bool
     start_day_offset: int | None
     due_day_offset: int | None
+    reminder_day_offset: int | None
     completed_day_offset: int | None
     synthetic: bool
 
@@ -94,6 +116,7 @@ class FollowUpReadState:
             "is_completed": self.is_completed,
             "start_day_offset": self.start_day_offset,
             "due_day_offset": self.due_day_offset,
+            "reminder_day_offset": self.reminder_day_offset,
             "completed_day_offset": self.completed_day_offset,
             "synthetic": self.synthetic,
         }
@@ -150,6 +173,7 @@ def _project(flag: FollowUpFlag) -> FollowUpReadState:
         is_completed=flag.state is FollowUpState.COMPLETED,
         start_day_offset=flag.start_day_offset,
         due_day_offset=flag.due_day_offset,
+        reminder_day_offset=flag.reminder_day_offset,
         completed_day_offset=flag.completed_day_offset,
         synthetic=True,
     )
