@@ -138,7 +138,7 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-057"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-060-sweep",
@@ -147,7 +147,8 @@
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
-        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e"
+        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e",
+        "main:eba5f52ff826aa8ca1dfc4252a3a85fe21b550b5"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
@@ -158,7 +159,7 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-060"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-061-rule-reads",
@@ -167,7 +168,8 @@
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
-        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e"
+        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e",
+        "main:eba5f52ff826aa8ca1dfc4252a3a85fe21b550b5"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
@@ -178,7 +180,7 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-061"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-062-rule-crud",
@@ -187,7 +189,8 @@
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
-        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e"
+        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e",
+        "main:eba5f52ff826aa8ca1dfc4252a3a85fe21b550b5"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
@@ -198,7 +201,7 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-062"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-063-rule-state-order",
@@ -207,7 +210,8 @@
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
-        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e"
+        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e",
+        "main:eba5f52ff826aa8ca1dfc4252a3a85fe21b550b5"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
@@ -218,7 +222,7 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-063"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-064-rule-logic",
@@ -227,7 +231,8 @@
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
-        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e"
+        "main:705f6955a11c286aab3cbca9d01d5d543b8e636e",
+        "main:eba5f52ff826aa8ca1dfc4252a3a85fe21b550b5"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
@@ -238,14 +243,14 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-064"],
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "riskClass": "READ",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-065-quick-step-reads",
       "issue": null,
       "prs": [],
       "evidence": ["branch:wave-h/out-065-quick-step-reads"],
-      "implementationState": "SPECIFIED_ONLY",
+      "implementationState": "IMPLEMENTED_NOT_ATTESTED",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
     },
@@ -254,14 +259,14 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-065"],
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-066-quick-step-crud",
       "issue": null,
       "prs": [],
       "evidence": ["branch:wave-h/out-066-quick-step-crud"],
-      "implementationState": "SPECIFIED_ONLY",
+      "implementationState": "IMPLEMENTED_NOT_ATTESTED",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
     },
@@ -270,14 +275,14 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-066"],
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-067-quick-step-execution-policy",
       "issue": null,
       "prs": [],
       "evidence": ["branch:wave-h/out-067-quick-step-execution-policy"],
-      "implementationState": "SPECIFIED_ONLY",
+      "implementationState": "IMPLEMENTED_NOT_ATTESTED",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
     },
@@ -286,14 +291,14 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-067"],
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-068-conditional-formatting",
       "issue": null,
       "prs": [],
       "evidence": ["branch:wave-h/out-068-conditional-formatting"],
-      "implementationState": "SPECIFIED_ONLY",
+      "implementationState": "IMPLEMENTED_NOT_ATTESTED",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
     },
@@ -302,14 +307,14 @@
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
       "dependencies": ["OUT-068"],
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-069-forwarding-settings",
       "issue": null,
       "prs": [],
       "evidence": ["branch:wave-h/out-069-forwarding-settings"],
-      "implementationState": "SPECIFIED_ONLY",
+      "implementationState": "IMPLEMENTED_NOT_ATTESTED",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
     },
@@ -329,6 +334,7 @@
         "docs/m365-transition/evidence/rel-026-baseline.md",
         "docs/m365-transition/evidence/rel-026-baseline.json",
         ".github/workflows/delivery-economics.yml",
+        "gha:31313733357/delivery-economics-31313575178",
         "main:eba5f52ff826aa8ca1dfc4252a3a85fe21b550b5"
       ],
       "implementationState": "IMPLEMENTED_NOT_ATTESTED",
