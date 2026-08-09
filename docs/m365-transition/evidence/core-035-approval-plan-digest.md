@@ -1,6 +1,6 @@
 # CORE-035 — Approval plan digest
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -55,3 +55,9 @@ CORE-034, PLN-MIG-001 and PLN-MIG-002 are merged and post-merge GREEN. This revi
 ## Acceptance coverage
 
 Tests prove deterministic hashing, binding to node order/tool version/plan kind, canonical dependency ordering and fail-closed behavior for read-only, single-node, unknown-tool and invalid-scope plans.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

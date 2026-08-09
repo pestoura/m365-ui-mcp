@@ -1,6 +1,6 @@
 # CORE-047 — Execution provenance envelope
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -76,3 +76,9 @@ Tests prove:
 CORE-046 is merged at `a5a0e59ea005296fa532e48cea92e2f4cf11d1c8` and its post-merge `main` validation is fully GREEN, including functional gates, filesystem/dependency/secret scanning, both image builds, Trivy HIGH/CRITICAL scans and CycloneDX SBOM validation.
 
 CORE-047 is therefore formally unblocked for integration. This revision re-triggers the complete mandatory suite against the current `main`; historical stacked/preventive runs are not accepted as merge evidence.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

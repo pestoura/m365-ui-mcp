@@ -1,6 +1,6 @@
 # CORE-044 — Result projection operators
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -41,3 +41,9 @@ CORE-046 adds secret-aware field classification; CORE-044 therefore does not cla
 ## Acceptance coverage
 
 Tests cover select, count, exists, first, latest, top-n, pagination, metadata-only, input isolation and rejection of unbounded/ambiguous projection requests.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

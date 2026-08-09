@@ -1,6 +1,6 @@
 # CORE-037 — Generalized state identity
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -59,3 +59,9 @@ No tenant content, mailbox address, account email, browser profile path, cookie,
 ## Current integration gate
 
 CORE-036 is merged and post-merge GREEN on `main` at `e9e0dcc6d0a0a1097c82da8b93e3b8d7637016fb`. PR #261 is now based directly on that integration point. This revision deliberately re-triggers all mandatory gates; stacked-branch evidence is not reused for merge.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

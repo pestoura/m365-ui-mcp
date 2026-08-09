@@ -1,6 +1,6 @@
 # CORE-039 — Typed locks
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -83,3 +83,9 @@ Tests prove:
 ## Current integration gate
 
 CORE-038 is merged and post-merge GREEN on `main` at `a7178b3417c0907e66388115742443739b2e017e`. PR #263 is now based directly on that integration point. This revision deliberately re-triggers every mandatory CI/security/image/Trivy/SBOM/documentation gate; stacked-branch evidence is not reused for merge.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

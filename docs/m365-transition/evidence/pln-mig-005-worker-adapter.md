@@ -1,6 +1,6 @@
 # PLN-MIG-005 — Planner worker operations into application adapter
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -50,3 +50,9 @@ Tests prove exact ownership of the five Planner operations, mock output parity, 
 ## Current integration gate
 
 PLN-MIG-004 is merged and `main` is post-merge GREEN at `f73ad7ec81d905734f6b94ad8e0ea11e483ca540`. This clean revision is based directly on that integration point and intentionally excludes unrelated stacked-branch rewrites of prior Planner tests. Merge only after standalone and pull-request mandatory CI/security/documentation/image/Trivy/SBOM gates are GREEN.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

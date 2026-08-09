@@ -1,6 +1,6 @@
 # PLN-MIG-003 — Planner capability definitions
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -41,3 +41,9 @@ Every definition remains bound to `application=planner`, `surface=planner_web` a
 ## Current integration gate
 
 Phase 5 through CORE-050 is merged and the current `main` is post-merge GREEN at `d9865c672873440fa9162ea52311a244603b07f1`. This clean revision is built directly from that baseline so the Planner ownership migration cannot reintroduce stale stacked-branch history. Merge only after all mandatory CI/security/docs/image/Trivy/SBOM gates pass.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

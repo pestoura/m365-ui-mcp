@@ -1,6 +1,6 @@
 # CORE-040 — Saga/checkpoint generalization
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -90,3 +90,9 @@ Tests prove:
 ## Current integration gate
 
 CORE-039 is merged and post-merge GREEN on `main` at `2c1f4c59ac26c3d0819045c8f8a593aceb3eb90c`. PR #264 is now based directly on that integration point. Its CORE-040-specific Ruff spacing issue was corrected in advance; this revision deliberately re-triggers the complete mandatory current-base gate suite and does not reuse stacked evidence.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

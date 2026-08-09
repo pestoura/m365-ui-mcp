@@ -1,6 +1,6 @@
 # PLN-MIG-008 — Planner mock parity suite
 
-Status: **IMPLEMENTED_LOCAL_GATES_GREEN**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -32,3 +32,9 @@ No credential material, no tenant data and no absolute filesystem path is stored
 ## Current integration gate
 
 This branch is cut from current remote `main` at `2ff95b0` (merge of PR #295). Local gates (compileall, ruff, mypy, check_docs, check_contracts, full pytest, isolated_acceptance, check_no_secrets) are GREEN on this base. Merge only after pull-request CI/security/documentation gates are also GREEN.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

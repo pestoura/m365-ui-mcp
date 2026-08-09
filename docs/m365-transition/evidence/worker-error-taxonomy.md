@@ -1,6 +1,6 @@
 # CORE-030 — Worker error taxonomy expansion
 
-Status: **IMPLEMENTED_AWAITING_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -73,3 +73,9 @@ Tests prove:
 - malformed browser-shaped requests do not echo rejected input.
 
 No CI test authenticates to a real Microsoft tenant. Outlook remains `RESERVED`.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.

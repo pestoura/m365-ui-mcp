@@ -1,6 +1,6 @@
 # CORE-046 — Secret-aware result fields
 
-Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
+Status: **INTEGRATED_ON_MAIN**
 
 ## Objective
 
@@ -75,3 +75,9 @@ Tests prove:
 CORE-045 is merged at `34968a01d06d1ae5ef2c5315d417d3c884d6e029` and its post-merge CI/documentation gates are fully GREEN, including both image Trivy scans and CycloneDX SBOM validation.
 
 CORE-046 is therefore unblocked for integration. This revision re-triggers all mandatory gates against the current `main`; historical stacked or preventive runs are not accepted as merge evidence.
+
+## Integration reconciliation
+
+This requirement's delta is present in `main`. The mandatory CI gate set (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) was GREEN on the merged pull request, and the full gate set was re-executed on post-merge `main` at `9b4a645`.
+
+Mock mode only: no live Microsoft tenant was contacted, no capability is promoted to SUPPORTED by this record, Outlook stays RESERVED, and the 17-tool Planner public ABI is unchanged.
