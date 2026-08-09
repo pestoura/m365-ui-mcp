@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import m365_mcp.apps.planner as planner_app
-import m365_mcp.capability_registry as capability_registry
-import m365_mcp.config as config
-import m365_mcp.policy as policy
-import m365_mcp.tool_registry as tool_registry
-
+from m365_mcp import capability_registry, config, policy, tool_registry
+from m365_mcp.apps import planner as planner_app
 
 EXPECTED_CAPABILITIES = (
     ("plans.read", "account"),
@@ -45,14 +41,18 @@ def test_default_capability_registry_is_composed_from_planner_app_definitions() 
     assert registry.by_application("outlook") == ()
 
 
-def test_capability_migration_preserves_scope_aware_policy_for_all_planner_tools() -> None:
+def test_capability_migration_preserves_policy_and_registry_metadata() -> None:
     engine = policy.MetadataPolicyEngine()
     tools = tool_registry.default_tool_registry().by_application("planner")
+    capabilities = capability_registry.default_capability_registry()
 
     assert len(tools) == 17
     for definition in tools:
         result = engine.evaluate(definition.name, config.Settings())
         assert result.decision is policy.Decision.ALLOW
-        assert result.scope is not None
-        assert result.scope.application == "planner"
-        assert result.scope.surface == definition.surface
+        assert result.application == "planner"
+        assert result.capability_keys == definition.capability_keys
+        assert all(
+            capabilities.has_capability("planner", capability)
+            for capability in definition.capability_keys
+        )
