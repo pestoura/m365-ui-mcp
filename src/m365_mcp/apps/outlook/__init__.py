@@ -1,15 +1,22 @@
 """Outlook application foundation.
 
 OUT-001 creates an application-owned package boundary, OUT-002 adds synthetic
-isolated fixtures, OUT-003 adds semantic shell/navigation requirements, and
-OUT-004 adds evidence-neutral capability discovery. Outlook remains RESERVED
-and exposes no public MCP registrar or browser operation surface.
+isolated fixtures, OUT-003 adds semantic shell/navigation requirements,
+OUT-004 adds evidence-neutral capability discovery, and OUT-005 adds sanitized
+primary-mailbox context verification. Outlook remains RESERVED and exposes no
+public MCP registrar or browser operation surface.
 """
 
 from m365_mcp.apps.outlook.discovery import (
     DiscoveryState,
     OutlookCapabilityCandidate,
     default_outlook_discovery_candidates,
+)
+from m365_mcp.apps.outlook.mailbox_context import (
+    PrimaryMailboxContext,
+    PrimaryMailboxContextState,
+    PrimaryMailboxObservation,
+    verify_primary_mailbox_context,
 )
 from m365_mcp.apps.outlook.manifest import OutlookFoundationManifest, foundation_manifest
 from m365_mcp.apps.outlook.mock_ui import (
@@ -31,8 +38,12 @@ __all__ = [
     "OutlookMockFixture",
     "OutlookShellContract",
     "OutlookShellTarget",
+    "PrimaryMailboxContext",
+    "PrimaryMailboxContextState",
+    "PrimaryMailboxObservation",
     "default_outlook_discovery_candidates",
     "default_outlook_fixture",
     "foundation_manifest",
     "outlook_shell_contracts",
+    "verify_primary_mailbox_context",
 ]
