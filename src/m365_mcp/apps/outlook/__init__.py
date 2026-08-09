@@ -5,8 +5,9 @@ OUT-010..OUT-014 add synthetic-only read models. OUT-015 adds controlled
 attachment retrieval into an injected artifact sink; no attachment bytes or
 raw storage locator are projected. OUT-016..OUT-019 add folder, category,
 follow-up and pin/snooze read state. OUT-020 adds a synthetic-only bounded
-calendar listing. Outlook remains RESERVED and exposes no public MCP registrar
-or browser operation surface.
+calendar listing and OUT-021 adds synthetic-only calendar event list/get/search
+using relative day offsets only. Outlook remains RESERVED and exposes no public
+MCP registrar or browser operation surface.
 """
 
 from m365_mcp.apps.outlook.attachment_metadata import (
@@ -20,6 +21,18 @@ from m365_mcp.apps.outlook.attachment_retrieval import (
     AttachmentRetrievalResult,
     SyntheticAttachmentPayload,
     retrieve_synthetic_attachment,
+)
+from m365_mcp.apps.outlook.calendar_events import (
+    EventProjection,
+    EventSearchRequest,
+    EventSearchResult,
+    EventSensitivity,
+    EventShowAs,
+    SyntheticEvent,
+    default_synthetic_events,
+    get_fixture_event,
+    list_fixture_events,
+    search_fixture_events,
 )
 from m365_mcp.apps.outlook.calendar_list import (
     CalendarColorToken,
@@ -140,6 +153,11 @@ __all__ = [
     "CategoryUsage",
     "ConversationReadResult",
     "DiscoveryState",
+    "EventProjection",
+    "EventSearchRequest",
+    "EventSearchResult",
+    "EventSensitivity",
+    "EventShowAs",
     "FolderListResult",
     "FollowUpFlag",
     "FollowUpListResult",
@@ -178,6 +196,7 @@ __all__ = [
     "SyntheticCalendar",
     "SyntheticCategory",
     "SyntheticConversation",
+    "SyntheticEvent",
     "SyntheticFolder",
     "default_outlook_discovery_candidates",
     "default_outlook_fixture",
@@ -186,15 +205,18 @@ __all__ = [
     "default_synthetic_categories",
     "default_synthetic_category_assignments",
     "default_synthetic_conversations",
+    "default_synthetic_events",
     "default_synthetic_folders",
     "default_synthetic_follow_up_flags",
     "default_synthetic_pin_snooze_markers",
     "evaluate_outlook_readiness",
     "foundation_manifest",
+    "get_fixture_event",
     "get_fixture_message",
     "list_fixture_attachment_metadata",
     "list_fixture_calendars",
     "list_fixture_categories",
+    "list_fixture_events",
     "list_fixture_folders",
     "list_fixture_follow_up_state",
     "list_fixture_pin_snooze_state",
@@ -207,6 +229,7 @@ __all__ = [
     "read_fixture_message_categories",
     "read_fixture_pin_snooze_state",
     "retrieve_synthetic_attachment",
+    "search_fixture_events",
     "search_fixture_messages",
     "verify_primary_mailbox_context",
     "verify_shared_mailbox_context",
