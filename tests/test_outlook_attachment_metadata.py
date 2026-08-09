@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from m365_mcp.apps.outlook import attachment_metadata, discovery, mailbox_context, mock_ui, readiness
+from m365_mcp.apps.outlook import (
+    attachment_metadata,
+    discovery,
+    mailbox_context,
+    mock_ui,
+    readiness,
+)
 from m365_mcp.apps.outlook.shell_contracts import OutlookShellTarget
 from m365_mcp.capability_registry import default_capability_registry
 from m365_mcp.tool_registry import default_tool_registry
@@ -78,13 +84,12 @@ def test_attachment_catalog_drift_fails_closed() -> None:
     else:
         raise AssertionError("dangling attachment metadata must fail closed")
 
-    mismatch = ()
     try:
         attachment_metadata.list_fixture_attachment_metadata(
             fixture,
             "msg-002",
             readiness=_ready_report(),
-            attachments=mismatch,
+            attachments=(),
         )
     except ValueError as exc:
         assert "disagrees with message attachment state" in str(exc)
