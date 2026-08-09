@@ -5,6 +5,8 @@ computed later from auth/account/UI/runtime/policy evidence by CORE-012; this
 registry therefore contains no tenant content and makes no live-support claim.
 PLN-MIG-003 moves Planner-owned capability declarations out of this generic core
 while retaining the application-neutral registry schema and composition boundary.
+Outlook discovery identities may also be declared here while the application
+remains RESERVED; declaration is not execution or live-support promotion.
 """
 
 from __future__ import annotations
@@ -121,6 +123,9 @@ class CapabilityRegistry:
 
 def default_capability_registry() -> CapabilityRegistry:
     """Compose current scoped definitions from application-owned modules."""
+    from m365_mcp.apps.outlook.capability_registry import outlook_capability_definitions
     from m365_mcp.apps.planner.capability_registry import planner_capability_definitions
 
-    return CapabilityRegistry(planner_capability_definitions())
+    return CapabilityRegistry(
+        planner_capability_definitions() + outlook_capability_definitions()
+    )
