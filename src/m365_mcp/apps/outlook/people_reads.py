@@ -18,7 +18,12 @@ class SyntheticContact:
     job_title: str = ""
 
     def __post_init__(self) -> None:
-        if not self.contact_key or self.contact_key != self.contact_key.strip() or "@" in self.contact_key:
+        invalid_contact_key = (
+            not self.contact_key
+            or self.contact_key != self.contact_key.strip()
+            or "@" in self.contact_key
+        )
+        if invalid_contact_key:
             raise ValueError("contact_key must be an opaque semantic token")
         if not self.display_name or self.display_name != self.display_name.strip():
             raise ValueError("display_name must be non-empty and trimmed")
@@ -77,7 +82,8 @@ def search_fixture_contacts(
         raise ValueError("query must be non-empty, trimmed and bounded")
     needle = query.casefold()
     matches = tuple(
-        item for item in _catalog(contacts)
+        item
+        for item in _catalog(contacts)
         if needle in item.display_name.casefold()
         or needle in item.organization.casefold()
         or needle in item.job_title.casefold()
@@ -95,10 +101,19 @@ def get_fixture_contact(
     _gate(fixture, readiness)
     if not contact_key or contact_key != contact_key.strip() or "@" in contact_key:
         raise ValueError("contact_key must be an opaque semantic token")
-    match = next((item for item in _catalog(contacts) if item.contact_key == contact_key), None)
+    match = next(
+        (item for item in _catalog(contacts) if item.contact_key == contact_key),
+        None,
+    )
     if match is None:
         raise ValueError("synthetic contact_key not found")
     return match
 
 
-__all__ = ["ContactSearchResult", "SyntheticContact", "default_synthetic_contacts", "get_fixture_contact", "search_fixture_contacts"]
+__all__ = [
+    "ContactSearchResult",
+    "SyntheticContact",
+    "default_synthetic_contacts",
+    "get_fixture_contact",
+    "search_fixture_contacts",
+]
