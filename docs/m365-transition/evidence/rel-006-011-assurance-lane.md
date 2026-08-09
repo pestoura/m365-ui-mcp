@@ -1,6 +1,6 @@
 # REL-006..REL-011 — Assurance lane (Lane E)
 
-Status: **IMPLEMENTED_AWAITING_GATES**
+Status: **IMPLEMENTED_ON_CURRENT_MAIN_GATES_GREEN**
 
 Scope: Phase 16 assurance items that are justified now, on mock/isolated evidence only.
 No live tenant evidence exists, therefore **no REL-012+ live acceptance is claimed**.
@@ -36,14 +36,14 @@ No feature implementation module was modified. No product behaviour changed.
 | --- | --- |
 | `compileall src tests scripts` | PASS |
 | `ruff check .` | PASS |
-| `mypy` | PASS (115 source files) |
+| `mypy` | PASS (121 source files) |
 | `scripts/check_docs.py` | PASS (0 errors, 0 warnings) |
 | `scripts/check_contracts.py` | PASS |
 | `scripts/check_policy_metadata.py` | PASS (17 tools, 0 violations) |
 | `scripts/check_no_secrets.py` | PASS |
 | `scripts/check_base_image_pinning.py` | PASS |
 | `scripts/isolated_acceptance.py` | PASS (25 checks, 10 IA families, 0 unmapped) |
-| `pytest` | 441 passed (baseline on `main`: 405) |
+| `pytest` | 479 passed (baseline on `main` @ 96cee6d: 443) |
 
 Negative controls were exercised locally for the REL-010 detector: injected
 `{"token": ...}`, `Bearer ...` and `{"cookie": ...}` payloads all fail the
