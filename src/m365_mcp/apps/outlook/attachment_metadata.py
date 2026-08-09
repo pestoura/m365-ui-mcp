@@ -25,7 +25,12 @@ class SyntheticAttachment:
     def __post_init__(self) -> None:
         for field_name in ("attachment_key", "message_key"):
             value = getattr(self, field_name)
-            if not value or value != value.strip() or any(char.isspace() for char in value):
+            invalid = (
+                not value
+                or value != value.strip()
+                or any(char.isspace() for char in value)
+            )
+            if invalid:
                 raise ValueError(f"{field_name} must be a non-empty semantic token")
         if not self.file_name or self.file_name != self.file_name.strip():
             raise ValueError("file_name must be non-empty")
@@ -77,7 +82,7 @@ def list_fixture_attachment_metadata(
     if message is None:
         raise ValueError("synthetic message_key not found")
 
-    catalog = attachments or default_synthetic_attachments()
+    catalog = default_synthetic_attachments() if attachments is None else attachments
     attachment_keys = tuple(item.attachment_key for item in catalog)
     if len(set(attachment_keys)) != len(attachment_keys):
         raise ValueError("attachment catalog keys must be unique")
