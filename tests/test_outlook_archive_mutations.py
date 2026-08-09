@@ -50,9 +50,12 @@ def test_archive_and_restore_are_verified() -> None:
         ),
         readiness=_ready(),
     )
+    restored_message = next(
+        item for item in restored.messages if item.message_key == "msg-001"
+    )
     assert second.read_back_folder_key == "inbox"
     assert second.verified is True
-    assert next(item for item in restored.messages if item.message_key == "msg-001").folder_key == "inbox"
+    assert restored_message.folder_key == "inbox"
 
 
 def test_archive_and_restore_are_domain_idempotent() -> None:
