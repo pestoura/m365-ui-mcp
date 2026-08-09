@@ -6,7 +6,15 @@ from m365_mcp.tool_registry import default_tool_registry
 
 
 def _ready() -> readiness.OutlookReadinessReport:
-    return readiness.OutlookReadinessReport(state=readiness.OutlookReadinessState.DISCOVERY_READY, primary_context_verified=True, shared_context_verified=False, candidate_count=1, observed_count=1, blocked_count=0, reattestation_count=0)
+    return readiness.OutlookReadinessReport(
+        state=readiness.OutlookReadinessState.DISCOVERY_READY,
+        primary_context_verified=True,
+        shared_context_verified=False,
+        candidate_count=1,
+        observed_count=1,
+        blocked_count=0,
+        reattestation_count=0,
+    )
 
 
 def test_todo_reads_and_list_filter() -> None:
@@ -37,8 +45,20 @@ def test_dangling_task_and_bad_due_offset_fail_closed() -> None:
 
 def test_task_projection_excludes_identity_and_browser_primitives() -> None:
     fixture = mock_ui.default_outlook_fixture()
-    projection = repr(todo_task_reads.list_fixture_tasks(fixture, "todo-default", readiness=_ready())[0].to_projection()).lower()
-    for forbidden in ("@", "http", "://", "selector", "xpath", "javascript", "cookie", "tenant", "utc"):
+    tasks = todo_task_reads.list_fixture_tasks(fixture, "todo-default", readiness=_ready())
+    projection = repr(tasks[0].to_projection()).lower()
+    forbidden_tokens = (
+        "@",
+        "http",
+        "://",
+        "selector",
+        "xpath",
+        "javascript",
+        "cookie",
+        "tenant",
+        "utc",
+    )
+    for forbidden in forbidden_tokens:
         assert forbidden not in projection
 
 
