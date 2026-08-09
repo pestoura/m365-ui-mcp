@@ -23,8 +23,8 @@ def _semantic_token(value: str, name: str) -> str:
 class RuleConditionKind(StrEnum):
     FROM_KEY = "FROM_KEY"
     TO_KEY = "TO_KEY"
-    SUBJECT_CONTAINS_TOKEN = "SUBJECT_CONTAINS_TOKEN"
-    BODY_CONTAINS_TOKEN = "BODY_CONTAINS_TOKEN"
+    SUBJECT_CONTAINS_TEXT = "SUBJECT_CONTAINS_TEXT"
+    BODY_CONTAINS_TEXT = "BODY_CONTAINS_TEXT"
     HAS_ATTACHMENT = "HAS_ATTACHMENT"
     IMPORTANCE = "IMPORTANCE"
 
@@ -163,7 +163,7 @@ def default_synthetic_rules() -> tuple[SyntheticMailRule, ...]:
             display_name="Synthetic follow-up categorization",
             order=2,
             conditions=(
-                RulePredicate(RuleConditionKind.SUBJECT_CONTAINS_TOKEN, "followup"),
+                RulePredicate(RuleConditionKind.SUBJECT_CONTAINS_TEXT, "followup"),
             ),
             actions=(RuleAction(RuleActionKind.APPLY_CATEGORY, "cat-followup"),),
         ),
