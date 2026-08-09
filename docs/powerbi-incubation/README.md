@@ -93,6 +93,14 @@ The initial read-only target is the existing Power BI report discussed during de
 
 No credential, tenant secret or authentication material is stored in this repository.
 
+## Delivery operating model
+
+Implementation cadence and delivery behavior are governed by [`delivery-operating-model.md`](delivery-operating-model.md).
+
+The delivery model uses bounded multi-lane waves, a permanent Controller/Integration lane, fast preflight gates before expensive/live acceptance, vertical capability slices and the rule `GREEN/PASS -> continue automatically`.
+
+This does **not** override the Power BI start gate: implementation remains blocked until `PBI-001` proves the current Planner/Outlook M365 baseline is GREEN and versioned.
+
 ## Integration rule
 
 Do not merge Power BI implementation into the active M365 program prematurely.
