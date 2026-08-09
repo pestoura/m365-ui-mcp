@@ -171,4 +171,4 @@ def test_out032_remains_reserved_and_not_public() -> None:
     assert default_tool_registry().by_application("outlook") == ()
 
 
-# Revalidated against the current Wave B integration base; no live-support claim.
+# Revalidated against cumulative Wave B after OUT-030/OUT-031; no live claim.
