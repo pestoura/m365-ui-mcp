@@ -23,6 +23,7 @@ jobs:
         run: |
           cp docs/m365-transition/execution-index.json /tmp/execution-index.previous.json
           python - <<'PY'
+          import base64
           import json
           import re
           from pathlib import Path
@@ -60,8 +61,7 @@ jobs:
                   raise SystemExit(
                       f'expected one literal in {key}: {old!r}; got {obj.count(old)}'
                   )
-              updated = obj.replace(old, new, 1)
-              text = text[:start] + updated + text[end:]
+              text = text[:start] + obj.replace(old, new, 1) + text[end:]
 
           lane_prs = {
               'OUT-098': 455,
@@ -91,103 +91,9 @@ jobs:
           marker = '    {\n      "key": "REL-026",'
           if text.count(marker) != 1:
               raise SystemExit('REL-026 insertion marker not unique')
-          wave_n = '''    {
-      "key": "OUT-104",
-      "releaseBand": "0.7.x-people-todo-shared",
-      "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-103"],
-      "state": "READY",
-      "riskClass": "SAFE_WRITE",
-      "wave": "wave-n-out-104-109",
-      "branch": "wave-n/out-104-task-mutations",
-      "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
-      "liveSupportState": "UNOBSERVED",
-      "blockerCode": null
-    },
-    {
-      "key": "OUT-105",
-      "releaseBand": "0.7.x-people-todo-shared",
-      "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-104"],
-      "state": "READY",
-      "riskClass": "SAFE_WRITE",
-      "wave": "wave-n-out-104-109",
-      "branch": "wave-n/out-105-task-scheduling",
-      "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
-      "liveSupportState": "UNOBSERVED",
-      "blockerCode": null
-    },
-    {
-      "key": "OUT-106",
-      "releaseBand": "0.7.x-people-todo-shared",
-      "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-105"],
-      "state": "READY",
-      "riskClass": "SAFE_WRITE",
-      "wave": "wave-n-out-104-109",
-      "branch": "wave-n/out-106-task-important-myday",
-      "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
-      "liveSupportState": "UNOBSERVED",
-      "blockerCode": null
-    },
-    {
-      "key": "OUT-107",
-      "releaseBand": "0.7.x-people-todo-shared",
-      "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-106"],
-      "state": "READY",
-      "riskClass": "SAFE_WRITE",
-      "wave": "wave-n-out-104-109",
-      "branch": "wave-n/out-107-task-steps",
-      "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
-      "liveSupportState": "UNOBSERVED",
-      "blockerCode": null
-    },
-    {
-      "key": "OUT-108",
-      "releaseBand": "0.7.x-people-todo-shared",
-      "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-107"],
-      "state": "READY",
-      "riskClass": "SAFE_WRITE",
-      "wave": "wave-n-out-104-109",
-      "branch": "wave-n/out-108-task-notes-attachments",
-      "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
-      "liveSupportState": "UNOBSERVED",
-      "blockerCode": null
-    },
-    {
-      "key": "OUT-109",
-      "releaseBand": "0.7.x-people-todo-shared",
-      "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-108"],
-      "state": "READY",
-      "riskClass": "SAFE_WRITE",
-      "wave": "wave-n-out-104-109",
-      "branch": "wave-n/out-109-flagged-email-relationship",
-      "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
-      "liveSupportState": "UNOBSERVED",
-      "blockerCode": null
-    },
-'''
+          wave_n = base64.b64decode(
+              'ICAgIHsKICAgICAgImtleSI6ICJPVVQtMTA0IiwKICAgICAgInJlbGVhc2VCYW5kIjogIjAuNy54LXBlb3BsZS10b2RvLXNoYXJlZCIsCiAgICAgICJwaGFzZSI6ICIxMi1wZW9wbGUtdG9kby1zaGFyZWQiLAogICAgICAiZGVwZW5kZW5jaWVzIjogWyJPVVQtMTAzIl0sCiAgICAgICJzdGF0ZSI6ICJSRUFEWSIsCiAgICAgICJyaXNrQ2xhc3MiOiAiU0FGRV9XUklURSIsCiAgICAgICJ3YXZlIjogIndhdmUtbi1vdXQtMTA0LTEwOSIsCiAgICAgICJicmFuY2giOiAid2F2ZS1uL291dC0xMDQtdGFzay1tdXRhdGlvbnMiLAogICAgICAiaXNzdWUiOiBudWxsLAogICAgICAicHJzIjogW10sCiAgICAgICJldmlkZW5jZSI6IFtdLAogICAgICAiaW1wbGVtZW50YXRpb25TdGF0ZSI6ICJTUEVDSUZJRURfT05MWSIsCiAgICAgICJsaXZlU3VwcG9ydFN0YXRlIjogIlVOT0JTRVJWRUQiLAogICAgICAiYmxvY2tlckNvZGUiOiBudWxsCiAgICB9LAogICAgewogICAgICAia2V5IjogIk9VVC0xMDUiLAogICAgICAicmVsZWFzZUJhbmQiOiAiMC43LngtcGVvcGxlLXRvZG8tc2hhcmVkIiwKICAgICAgInBoYXNlIjogIjEyLXBlb3BsZS10b2RvLXNoYXJlZCIsCiAgICAgICJkZXBlbmRlbmNpZXMiOiBbIk9VVC0xMDQiXSwKICAgICAgInN0YXRlIjogIlJFQURZIiwKICAgICAgInJpc2tDbGFzcyI6ICJTQUZFX1dSSVRFIiwKICAgICAgIndhdmUiOiAid2F2ZS1uLW91dC0xMDQtMTA5IiwKICAgICAgImJyYW5jaCI6ICJ3YXZlLW4vb3V0LTEwNS10YXNrLXNjaGVkdWxpbmciLAogICAgICAiaXNzdWUiOiBudWxsLAogICAgICAicHJzIjogW10sCiAgICAgICJldmlkZW5jZSI6IFtdLAogICAgICAiaW1wbGVtZW50YXRpb25TdGF0ZSI6ICJTUEVDSUZJRURfT05MWSIsCiAgICAgICJsaXZlU3VwcG9ydFN0YXRlIjogIlVOT0JTRVJWRUQiLAogICAgICAiYmxvY2tlckNvZGUiOiBudWxsCiAgICB9LAogICAgewogICAgICAia2V5IjogIk9VVC0xMDYiLAogICAgICAicmVsZWFzZUJhbmQiOiAiMC43LngtcGVvcGxlLXRvZG8tc2hhcmVkIiwKICAgICAgInBoYXNlIjogIjEyLXBlb3BsZS10b2RvLXNoYXJlZCIsCiAgICAgICJkZXBlbmRlbmNpZXMiOiBbIk9VVC0xMDUiXSwKICAgICAgInN0YXRlIjogIlJFQURZIiwKICAgICAgInJpc2tDbGFzcyI6ICJTQUZFX1dSSVRFIiwKICAgICAgIndhdmUiOiAid2F2ZS1uLW91dC0xMDQtMTA5IiwKICAgICAgImJyYW5jaCI6ICJ3YXZlLW4vb3V0LTEwNi10YXNrLWltcG9ydGFudC1teWRheSIsCiAgICAgICJpc3N1ZSI6IG51bGwsCiAgICAgICJwcnMiOiBbXSwKICAgICAgImV2aWRlbmNlIjogW10sCiAgICAgICJpbXBsZW1lbnRhdGlvblN0YXRlIjogIlNQRUNJRklFRF9PTkxZIiwKICAgICAgImxpdmVTdXBwb3J0U3RhdGUiOiAiVU5PQlNFUlZFRCIsCiAgICAgICJibG9ja2VyQ29kZSI6IG51bGwKICAgIH0sCiAgICB7CiAgICAgICJrZXkiOiAiT1VULTEwNyIsCiAgICAgICJyZWxlYXNlQmFuZCI6ICIwLjcueC1wZW9wbGUtdG9kby1zaGFyZWQiLAogICAgICAicGhhc2UiOiAiMTItcGVvcGxlLXRvZG8tc2hhcmVkIiwKICAgICAgImRlcGVuZGVuY2llcyI6IFsiT1VULTEwNiJdLAogICAgICAic3RhdGUiOiAiUkVBRFkiLAogICAgICAicmlza0NsYXNzIjogIlNBRkVfV1JJVEUiLAogICAgICAid2F2ZSI6ICJ3YXZlLW4tb3V0LTEwNC0xMDkiLAogICAgICAiYnJhbmNoIjogIndhdmUtbi9vdXQtMTA3LXRhc2stc3RlcHMiLAogICAgICAiaXNzdWUiOiBudWxsLAogICAgICAicHJzIjogW10sCiAgICAgICJldmlkZW5jZSI6IFtdLAogICAgICAiaW1wbGVtZW50YXRpb25TdGF0ZSI6ICJTUEVDSUZJRURfT05MWSIsCiAgICAgICJsaXZlU3VwcG9ydFN0YXRlIjogIlVOT0JTRVJWRUQiLAogICAgICAiYmxvY2tlckNvZGUiOiBudWxsCiAgICB9LAogICAgewogICAgICAia2V5IjogIk9VVC0xMDgiLAogICAgICAicmVsZWFzZUJhbmQiOiAiMC43LngtcGVvcGxlLXRvZG8tc2hhcmVkIiwKICAgICAgInBoYXNlIjogIjEyLXBlb3BsZS10b2RvLXNoYXJlZCIsCiAgICAgICJkZXBlbmRlbmNpZXMiOiBbIk9VVC0xMDciXSwKICAgICAgInN0YXRlIjogIlJFQURZIiwKICAgICAgInJpc2tDbGFzcyI6ICJTQUZFX1dSSVRFIiwKICAgICAgIndhdmUiOiAid2F2ZS1uLW91dC0xMDQtMTA5IiwKICAgICAgImJyYW5jaCI6ICJ3YXZlLW4vb3V0LTEwOC10YXNrLW5vdGVzLWF0dGFjaG1lbnRzIiwKICAgICAgImlzc3VlIjogbnVsbCwKICAgICAgInBycyI6IFtdLAogICAgICAiZXZpZGVuY2UiOiBbXSwKICAgICAgImltcGxlbWVudGF0aW9uU3RhdGUiOiAiU1BFQ0lGSUVEX09OTFkiLAogICAgICAibGl2ZVN1cHBvcnRTdGF0ZSI6ICJVTk9CU0VSVkVEIiwKICAgICAgImJsb2NrZXJDb2RlIjogbnVsbAogICAgfSwKICAgIHsKICAgICAgImtleSI6ICJPVVQtMTA5IiwKICAgICAgInJlbGVhc2VCYW5kIjogIjAuNy54LXBlb3BsZS10b2RvLXNoYXJlZCIsCiAgICAgICJwaGFzZSI6ICIxMi1wZW9wbGUtdG9kby1zaGFyZWQiLAogICAgICAiZGVwZW5kZW5jaWVzIjogWyJPVVQtMTA4Il0sCiAgICAgICJzdGF0ZSI6ICJSRUFEWSIsCiAgICAgICJyaXNrQ2xhc3MiOiAiU0FGRV9XUklURSIsCiAgICAgICJ3YXZlIjogIndhdmUtbi1vdXQtMTA0LTEwOSIsCiAgICAgICJicmFuY2giOiAid2F2ZS1uL291dC0xMDktZmxhZ2dlZC1lbWFpbC1yZWxhdGlvbnNoaXAiLAogICAgICAiaXNzdWUiOiBudWxsLAogICAgICAicHJzIjogW10sCiAgICAgICJldmlkZW5jZSI6IFtdLAogICAgICAiaW1wbGVtZW50YXRpb25TdGF0ZSI6ICJTUEVDSUZJRURfT05MWSIsCiAgICAgICJsaXZlU3VwcG9ydFN0YXRlIjogIlVOT0JTRVJWRUQiLAogICAgICAiYmxvY2tlckNvZGUiOiBudWxsCiAgICB9LAo='
+          ).decode('utf-8')
           text = text.replace(marker, wave_n + marker, 1)
           json.loads(text)
           path.write_text(text, encoding='utf-8')
