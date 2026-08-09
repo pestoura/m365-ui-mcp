@@ -1,6 +1,6 @@
 # CORE-048 — Token/context economics metrics
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_047**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -55,4 +55,6 @@ Tests prove:
 
 ## Dependency gate
 
-This work is stacked on CORE-047. It cannot merge until CORE-047 and its predecessors are merged and post-merge GREEN.
+CORE-047 is merged at `7816bbd97828ad960b79c6981bd594cb926d080e` and its complete post-merge `main` suite is GREEN, including functional gates, filesystem/dependency/secret scanning, both image builds, Trivy HIGH/CRITICAL scans and CycloneDX SBOM validation.
+
+CORE-048 is therefore formally unblocked for integration. This revision creates a fresh head and re-triggers the complete mandatory gate suite against the current `main`; historical stacked/preventive runs are invalid as merge evidence.
