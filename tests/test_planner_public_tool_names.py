@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import m365_mcp.apps.planner.public_surface as public_surface
-import m365_mcp.tool_registry as tool_registry
-import planner_mcp.tools as legacy_tools
-
+from m365_mcp import tool_registry
+from m365_mcp.apps.planner import public_surface
+from planner_mcp import tools as legacy_tools
 
 EXPECTED_PUBLIC_NAMES = (
     "planner_health",
