@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from m365_mcp.application_registry import ApplicationKey, ApplicationState, default_application_registry
+from m365_mcp.application_registry import (
+    ApplicationKey,
+    ApplicationState,
+    default_application_registry,
+)
 from m365_mcp.apps.outlook import draft_models, readiness, recipient_resolution
 from m365_mcp.idempotency_v2 import reserve_operation
 from m365_mcp.state_identity import resource_state_identity
@@ -24,8 +28,14 @@ def _ready() -> readiness.OutlookReadinessReport:
 
 def _candidates() -> tuple[recipient_resolution.SyntheticRecipientCandidate, ...]:
     return (
-        recipient_resolution.SyntheticRecipientCandidate("person-alpha", ("alpha", "project-a")),
-        recipient_resolution.SyntheticRecipientCandidate("person-beta", ("beta", "project-b")),
+        recipient_resolution.SyntheticRecipientCandidate(
+            "person-alpha",
+            ("alpha", "project-a"),
+        ),
+        recipient_resolution.SyntheticRecipientCandidate(
+            "person-beta",
+            ("beta", "project-b"),
+        ),
     )
 
 

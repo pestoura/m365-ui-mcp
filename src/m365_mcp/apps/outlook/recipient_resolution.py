@@ -100,7 +100,9 @@ def apply_recipient_assignment(
     if current is None or not current.synthetic:
         raise ValueError("synthetic draft_key not found")
 
-    resolved = tuple(resolve_recipient(query, candidates).recipient_key for query in request.queries)
+    resolved = tuple(
+        resolve_recipient(query, candidates).recipient_key for query in request.queries
+    )
     if len(resolved) != len(set(resolved)):
         raise ValueError("recipient queries resolve to duplicate identities")
 
