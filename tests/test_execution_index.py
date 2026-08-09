@@ -71,10 +71,13 @@ def test_mock_only_item_cannot_claim_live_support(tmp_path: Path) -> None:
 
 def test_illegal_ready_to_accepted_jump_is_rejected(tmp_path: Path) -> None:
     previous = _document()
-    current = copy.deepcopy(previous)
     previous_item = _item(previous, "OUT-060")
+    previous_item["state"] = "READY"
+    previous_item["branch"] = None
+    previous_item["wave"] = None
+
+    current = copy.deepcopy(previous)
     current_item = _item(current, "OUT-060")
-    assert previous_item["state"] == "READY"
     current_item["state"] = "ACCEPTED"
 
     previous_path = tmp_path / "previous.json"
