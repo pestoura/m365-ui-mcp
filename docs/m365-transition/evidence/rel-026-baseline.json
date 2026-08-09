@@ -1,0 +1,118 @@
+{
+  "schema": "m365.delivery-economics-baseline/v1",
+  "status": "PRE_CONSOLIDATION",
+  "samples": [
+    {
+      "sample": "PHASE_9_WAVE_F_INTEGRATION_BOUNDARY",
+      "ci_run_id": 31307838926,
+      "jds_run_id": 31307838928,
+      "ci_total_seconds": 393,
+      "fast_quality_seconds": 43,
+      "tests_acceptance_seconds": 35,
+      "repo_security_seconds": 24,
+      "heavy_seconds": 308,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "reruns": 0,
+      "failure_class": null,
+      "jds_effective_capabilities": 14,
+      "jds_selected_capabilities": 8,
+      "jds_skipped_capabilities": 6,
+      "jds_avoided_capability_percent": 42.9,
+      "jds_heavy_capabilities_skipped": [
+        "container.build",
+        "security.container-scan",
+        "security.sbom"
+      ],
+      "lane_count": 5,
+      "integration_change_failure": false,
+      "post_merge_regression": false
+    },
+    {
+      "sample": "PHASE_9_WAVE_F_MAIN_PUSH",
+      "ci_run_id": 31308117109,
+      "ci_total_seconds": 315,
+      "fast_quality_seconds": 35,
+      "tests_acceptance_seconds": 39,
+      "repo_security_seconds": 22,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "reruns": 0,
+      "failure_class": null,
+      "integration_change_failure": false,
+      "post_merge_regression": false
+    },
+    {
+      "sample": "CONTROL_INDEX_MAIN_PUSH",
+      "ci_run_id": 31308567008,
+      "jds_run_id": 31308567009,
+      "ci_total_seconds": 290,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "reruns": 0,
+      "failure_class": null,
+      "jds_effective_capabilities": 14,
+      "jds_selected_capabilities": 8,
+      "jds_skipped_capabilities": 6,
+      "jds_avoided_capability_percent": 42.9,
+      "jds_heavy_capabilities_skipped": [
+        "container.build",
+        "security.container-scan",
+        "security.sbom"
+      ],
+      "integration_change_failure": false,
+      "post_merge_regression": false
+    },
+    {
+      "sample": "PHASE_10_WAVE_G_INTEGRATION_BOUNDARY",
+      "ci_run_id": 31312156758,
+      "jds_run_id": 31312156744,
+      "ci_total_seconds": 291,
+      "fast_quality_seconds": 38,
+      "tests_acceptance_seconds": 34,
+      "repo_security_seconds": 34,
+      "heavy_seconds": 212,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "reruns": 0,
+      "failure_class": null,
+      "jds_effective_capabilities": 14,
+      "jds_selected_capabilities": 8,
+      "jds_skipped_capabilities": 6,
+      "jds_avoided_capability_percent": 42.9,
+      "jds_heavy_capabilities_skipped": [
+        "container.build",
+        "security.container-scan",
+        "security.sbom"
+      ],
+      "lane_count": 5,
+      "integration_change_failure": false,
+      "post_merge_regression": null
+    }
+  ],
+  "pending_observations": [
+    {
+      "sample": "PHASE_10_WAVE_G_MAIN_PUSH",
+      "ci_run_id": 31312397711,
+      "jds_run_id": 31312397658,
+      "state": "PENDING_HEAVY_SBOM",
+      "completed_fast_quality": true,
+      "completed_tests_acceptance": true,
+      "completed_repo_security": true,
+      "completed_image_builds": 2,
+      "completed_trivy_image_scans": 2,
+      "failure_class": null,
+      "post_merge_regression": null
+    }
+  ],
+  "policy": {
+    "gate_removed_to_improve_metric": false,
+    "branch_names_emitted": false,
+    "user_identity_emitted": false,
+    "tenant_content_emitted": false
+  }
+}
