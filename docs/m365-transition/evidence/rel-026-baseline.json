@@ -1,0 +1,76 @@
+{
+  "schema": "m365.delivery-economics-baseline/v1",
+  "status": "PRE_CONSOLIDATION",
+  "samples": [
+    {
+      "sample": "PHASE_9_WAVE_F_INTEGRATION_BOUNDARY",
+      "ci_run_id": 31307838926,
+      "jds_run_id": 31307838928,
+      "ci_total_seconds": 393,
+      "fast_quality_seconds": 43,
+      "tests_acceptance_seconds": 35,
+      "repo_security_seconds": 24,
+      "heavy_seconds": 308,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "reruns": 0,
+      "failure_class": null,
+      "jds_effective_capabilities": 14,
+      "jds_selected_capabilities": 8,
+      "jds_skipped_capabilities": 6,
+      "jds_avoided_capability_percent": 42.9,
+      "jds_heavy_capabilities_skipped": [
+        "container.build",
+        "security.container-scan",
+        "security.sbom"
+      ],
+      "lane_count": 5,
+      "integration_change_failure": false,
+      "post_merge_regression": false
+    },
+    {
+      "sample": "PHASE_9_WAVE_F_MAIN_PUSH",
+      "ci_run_id": 31308117109,
+      "ci_total_seconds": 315,
+      "fast_quality_seconds": 35,
+      "tests_acceptance_seconds": 39,
+      "repo_security_seconds": 22,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "reruns": 0,
+      "failure_class": null,
+      "integration_change_failure": false,
+      "post_merge_regression": false
+    },
+    {
+      "sample": "CONTROL_INDEX_MAIN_PUSH",
+      "ci_run_id": 31308567008,
+      "jds_run_id": 31308567009,
+      "ci_total_seconds": 290,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "reruns": 0,
+      "failure_class": null,
+      "jds_effective_capabilities": 14,
+      "jds_selected_capabilities": 8,
+      "jds_skipped_capabilities": 6,
+      "jds_avoided_capability_percent": 42.9,
+      "jds_heavy_capabilities_skipped": [
+        "container.build",
+        "security.container-scan",
+        "security.sbom"
+      ],
+      "integration_change_failure": false,
+      "post_merge_regression": false
+    }
+  ],
+  "policy": {
+    "gate_removed_to_improve_metric": false,
+    "branch_names_emitted": false,
+    "user_identity_emitted": false,
+    "tenant_content_emitted": false
+  }
+}
