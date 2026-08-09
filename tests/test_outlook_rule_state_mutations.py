@@ -15,6 +15,8 @@ from m365_mcp.state_identity import resource_state_identity
 from m365_mcp.tool_registry import default_tool_registry
 from m365_mcp.typed_locks import state_lock
 
+# Cumulative revalidation trigger: OUT-060..062 integrated in Wave G.
+
 
 def _ready() -> readiness.OutlookReadinessReport:
     return readiness.OutlookReadinessReport(
