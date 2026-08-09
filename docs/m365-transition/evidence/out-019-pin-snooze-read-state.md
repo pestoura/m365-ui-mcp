@@ -1,6 +1,6 @@
 # OUT-019 — Pin/Snooze read state
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_OUT_018**
+Status: **INTEGRATED_CLEAN_ON_MAIN**
 
 ## Objective
 
@@ -60,3 +60,9 @@ The OUT-013..OUT-015 stack is missing `m365_mcp.result_references`. See `out-016
 ## Dependency gate
 
 Stacked on OUT-018. Must not merge until OUT-002..OUT-018 are integrated in order and every predecessor is post-merge GREEN, and until the inherited `result_references` defect is resolved.
+
+## Integration reconciliation
+
+The delta is integrated in `main` (clean branch rebased on GREEN `main` and merged through PR #319). Mandatory CI gates (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) were GREEN on the merged PR and the post-merge `main` gate set was re-executed locally at `12b363c`.
+
+This records mock-mode integration only. No live Microsoft tenant was contacted, no Outlook capability is promoted to SUPPORTED, the Outlook application stays RESERVED with no public `outlook_*` MCP tool, and the Planner public tool ABI is unchanged.
