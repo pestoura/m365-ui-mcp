@@ -2,20 +2,40 @@ from __future__ import annotations
 
 import json
 
-import m365_mcp.apps.planner.ui_contracts as planner_ui_contracts
-import m365_mcp.contracts as m365_contracts
-import m365_mcp.ui_contract_store as ui_contract_store
-
 
 COMMON_AUTH_SELECTORS = ("auth.login_email_input", "auth.mfa_number_display")
 
 
+def _contract_set():
+    from m365_mcp.ui_contract_store import load_ui_contract_set
+
+    return load_ui_contract_set()
+
+
+def _planner_fragment_specs():
+    from m365_mcp.apps.planner.ui_contracts import planner_ui_contract_fragment_specs
+
+    return planner_ui_contract_fragment_specs()
+
+
+def _planner_selector_names():
+    from m365_mcp.apps.planner.ui_contracts import planner_selector_names
+
+    return planner_selector_names()
+
+
+def _contracts_dir():
+    from m365_mcp.contracts import contracts_dir
+
+    return contracts_dir()
+
+
 def test_planner_fragment_specs_match_canonical_contract_set() -> None:
-    contract_set = ui_contract_store.load_ui_contract_set()
+    contract_set = _contract_set()
     planner_fragments = tuple(
         fragment for fragment in contract_set.fragments if fragment.application == "planner"
     )
-    specs = planner_ui_contracts.planner_ui_contract_fragment_specs()
+    specs = _planner_fragment_specs()
 
     assert len(planner_fragments) == len(specs) == 3
     for fragment, spec in zip(planner_fragments, specs, strict=True):
@@ -27,8 +47,8 @@ def test_planner_fragment_specs_match_canonical_contract_set() -> None:
 
 
 def test_planner_partition_preserves_eight_app_selectors_and_ten_legacy_selectors() -> None:
-    contract_set = ui_contract_store.load_ui_contract_set()
-    planner_selectors = planner_ui_contracts.planner_selector_names()
+    contract_set = _contract_set()
+    planner_selectors = _planner_selector_names()
 
     assert len(planner_selectors) == 8
     assert len(set(planner_selectors)) == 8
@@ -37,7 +57,7 @@ def test_planner_partition_preserves_eight_app_selectors_and_ten_legacy_selector
 
 
 def test_common_auth_fragment_remains_platform_owned() -> None:
-    contract_set = ui_contract_store.load_ui_contract_set()
+    contract_set = _contract_set()
     common = tuple(fragment for fragment in contract_set.fragments if fragment.scope == "common")
 
     assert len(common) == 1
@@ -47,17 +67,15 @@ def test_common_auth_fragment_remains_platform_owned() -> None:
 
 
 def test_legacy_contract_selector_order_and_metadata_remain_identical() -> None:
-    legacy = json.loads(
-        (m365_contracts.contracts_dir() / "ui_contract.json").read_text(encoding="utf-8")
-    )
-    fragmented = ui_contract_store.load_ui_contract_set()
+    legacy = json.loads((_contracts_dir() / "ui_contract.json").read_text(encoding="utf-8"))
+    fragmented = _contract_set()
 
     assert legacy["ui_contract_version"] == fragmented.legacy_version
     assert legacy["selectors"] == fragmented.selectors()
 
 
 def test_planner_fragment_declarations_contain_no_selector_values() -> None:
-    for spec in planner_ui_contracts.planner_ui_contract_fragment_specs():
+    for spec in _planner_fragment_specs():
         assert spec.fragment_id.startswith("planner.")
         assert all(
             selector.startswith(("plan.", "task.", "account."))
