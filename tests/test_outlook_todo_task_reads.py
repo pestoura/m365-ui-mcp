@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from m365_mcp.apps.outlook import mock_ui, readiness, todo_task_reads
 from m365_mcp.capability_registry import default_capability_registry
 from m365_mcp.tool_registry import default_tool_registry
@@ -21,7 +23,11 @@ def test_todo_reads_and_list_filter() -> None:
     fixture = mock_ui.default_outlook_fixture()
     data = todo_task_reads.read_fixture_todo(fixture, readiness=_ready())
     assert len(data["lists"]) == 2  # type: ignore[arg-type]
-    tasks = todo_task_reads.list_fixture_tasks(fixture, "todo-default", readiness=_ready())
+    tasks = todo_task_reads.list_fixture_tasks(
+        fixture,
+        "todo-default",
+        readiness=_ready(),
+    )
     assert [item.task_key for item in tasks] == ["task-alpha", "task-charlie"]
 
 
@@ -29,25 +35,31 @@ def test_dangling_task_and_bad_due_offset_fail_closed() -> None:
     fixture = mock_ui.default_outlook_fixture()
     lists = (todo_task_reads.SyntheticTodoList("todo-a", "A"),)
     tasks = (todo_task_reads.SyntheticTodoTask("task-a", "missing", "A"),)
-    try:
-        todo_task_reads.read_fixture_todo(fixture, readiness=_ready(), lists=lists, tasks=tasks)
-    except ValueError as exc:
-        assert "reference" in str(exc)
-    else:
-        raise AssertionError("dangling task accepted")
-    try:
-        todo_task_reads.SyntheticTodoTask("task-b", "todo-a", "B", due_day_offset=4000)
-    except ValueError as exc:
-        assert "bounded" in str(exc)
-    else:
-        raise AssertionError("unbounded due date accepted")
+    with pytest.raises(ValueError, match="reference"):
+        todo_task_reads.read_fixture_todo(
+            fixture,
+            readiness=_ready(),
+            lists=lists,
+            tasks=tasks,
+        )
+    with pytest.raises(ValueError, match="bounded"):
+        todo_task_reads.SyntheticTodoTask(
+            "task-b",
+            "todo-a",
+            "B",
+            due_day_offset=4000,
+        )
 
 
 def test_task_projection_excludes_identity_and_browser_primitives() -> None:
     fixture = mock_ui.default_outlook_fixture()
-    tasks = todo_task_reads.list_fixture_tasks(fixture, "todo-default", readiness=_ready())
+    tasks = todo_task_reads.list_fixture_tasks(
+        fixture,
+        "todo-default",
+        readiness=_ready(),
+    )
     projection = repr(tasks[0].to_projection()).lower()
-    forbidden_tokens = (
+    forbidden_values = (
         "@",
         "http",
         "://",
@@ -58,7 +70,7 @@ def test_task_projection_excludes_identity_and_browser_primitives() -> None:
         "tenant",
         "utc",
     )
-    for forbidden in forbidden_tokens:
+    for forbidden in forbidden_values:
         assert forbidden not in projection
 
 

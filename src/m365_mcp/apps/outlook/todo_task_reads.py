@@ -23,7 +23,12 @@ class SyntheticTodoList:
     display_name: str
 
     def __post_init__(self) -> None:
-        if not self.list_key or self.list_key != self.list_key.strip() or "@" in self.list_key:
+        invalid_list_key = (
+            not self.list_key
+            or self.list_key != self.list_key.strip()
+            or "@" in self.list_key
+        )
+        if invalid_list_key:
             raise ValueError("list_key must be opaque")
 
 
@@ -36,16 +41,22 @@ class SyntheticTodoTask:
     due_day_offset: int | None = None
 
     def __post_init__(self) -> None:
-        if not self.task_key or self.task_key != self.task_key.strip() or "@" in self.task_key:
+        invalid_task_key = (
+            not self.task_key
+            or self.task_key != self.task_key.strip()
+            or "@" in self.task_key
+        )
+        if invalid_task_key:
             raise ValueError("task_key must be opaque")
         if not self.title or self.title != self.title.strip():
             raise ValueError("title must be non-empty and trimmed")
         if not isinstance(self.state, TaskState):
             raise ValueError("state must be a closed TaskState")
-        if self.due_day_offset is not None and (
+        invalid_due_offset = self.due_day_offset is not None and (
             isinstance(self.due_day_offset, bool)
             or not -3650 <= self.due_day_offset <= 3650
-        ):
+        )
+        if invalid_due_offset:
             raise ValueError("due_day_offset must be bounded")
 
     def to_projection(self) -> dict[str, object]:
@@ -59,20 +70,33 @@ class SyntheticTodoTask:
         }
 
 
-def default_synthetic_todo() -> tuple[tuple[SyntheticTodoList, ...], tuple[SyntheticTodoTask, ...]]:
+def default_synthetic_todo(
+) -> tuple[tuple[SyntheticTodoList, ...], tuple[SyntheticTodoTask, ...]]:
     lists = (
         SyntheticTodoList("todo-default", "Tasks"),
         SyntheticTodoList("todo-project", "Project"),
     )
     tasks = (
         SyntheticTodoTask(
-            "task-alpha", "todo-default", "Review synthetic item", TaskState.IN_PROGRESS, 1
+            "task-alpha",
+            "todo-default",
+            "Review synthetic item",
+            TaskState.IN_PROGRESS,
+            1,
         ),
         SyntheticTodoTask(
-            "task-bravo", "todo-project", "Prepare synthetic note", TaskState.NOT_STARTED, 3
+            "task-bravo",
+            "todo-project",
+            "Prepare synthetic note",
+            TaskState.NOT_STARTED,
+            3,
         ),
         SyntheticTodoTask(
-            "task-charlie", "todo-default", "Closed synthetic task", TaskState.COMPLETED, -1
+            "task-charlie",
+            "todo-default",
+            "Closed synthetic task",
+            TaskState.COMPLETED,
+            -1,
         ),
     )
     return lists, tasks
@@ -85,7 +109,10 @@ def _gate(fixture: OutlookMockFixture, readiness: OutlookReadinessReport) -> Non
         raise ValueError("Outlook read-only discovery is not ready")
 
 
-def _validate(lists: tuple[SyntheticTodoList, ...], tasks: tuple[SyntheticTodoTask, ...]) -> None:
+def _validate(
+    lists: tuple[SyntheticTodoList, ...],
+    tasks: tuple[SyntheticTodoTask, ...],
+) -> None:
     if not lists or len(lists) > _MAX_LISTS or len(tasks) > _MAX_TASKS:
         raise ValueError("To Do catalog must be bounded")
     list_keys = {item.list_key for item in lists}
@@ -98,6 +125,17 @@ def _validate(lists: tuple[SyntheticTodoList, ...], tasks: tuple[SyntheticTodoTa
         raise ValueError("task list_key must reference a synthetic To Do list")
 
 
+def _catalog(
+    lists: tuple[SyntheticTodoList, ...] | None,
+    tasks: tuple[SyntheticTodoTask, ...] | None,
+) -> tuple[tuple[SyntheticTodoList, ...], tuple[SyntheticTodoTask, ...]]:
+    default_lists, default_tasks = default_synthetic_todo()
+    use_lists = default_lists if lists is None else lists
+    use_tasks = default_tasks if tasks is None else tasks
+    _validate(use_lists, use_tasks)
+    return use_lists, use_tasks
+
+
 def read_fixture_todo(
     fixture: OutlookMockFixture,
     *,
@@ -106,15 +144,13 @@ def read_fixture_todo(
     tasks: tuple[SyntheticTodoTask, ...] | None = None,
 ) -> dict[str, object]:
     _gate(fixture, readiness)
-    default_lists, default_tasks = default_synthetic_todo()
-    use_lists = default_lists if lists is None else lists
-    use_tasks = default_tasks if tasks is None else tasks
-    _validate(use_lists, use_tasks)
+    use_lists, use_tasks = _catalog(lists, tasks)
+    list_projection = tuple(
+        {"list_key": item.list_key, "display_name": item.display_name}
+        for item in use_lists
+    )
     return {
-        "lists": tuple(
-            {"list_key": item.list_key, "display_name": item.display_name}
-            for item in use_lists
-        ),
+        "lists": list_projection,
         "tasks": tuple(item.to_projection() for item in use_tasks),
         "synthetic": True,
     }
@@ -128,13 +164,12 @@ def list_fixture_tasks(
     lists: tuple[SyntheticTodoList, ...] | None = None,
     tasks: tuple[SyntheticTodoTask, ...] | None = None,
 ) -> tuple[SyntheticTodoTask, ...]:
-    read_fixture_todo(fixture, readiness=readiness, lists=lists, tasks=tasks)
-    use_lists = default_synthetic_todo()[0] if lists is None else lists
+    _gate(fixture, readiness)
+    use_lists, use_tasks = _catalog(lists, tasks)
     available = {item.list_key for item in use_lists}
     if list_key not in available:
         raise ValueError("synthetic To Do list_key not found")
-    source = default_synthetic_todo()[1] if tasks is None else tasks
-    return tuple(item for item in source if item.list_key == list_key)
+    return tuple(item for item in use_tasks if item.list_key == list_key)
 
 
 __all__ = [
