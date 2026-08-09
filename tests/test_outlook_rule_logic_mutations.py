@@ -51,7 +51,7 @@ def test_rule_logic_updates_conditions_actions_exceptions_and_stop_processing() 
         ),
         exceptions=(
             mail_automation_models.RulePredicate(
-                mail_automation_models.RuleConditionKind.SUBJECT_CONTAINS_TOKEN,
+                mail_automation_models.RuleConditionKind.SUBJECT_CONTAINS_TEXT,
                 "keep",
             ),
         ),
