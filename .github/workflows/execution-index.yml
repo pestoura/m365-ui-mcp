@@ -38,11 +38,27 @@ jobs:
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref || '' }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           previous="${RUNNER_TEMP}/execution-index.previous.json"
-          if [[ -n "${BASE_SHA}" ]] && \
-             git show "${BASE_SHA}:docs/m365-transition/execution-index.json" > "$previous" 2>/dev/null; then
+
+          # Default-branch -> integration/** PRs synchronize ancestry. The
+          # controller transitions contained in the default-branch history
+          # already passed this gate individually, so re-collapsing that history
+          # into one direct transition from an older integration baseline would
+          # reject valid accepted history. Validate the current index statically
+          # for this one sync shape; all other PRs/pushes retain --previous.
+          if [[ "$EVENT_NAME" == "pull_request" ]] && \
+             [[ "$HEAD_REF" == "$DEFAULT_BRANCH" ]] && \
+             [[ "$BASE_REF" == integration/* ]]; then
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "default-branch integration sync: static index validation only"
+          elif [[ -n "${BASE_SHA}" ]] && \
+               git show "${BASE_SHA}:docs/m365-transition/execution-index.json" > "$previous" 2>/dev/null; then
             echo "path=$previous" >> "$GITHUB_OUTPUT"
             echo "previous index resolved from $BASE_SHA"
           else
