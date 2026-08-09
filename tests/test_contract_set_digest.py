@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from m365_mcp.ui_contract_projection import project_ui_contract_set
 from m365_mcp.ui_contract_store import UIContractFragment, UIContractSet, load_ui_contract_set
 from planner_mcp.ui_contract import load_status
 
@@ -85,8 +86,8 @@ def test_digest_payload_contains_no_runtime_identity_fields() -> None:
         assert forbidden not in payload
 
 
-def test_planner_status_exposes_exact_loaded_contract_set_digest() -> None:
-    expected = load_ui_contract_set().digest()
+def test_planner_status_exposes_exact_planner_projection_digest() -> None:
+    expected = project_ui_contract_set(load_ui_contract_set(), "planner").digest()
     status = load_status()
     assert status.contract_set_digest == expected
     assert status.to_dict()["ui_contract_set_digest"] == expected
