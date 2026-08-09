@@ -2,11 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-import m365_mcp.application_registry as application_registry
-import m365_mcp.execution_provenance as execution_provenance
-import m365_mcp.policy as policy
-import m365_mcp.security_tiers as security_tiers
-
+from m365_mcp import application_registry, execution_provenance, policy, security_tiers
 
 START = datetime(2026, 8, 8, 20, 0, tzinfo=UTC)
 
