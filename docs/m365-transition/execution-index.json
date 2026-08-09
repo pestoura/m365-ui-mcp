@@ -1,0 +1,196 @@
+{
+  "schema": "m365.execution-index/v1",
+  "generatedPolicy": "controller-maintained",
+  "roadmap": "docs/m365-transition/roadmap-and-backlog.md",
+  "rules": {
+    "maxActiveFeatureWip": 6,
+    "roadmapIsExecutionQueue": false,
+    "mergeImpliesLiveSupport": false
+  },
+  "items": [
+    {
+      "key": "M365-JDS-001",
+      "releaseBand": "0.9.x-hardening",
+      "phase": "engineering-platform",
+      "dependencies": [],
+      "state": "ACCEPTED",
+      "riskClass": "GOVERNANCE",
+      "wave": null,
+      "branch": "engineering/m365-jds-phase-a",
+      "issue": 357,
+      "prs": [390],
+      "evidence": [
+        "docs/m365-transition/evidence/m365-jds-phase-a.md",
+        "gha:31306569764/jds-effective-plan",
+        "main:45837ad07652f0613a9cfc8ccee47eddcbf17af3"
+      ],
+      "implementationState": "IMPLEMENTED_NOT_ATTESTED",
+      "liveSupportState": "NOT_APPLICABLE",
+      "blockerCode": null
+    },
+    {
+      "key": "M365-CONTROL-001",
+      "releaseBand": "0.9.x-hardening",
+      "phase": "delivery-controller",
+      "dependencies": ["M365-JDS-001"],
+      "state": "INTEGRATING",
+      "riskClass": "GOVERNANCE",
+      "wave": "control-index-bootstrap",
+      "branch": "engineering/m365-control-index",
+      "issue": 358,
+      "prs": [391],
+      "evidence": [
+        "docs/m365-transition/execution-index.json",
+        "scripts/check_execution_index.py",
+        ".github/workflows/execution-index.yml"
+      ],
+      "implementationState": "IMPLEMENTED_NOT_ATTESTED",
+      "liveSupportState": "NOT_APPLICABLE",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-053",
+      "releaseBand": "0.5.x-outlook-mail",
+      "phase": "9-outlook-email-productivity",
+      "dependencies": ["OUT-052"],
+      "state": "ACCEPTED",
+      "riskClass": "OUTBOUND_GOVERNED",
+      "wave": "wave-f-out-053-057",
+      "branch": "wave-f/out-053-forward",
+      "issue": null,
+      "prs": [385],
+      "evidence": [
+        "pr:392",
+        "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-054",
+      "releaseBand": "0.5.x-outlook-mail",
+      "phase": "9-outlook-email-productivity",
+      "dependencies": ["OUT-053"],
+      "state": "ACCEPTED",
+      "riskClass": "OUTBOUND_GOVERNED",
+      "wave": "wave-f-out-053-057",
+      "branch": "wave-f/out-054-resend",
+      "issue": null,
+      "prs": [386],
+      "evidence": [
+        "pr:392",
+        "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-055",
+      "releaseBand": "0.5.x-outlook-mail",
+      "phase": "9-outlook-email-productivity",
+      "dependencies": ["OUT-054"],
+      "state": "ACCEPTED",
+      "riskClass": "ASSURANCE",
+      "wave": "wave-f-out-053-057",
+      "branch": "wave-f/out-055-sent-item-readback",
+      "issue": null,
+      "prs": [387],
+      "evidence": [
+        "pr:392",
+        "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-056",
+      "releaseBand": "0.5.x-outlook-mail",
+      "phase": "9-outlook-email-productivity",
+      "dependencies": ["OUT-055"],
+      "state": "ACCEPTED",
+      "riskClass": "OUTBOUND_GOVERNED",
+      "wave": "wave-f-out-053-057",
+      "branch": "wave-f/out-056-recall",
+      "issue": null,
+      "prs": [388],
+      "evidence": [
+        "pr:392",
+        "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-057",
+      "releaseBand": "0.5.x-outlook-mail",
+      "phase": "9-outlook-email-productivity",
+      "dependencies": ["OUT-056"],
+      "state": "ACCEPTED",
+      "riskClass": "READ",
+      "wave": "wave-f-out-053-057",
+      "branch": "wave-f/out-057-recall-status",
+      "issue": null,
+      "prs": [389],
+      "evidence": [
+        "pr:392",
+        "gha:31307838928/jds-effective-plan",
+        "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-060",
+      "releaseBand": "0.5.x-outlook-mail",
+      "phase": "10-outlook-automation",
+      "dependencies": ["OUT-057"],
+      "state": "READY",
+      "riskClass": "SAFE_WRITE",
+      "wave": null,
+      "branch": null,
+      "issue": null,
+      "prs": [],
+      "evidence": [],
+      "implementationState": "PLANNED",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "REL-026",
+      "releaseBand": "0.9.x-hardening",
+      "phase": "delivery-economics",
+      "dependencies": ["M365-JDS-001", "M365-CONTROL-001"],
+      "state": "READY",
+      "riskClass": "OBSERVABILITY",
+      "wave": null,
+      "branch": null,
+      "issue": 367,
+      "prs": [],
+      "evidence": ["gha:31307838928/jds-effective-plan"],
+      "implementationState": "PLANNED",
+      "liveSupportState": "NOT_APPLICABLE",
+      "blockerCode": null
+    },
+    {
+      "key": "REL-027",
+      "releaseBand": "0.9.x-hardening",
+      "phase": "delivery-hygiene",
+      "dependencies": ["M365-CONTROL-001"],
+      "state": "DEFERRED",
+      "riskClass": "GOVERNANCE",
+      "wave": null,
+      "branch": null,
+      "issue": 369,
+      "prs": [],
+      "evidence": [],
+      "implementationState": "PLANNED",
+      "liveSupportState": "NOT_APPLICABLE",
+      "blockerCode": null
+    }
+  ]
+}
