@@ -89,7 +89,9 @@ def apply_fixture_archive_mutation(
     if request.action is ArchiveMutationAction.ARCHIVE:
         target = _ARCHIVE_FOLDER
     else:
-        if current.folder_key != _ARCHIVE_FOLDER and current.folder_key != request.restore_folder_key:
+        wrong_source = current.folder_key != _ARCHIVE_FOLDER
+        already_elsewhere = current.folder_key != request.restore_folder_key
+        if wrong_source and already_elsewhere:
             raise ValueError("restore requires message to be archived")
         target = request.restore_folder_key
         if target is None:
