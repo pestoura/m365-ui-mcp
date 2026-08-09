@@ -1,6 +1,5 @@
 import json
 
-
 COMMON_AUTH_SELECTORS = ("auth.login_email_input", "auth.mfa_number_display")
 
 
