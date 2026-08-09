@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from m365_mcp.application_registry import ApplicationKey, ApplicationState
-from m365_mcp.application_registry import default_application_registry
+from m365_mcp.application_registry import (
+    ApplicationKey,
+    ApplicationState,
+    default_application_registry,
+)
 from m365_mcp.apps.outlook import mock_ui, pin_mutations, pin_snooze_reads, readiness
 from m365_mcp.idempotency_v2 import reserve_operation
 from m365_mcp.state_identity import resource_state_identity
