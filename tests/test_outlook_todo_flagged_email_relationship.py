@@ -7,8 +7,13 @@ from m365_mcp.application_registry import (
     ApplicationState,
     default_application_registry,
 )
-from m365_mcp.apps.outlook import follow_up_reads, mock_ui, readiness
-from m365_mcp.apps.outlook import todo_flagged_email_relationship, todo_task_reads
+from m365_mcp.apps.outlook import (
+    follow_up_reads,
+    mock_ui,
+    readiness,
+    todo_flagged_email_relationship,
+    todo_task_reads,
+)
 from m365_mcp.tool_registry import default_tool_registry
 
 
