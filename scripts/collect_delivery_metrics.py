@@ -47,7 +47,7 @@ def duration_seconds(started_at: str | None, completed_at: str | None) -> int | 
 
 
 def classify_failure(jobs: list[dict[str, Any]]) -> str | None:
-    """Classify only observed failed steps; do not infer stale-base failures."""
+    """Classify from observed failed steps before considering broad job labels."""
     failed_steps: list[str] = []
     failed_jobs: list[str] = []
     for job in jobs:
@@ -60,11 +60,15 @@ def classify_failure(jobs: list[dict[str, Any]]) -> str | None:
 
     if not failed_jobs:
         return None
-    text = " ".join(failed_steps + failed_jobs)
-    if any(token in text for token in ("ruff", "mypy", "compile", "shellcheck", "shell syntax")):
+
+    step_text = " ".join(failed_steps)
+    if any(
+        token in step_text
+        for token in ("ruff", "mypy", "compile", "shellcheck", "shell syntax")
+    ):
         return "DETERMINISTIC_LINT"
     if any(
-        token in text
+        token in step_text
         for token in (
             "contract",
             "schema",
@@ -75,7 +79,7 @@ def classify_failure(jobs: list[dict[str, Any]]) -> str | None:
     ):
         return "CONTRACT"
     if any(
-        token in text
+        token in step_text
         for token in (
             "set up job",
             "actions/checkout",
@@ -85,6 +89,14 @@ def classify_failure(jobs: list[dict[str, Any]]) -> str | None:
             "setup-buildx",
         )
     ):
+        return "INFRA"
+    if failed_steps:
+        return "CODE"
+
+    job_text = " ".join(failed_jobs)
+    if any(token in job_text for token in ("contract", "schema", "documentation")):
+        return "CONTRACT"
+    if any(token in job_text for token in ("checkout", "setup", "install")):
         return "INFRA"
     return "CODE"
 
@@ -336,7 +348,9 @@ def main() -> int:
 
     metrics = collect_metrics(event, jobs, pr=pr, jds_plan=jds_plan)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     _write_summary(args.summary, metrics)
     return 0
 
