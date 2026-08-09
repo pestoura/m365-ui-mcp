@@ -1,6 +1,6 @@
 # OUT-005 — Primary-mailbox context verification
 
-Status: **IMPLEMENTED_ON_CURRENT_MAIN**
+Status: **INTEGRATED_CLEAN_ON_MAIN**
 
 ## Objective
 
@@ -73,3 +73,9 @@ Tests prove:
 ## Dependency gate
 
 OUT-004 is merged and integrated on current `main`, so this dependency is satisfied. The work is integrated on `main` and revalidated against the current integration base with the mandatory CI/security/image/Trivy/SBOM/documentation gates.
+
+## Integration reconciliation
+
+The delta is integrated in `main` (clean branch rebased on GREEN `main` and merged through PR #295). Mandatory CI gates (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) were GREEN on the merged PR and the post-merge `main` gate set was re-executed locally at `12b363c`.
+
+This records mock-mode integration only. No live Microsoft tenant was contacted, no Outlook capability is promoted to SUPPORTED, the Outlook application stays RESERVED with no public `outlook_*` MCP tool, and the Planner public tool ABI is unchanged.

@@ -1,6 +1,6 @@
 # OUT-003 — Outlook shell/navigation contracts
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_OUT_002**
+Status: **INTEGRATED_CLEAN_ON_MAIN**
 
 ## Objective
 
@@ -31,3 +31,9 @@ This work is stacked on OUT-002 and cannot merge before OUT-002 is merged and po
 ## Acceptance coverage
 
 Tests prove deterministic target order, namespace uniqueness, authenticated-shell requirement, `UNVERIFIED_LIVE` state, absence of generic browser/session primitives and continued zero Outlook execution exposure.
+
+## Integration reconciliation
+
+The delta is integrated in `main` (clean branch rebased on GREEN `main` and merged through PR #293). Mandatory CI gates (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) were GREEN on the merged PR and the post-merge `main` gate set was re-executed locally at `12b363c`.
+
+This records mock-mode integration only. No live Microsoft tenant was contacted, no Outlook capability is promoted to SUPPORTED, the Outlook application stays RESERVED with no public `outlook_*` MCP tool, and the Planner public tool ABI is unchanged.

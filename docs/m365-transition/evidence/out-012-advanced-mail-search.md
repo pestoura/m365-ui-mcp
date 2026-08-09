@@ -1,6 +1,6 @@
 # OUT-012 — Advanced mail search
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_OUT_011**
+Status: **INTEGRATED_CLEAN_ON_MAIN**
 
 ## Objective
 
@@ -39,3 +39,9 @@ Tests prove case-insensitive subject matching, combined folder/read/attachment f
 ## Dependency gate
 
 This work is stacked on OUT-011. It must not merge until the complete OUT-002..OUT-011 chain is integrated in order and each predecessor is post-merge GREEN. It will then be retargeted and fully revalidated.
+
+## Integration reconciliation
+
+The delta is integrated in `main` (clean branch rebased on GREEN `main` and merged through PR #311). Mandatory CI gates (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) were GREEN on the merged PR and the post-merge `main` gate set was re-executed locally at `12b363c`.
+
+This records mock-mode integration only. No live Microsoft tenant was contacted, no Outlook capability is promoted to SUPPORTED, the Outlook application stays RESERVED with no public `outlook_*` MCP tool, and the Planner public tool ABI is unchanged.

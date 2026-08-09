@@ -1,6 +1,6 @@
 # OUT-016 — Folder listing/navigation reads
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_OUT_015**
+Status: **INTEGRATED_CLEAN_ON_MAIN**
 
 ## Objective
 
@@ -53,3 +53,9 @@ OUT-016 does not fix and does not mask this. Local gate execution for OUT-016 wa
 ## Dependency gate
 
 Stacked on OUT-015. Must not merge until OUT-002..OUT-015 are integrated in order and every predecessor is post-merge GREEN, and until the inherited `result_references` defect is resolved. It will then be retargeted to `main` and fully revalidated.
+
+## Integration reconciliation
+
+The delta is integrated in `main` (clean branch rebased on GREEN `main` and merged through PR #316). Mandatory CI gates (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) were GREEN on the merged PR and the post-merge `main` gate set was re-executed locally at `12b363c`.
+
+This records mock-mode integration only. No live Microsoft tenant was contacted, no Outlook capability is promoted to SUPPORTED, the Outlook application stays RESERVED with no public `outlook_*` MCP tool, and the Planner public tool ABI is unchanged.

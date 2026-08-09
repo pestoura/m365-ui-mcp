@@ -1,6 +1,6 @@
 # OUT-013 — Conversation/thread reads
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_OUT_012**
+Status: **INTEGRATED_CLEAN_ON_MAIN**
 
 ## Objective
 
@@ -44,3 +44,9 @@ Tests prove explicit thread ordering, deterministic default catalog membership, 
 ## Dependency gate
 
 This work is stacked on OUT-012. It must not merge until the complete OUT-002..OUT-012 chain is integrated in order and every predecessor is post-merge GREEN. It will then be retargeted to `main` and fully revalidated with the mandatory gate suite.
+
+## Integration reconciliation
+
+The delta is integrated in `main` (clean branch rebased on GREEN `main` and merged through PR #313). Mandatory CI gates (compile/lint/type/contracts/tests, image build + Trivy + SBOM, filesystem/dependency/secret scanning) were GREEN on the merged PR and the post-merge `main` gate set was re-executed locally at `12b363c`.
+
+This records mock-mode integration only. No live Microsoft tenant was contacted, no Outlook capability is promoted to SUPPORTED, the Outlook application stays RESERVED with no public `outlook_*` MCP tool, and the Planner public tool ABI is unchanged.
