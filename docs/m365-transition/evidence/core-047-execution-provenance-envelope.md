@@ -1,6 +1,6 @@
 # CORE-047 — Execution provenance envelope
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_046**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -73,4 +73,6 @@ Tests prove:
 
 ## Dependency gate
 
-This work is stacked on CORE-046. CORE-046 remains stacked behind CORE-045/044 and cannot merge until Phase 4 reaches CORE-043 GREEN. CORE-047 therefore remains non-mergeable until all predecessors are integrated and post-merge GREEN.
+CORE-046 is merged at `a5a0e59ea005296fa532e48cea92e2f4cf11d1c8` and its post-merge `main` validation is fully GREEN, including functional gates, filesystem/dependency/secret scanning, both image builds, Trivy HIGH/CRITICAL scans and CycloneDX SBOM validation.
+
+CORE-047 is therefore formally unblocked for integration. This revision re-triggers the complete mandatory suite against the current `main`; historical stacked/preventive runs are not accepted as merge evidence.
