@@ -11,6 +11,7 @@ from m365_mcp.effective_capabilities import (
     EffectiveCapabilityEvidence,
     project_effective_capabilities_by_capability,
 )
+from m365_mcp.ui_contract_projection import project_ui_contract_set
 from m365_mcp.ui_contract_store import load_ui_contract_set
 from m365_mcp.ui_drift import UILifecycleState
 
@@ -82,7 +83,12 @@ def build_capabilities(
     account_context = account_context or {}
     license_evidence = license_evidence or {}
     registry = default_capability_registry()
-    contract_set = load_ui_contract_set()
+    global_contract_set = load_ui_contract_set()
+    contract_set = project_ui_contract_set(
+        global_contract_set,
+        "planner",
+        set_version=global_contract_set.legacy_version,
+    )
 
     authenticated = (
         str(auth_evidence.get("state", AuthState.UNKNOWN.value))
