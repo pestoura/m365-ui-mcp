@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import pytest
 
-from m365_mcp.application_registry import ApplicationKey, ApplicationState, default_application_registry
-from m365_mcp.apps.outlook import draft_models, outbound_models, readiness, schedule_send_intents
+from m365_mcp.application_registry import (
+    ApplicationKey,
+    ApplicationState,
+    default_application_registry,
+)
+from m365_mcp.apps.outlook import (
+    draft_models,
+    outbound_models,
+    readiness,
+    schedule_send_intents,
+)
 from m365_mcp.tool_registry import default_tool_registry
 
 
@@ -29,7 +38,10 @@ def test_schedule_send_preparation_is_approval_required_and_not_executable() -> 
         readiness=_ready(),
     )
     assert intent.kind is outbound_models.OutboundIntentKind.SCHEDULE_SEND
-    assert intent.approval_state is outbound_models.OutboundApprovalState.REQUIRED_NOT_BOUND
+    assert (
+        intent.approval_state
+        is outbound_models.OutboundApprovalState.REQUIRED_NOT_BOUND
+    )
     assert intent.executable is False
     with pytest.raises(PermissionError, match="canonical HITL approval"):
         outbound_models.require_outbound_execution_blocked(intent)
