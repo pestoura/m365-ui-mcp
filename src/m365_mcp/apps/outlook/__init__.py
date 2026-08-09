@@ -8,8 +8,9 @@ follow-up and pin/snooze read state. OUT-020 adds a synthetic-only bounded
 calendar listing and OUT-021 adds synthetic-only calendar event list/get/search
 using relative day offsets only, and OUT-022 derives bounded free-busy
 availability from those events. OUT-023 composes those grids into structural
-Scheduling Assistant reads. Outlook remains RESERVED and exposes no public MCP
-registrar or browser operation surface.
+Scheduling Assistant reads, and OUT-024 enforces delegated shared-calendar
+permission levels over those reads. Outlook remains RESERVED and exposes no
+public MCP registrar or browser operation surface.
 """
 
 from m365_mcp.apps.outlook.attachment_metadata import (
@@ -146,6 +147,15 @@ from m365_mcp.apps.outlook.scheduling_assistant import (
     default_synthetic_participants,
     read_fixture_scheduling_grid,
 )
+from m365_mcp.apps.outlook.shared_calendar_reads import (
+    SharedCalendarPermission,
+    SharedCalendarReadState,
+    SharedCalendarScope,
+    default_synthetic_shared_scopes,
+    list_shared_calendar_events,
+    read_shared_calendar_availability,
+    read_shared_calendar_state,
+)
 from m365_mcp.apps.outlook.shared_mailbox_context import (
     SharedMailboxContext,
     SharedMailboxContextState,
@@ -214,6 +224,9 @@ __all__ = [
     "PrimaryMailboxObservation",
     "SchedulingGrid",
     "SchedulingSlot",
+    "SharedCalendarPermission",
+    "SharedCalendarReadState",
+    "SharedCalendarScope",
     "SharedMailboxContext",
     "SharedMailboxContextState",
     "SharedMailboxObservation",
@@ -239,6 +252,7 @@ __all__ = [
     "default_synthetic_follow_up_flags",
     "default_synthetic_participants",
     "default_synthetic_pin_snooze_markers",
+    "default_synthetic_shared_scopes",
     "evaluate_outlook_readiness",
     "foundation_manifest",
     "get_fixture_event",
@@ -250,6 +264,7 @@ __all__ = [
     "list_fixture_folders",
     "list_fixture_follow_up_state",
     "list_fixture_pin_snooze_state",
+    "list_shared_calendar_events",
     "list_fixture_messages",
     "navigate_fixture_folder",
     "outlook_shell_contracts",
@@ -260,6 +275,8 @@ __all__ = [
     "read_fixture_message_categories",
     "read_fixture_pin_snooze_state",
     "read_fixture_scheduling_grid",
+    "read_shared_calendar_availability",
+    "read_shared_calendar_state",
     "retrieve_synthetic_attachment",
     "search_fixture_events",
     "search_fixture_messages",
