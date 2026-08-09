@@ -1,6 +1,6 @@
 # CORE-049 — UI execution metrics
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_048**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -30,4 +30,4 @@ Tests prove bounded projection, rejection of invalid numeric counters, determini
 
 ## Dependency gate
 
-This work is stacked on CORE-048 and cannot merge until CORE-048 and its predecessors are merged and post-merge GREEN.
+CORE-048 is merged and the current `main` is post-merge GREEN at `cd64ad70c4a1608f1948d46be51eeef3506c3124`. This revision re-triggers the complete mandatory gate suite against that exact integration base; historical stacked/preventive GREEN evidence is not reused for merge.
