@@ -1,0 +1,51 @@
+name: JDS Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches:
+      - main
+      - "integration/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: JDS effective plan audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: plan
+        uses: pestoura/jarvas-engineering-platform/.github/actions/plan@9ee1147ea85bbb5bbb733d252bab9ccbb113f5ef
+        with:
+          manifest: .jarvas/engineering.yml
+          base-ref: ${{ github.event.pull_request.base.sha || github.event.before }}
+
+      - name: Persist planner evidence
+        env:
+          PLAN_JSON: ${{ steps.plan.outputs.plan-json }}
+          SELECTED_GATES: ${{ steps.plan.outputs.selected-gates }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/jds
+          printf '%s\n' "$PLAN_JSON" > artifacts/jds/effective-plan.json
+          {
+            echo "## JDS additive audit"
+            echo
+            echo "- platform pin: \`9ee1147ea85bbb5bbb733d252bab9ccbb113f5ef\`"
+            echo "- selected gates: \`$SELECTED_GATES\`"
+            echo "- existing M365 CI remains authoritative pending parity proof"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jds-effective-plan
+          path: artifacts/jds/effective-plan.json
+          if-no-files-found: error
