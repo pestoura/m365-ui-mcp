@@ -7,8 +7,7 @@ from m365_mcp.application_registry import (
     ApplicationState,
     default_application_registry,
 )
-from m365_mcp.apps.outlook import mock_ui, readiness, todo_task_mutations
-from m365_mcp.apps.outlook import todo_task_reads
+from m365_mcp.apps.outlook import mock_ui, readiness, todo_task_mutations, todo_task_reads
 from m365_mcp.tool_registry import default_tool_registry
 
 
