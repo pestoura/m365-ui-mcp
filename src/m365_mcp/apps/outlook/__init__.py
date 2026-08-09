@@ -7,8 +7,9 @@ raw storage locator are projected. OUT-016..OUT-019 add folder, category,
 follow-up and pin/snooze read state. OUT-020 adds a synthetic-only bounded
 calendar listing and OUT-021 adds synthetic-only calendar event list/get/search
 using relative day offsets only, and OUT-022 derives bounded free-busy
-availability from those events. Outlook remains RESERVED and exposes no public
-MCP registrar or browser operation surface.
+availability from those events. OUT-023 composes those grids into structural
+Scheduling Assistant reads. Outlook remains RESERVED and exposes no public MCP
+registrar or browser operation surface.
 """
 
 from m365_mcp.apps.outlook.attachment_metadata import (
@@ -135,6 +136,16 @@ from m365_mcp.apps.outlook.readiness import (
     OutlookReadinessState,
     evaluate_outlook_readiness,
 )
+from m365_mcp.apps.outlook.scheduling_assistant import (
+    ParticipantGridRow,
+    ParticipantRole,
+    SchedulingGrid,
+    SchedulingSlot,
+    SlotFeasibility,
+    SyntheticParticipant,
+    default_synthetic_participants,
+    read_fixture_scheduling_grid,
+)
 from m365_mcp.apps.outlook.shared_mailbox_context import (
     SharedMailboxContext,
     SharedMailboxContextState,
@@ -193,15 +204,20 @@ __all__ = [
     "OutlookReadinessState",
     "OutlookShellContract",
     "OutlookShellTarget",
+    "ParticipantGridRow",
+    "ParticipantRole",
     "PinSnoozeListResult",
     "PinSnoozeMarker",
     "PinSnoozeReadState",
     "PrimaryMailboxContext",
     "PrimaryMailboxContextState",
     "PrimaryMailboxObservation",
+    "SchedulingGrid",
+    "SchedulingSlot",
     "SharedMailboxContext",
     "SharedMailboxContextState",
     "SharedMailboxObservation",
+    "SlotFeasibility",
     "SnoozeState",
     "SyntheticAttachment",
     "SyntheticAttachmentPayload",
@@ -210,6 +226,7 @@ __all__ = [
     "SyntheticConversation",
     "SyntheticEvent",
     "SyntheticFolder",
+    "SyntheticParticipant",
     "default_outlook_discovery_candidates",
     "default_outlook_fixture",
     "default_synthetic_attachments",
@@ -220,6 +237,7 @@ __all__ = [
     "default_synthetic_events",
     "default_synthetic_folders",
     "default_synthetic_follow_up_flags",
+    "default_synthetic_participants",
     "default_synthetic_pin_snooze_markers",
     "evaluate_outlook_readiness",
     "foundation_manifest",
@@ -241,6 +259,7 @@ __all__ = [
     "read_fixture_follow_up_state",
     "read_fixture_message_categories",
     "read_fixture_pin_snooze_state",
+    "read_fixture_scheduling_grid",
     "retrieve_synthetic_attachment",
     "search_fixture_events",
     "search_fixture_messages",
