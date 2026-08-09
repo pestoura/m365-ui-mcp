@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from scripts.collect_delivery_metrics import (
-    classify_failure,
-    collect_metrics,
-    duration_seconds,
-    jds_plan_metrics,
+import runpy
+from pathlib import Path
+from typing import Any
+
+_COLLECTOR = runpy.run_path(
+    str(Path(__file__).resolve().parents[1] / "scripts" / "collect_delivery_metrics.py")
 )
+classify_failure = _COLLECTOR["classify_failure"]
+collect_metrics = _COLLECTOR["collect_metrics"]
+duration_seconds = _COLLECTOR["duration_seconds"]
+jds_plan_metrics = _COLLECTOR["jds_plan_metrics"]
 
 
-def _event(*, event: str = "pull_request", head_branch: str = "feature") -> dict:
+def _event(*, event: str = "pull_request", head_branch: str = "feature") -> dict[str, Any]:
     return {
         "repository": {"default_branch": "main"},
         "workflow_run": {
@@ -25,7 +30,7 @@ def _event(*, event: str = "pull_request", head_branch: str = "feature") -> dict
     }
 
 
-def _jobs() -> list[dict]:
+def _jobs() -> list[dict[str, Any]]:
     return [
         {
             "name": "fast quality / compile / lint / type / contracts",
@@ -65,7 +70,7 @@ def _jobs() -> list[dict]:
     ]
 
 
-def _jds_plan() -> dict:
+def _jds_plan() -> dict[str, Any]:
     return {
         "ambiguousImpact": False,
         "effectiveCapabilities": [f"cap-{index}" for index in range(10)],
