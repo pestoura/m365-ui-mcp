@@ -79,9 +79,11 @@ def require_outbound_execution_blocked(intent: SyntheticOutboundIntent) -> None:
     """Explicit guard proving prepared synthetic intents cannot execute."""
     if not intent.synthetic or intent.executable:
         raise RuntimeError("outbound intent unexpectedly became executable")
-    raise PermissionError(
-        "outbound execution blocked: semantic tool registration and canonical HITL approval required"
+    message = (
+        "outbound execution blocked: semantic tool registration and "
+        "canonical HITL approval required"
     )
+    raise PermissionError(message)
 
 
 __all__ = [
