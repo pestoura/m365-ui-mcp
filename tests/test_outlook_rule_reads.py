@@ -10,6 +10,8 @@ from m365_mcp.application_registry import (
 from m365_mcp.apps.outlook import readiness, rule_reads
 from m365_mcp.tool_registry import default_tool_registry
 
+# Cumulative revalidation trigger: OUT-060 integrated in Wave G.
+
 
 def _ready() -> readiness.OutlookReadinessReport:
     return readiness.OutlookReadinessReport(
