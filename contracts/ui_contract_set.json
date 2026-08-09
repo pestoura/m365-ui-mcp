@@ -1,5 +1,5 @@
 {
-  "ui_contract_set_version": "0.1.0",
+  "ui_contract_set_version": "0.2.0",
   "legacy_ui_contract_version": "0.1.0",
   "fragments": [
     {
@@ -17,6 +17,30 @@
     {
       "fragment_id": "planner.account",
       "path": "ui_fragments/apps/planner/account.json"
+    },
+    {
+      "fragment_id": "outlook.account",
+      "path": "ui_fragments/apps/outlook/account.json"
+    },
+    {
+      "fragment_id": "outlook.mail-surface",
+      "path": "ui_fragments/surfaces/outlook-web/mail.json"
+    },
+    {
+      "fragment_id": "outlook.calendar-surface",
+      "path": "ui_fragments/surfaces/outlook-web/calendar.json"
+    },
+    {
+      "fragment_id": "outlook.people-surface",
+      "path": "ui_fragments/surfaces/outlook-web/people.json"
+    },
+    {
+      "fragment_id": "outlook.todo-surface",
+      "path": "ui_fragments/surfaces/outlook-web/todo.json"
+    },
+    {
+      "fragment_id": "outlook.settings-surface",
+      "path": "ui_fragments/surfaces/outlook-web/settings.json"
     }
   ]
 }
