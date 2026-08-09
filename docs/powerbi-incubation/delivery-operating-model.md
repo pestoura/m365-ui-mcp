@@ -4,6 +4,8 @@ Status: **INCUBATION / VNEXT INPUT**
 
 This document defines **how Power BI UI MCP work will be delivered once implementation is allowed to start**. It does not override the incubation gate `PBI-001`.
 
+The model follows JDS-001 principles: next usable baseline, critical path, vertical slices, bounded WIP, fast feedback, evidence-based support and explicit recovery/rollback behavior where applicable.
+
 ## Hard start gate
 
 Implementation must not begin until the active Planner/Outlook M365 baseline is GREEN and versioned.
@@ -28,11 +30,11 @@ GREEN | PASS | SUPPORTED | ACCEPTED
         CONTINUE AUTOMATICALLY
 ```
 
-Stop only for a real blocker: authentication/MFA requiring the user, Conditional Access/device-compliance restriction, unsupported live Power BI surface, destructive ambiguity, security regression, shared M365 baseline regression, unavailable tenant/service, or insufficient evidence to support a capability claim.
+Stop only for a real blocker: authentication/MFA requiring the user, Conditional Access/device-compliance restriction, unsupported live Power BI surface, destructive ambiguity, security regression, shared M365 baseline regression, unavailable tenant/service, or insufficient evidence for a capability claim.
 
 ## Delivery objective
 
-Optimize for **time to a useful Power BI automation capability**, not for breadth of implemented UI mechanics.
+Optimize for **time to a useful Power BI automation capability**, not breadth of implemented UI mechanics.
 
 Preferred progression:
 
@@ -56,97 +58,43 @@ reliable report-building workflows
 production-capable integration
 ```
 
-Do not attempt to implement every Power BI feature before producing the first useful accepted baseline.
+Do not implement every Power BI feature before producing the first accepted useful baseline.
 
-## Delivery topology
+## Work topology and WIP
 
-Normal execution uses:
+Power BI implementation does **not** require a fixed number of development lanes or agents.
+
+Parallel work is used only where it materially reduces critical-path time. For the current Jarvas/Hermes development environment, use this as an upper bound rather than a target:
 
 ```text
-5–6 development lanes
-+
-1 Controller / Integration lane
+active development WIP <= 5–6 lanes
 ```
 
-Use fewer lanes when the UI or model dependencies are serial. Parallelism must reduce critical-path time, not create merge or browser-contract conflicts.
+Use fewer lanes when UI/model dependencies are serial or when additional work would create merge, browser-contract or CI pressure.
 
-### Controller / Integration lane
+A lane may be executed by a human, agent, automation or other implementation mechanism.
 
-The controller continuously:
+### Integration Controller role
 
-1. reconciles `main`, Power BI incubation/implementation branches, PRs, CI and evidence;
-2. identifies the next usable Power BI baseline;
-3. identifies critical-path dependencies;
+For concurrent work, one role owns integration throughput. It may be human or automated.
+
+It continuously:
+
+1. reconciles current M365 baseline, Power BI branch/PRs, CI and evidence;
+2. identifies the next demonstrable Power BI capability and critical path;
+3. keeps WIP bounded;
 4. classifies failures;
-5. fixes deterministic failures immediately where safe;
-6. integrates GREEN lanes;
-7. revalidates the M365 shared baseline;
-8. launches the next independent wave;
-9. prevents mock or code-only capabilities from being misreported as live support.
+5. repairs/routes deterministic failures;
+6. integrates GREEN work;
+7. revalidates the shared M365 baseline;
+8. opens the next independent work only when capacity exists;
+9. prevents mock/code-only capabilities from being reported as live support.
 
-## Delivery waves
+## Delivery waves and vertical slices
 
-Power BI should be built in **vertical waves**.
+Waves are optional coordination devices for independent slices that compose one baseline. They are not a mandatory architecture or staffing model.
 
-### Example Wave A — live read discovery
-
-```text
-lane A: authentication/session readiness
-lane B: workspace discovery
-lane C: report/page discovery
-lane D: UIContract/evidence harness
-lane E: semantic model/developer-surface discovery
-lane F: policy/capability projection
-                 ↓
-            integration
-                 ↓
-       READ-ONLY BASELINE
-```
-
-### Example Wave B — first controlled mutation
-
-```text
-lane A: page operation
-lane B: visual target resolution
-lane C: formatting/property contract
-lane D: mutation/read-back verification
-lane E: evidence/rollback
-lane F: UI drift tests
-                 ↓
-            integration
-                 ↓
-      CONTROLLED MUTATION BASELINE
-```
-
-The actual wave must always be selected from current live repository and tenant evidence.
-
-## Execution hierarchy
-
-For every operation, prefer the highest-level reliable surface available:
-
-```text
-TMDL / model code surface
-        >
-DAX editor
-        >
-Power Query M / Advanced Editor
-        >
-semantic DOM / ARIA Playwright
-        >
-keyboard / clipboard acceleration
-        >
-geometry-aware canvas interaction
-        >
-vision-assisted recovery/validation
-        >
-absolute coordinates (last resort)
-```
-
-This hierarchy is also a delivery optimization: higher-level deterministic surfaces should be implemented before expensive brittle GUI choreography when they solve the same user intent.
-
-## Vertical capability slice
-
-A Power BI capability is most valuable when delivered end to end:
+A Power BI capability should be delivered end to end:
 
 ```text
 semantic intent
@@ -170,7 +118,31 @@ semantic intent
    → evidence / rollback or compensation
 ```
 
-Avoid large horizontal foundations that cannot yet perform a useful accepted operation.
+The first implementation should be a walking skeleton: authenticate/establish session readiness, discover one controlled workspace/report/page path, return a normalized read and retain sanitized evidence before broad feature work begins.
+
+## Execution hierarchy
+
+For every operation, prefer the highest-level reliable surface available:
+
+```text
+TMDL / model code surface
+        >
+DAX editor
+        >
+Power Query M / Advanced Editor
+        >
+semantic DOM / ARIA Playwright
+        >
+keyboard / clipboard acceleration
+        >
+geometry-aware canvas interaction
+        >
+vision-assisted recovery/validation
+        >
+absolute coordinates (last resort)
+```
+
+Higher-level deterministic surfaces should be implemented before brittle GUI choreography when they solve the same semantic intent.
 
 ## Fast gates before expensive/live gates
 
@@ -192,16 +164,14 @@ controlled live read acceptance
 controlled live mutation acceptance
 ```
 
-Do not consume a live authenticated browser session to discover failures that lint, typing or mock tests could have caught first.
+Do not consume a live authenticated browser session to discover failures that deterministic local gates could catch first.
 
 ## Failure classification
 
 ### Deterministic failure
 
-Examples: lint, formatting, typing, schema, fixture, deterministic unit test.
-
 ```text
-FAIL → inspect → patch → targeted retest → push → continue
+FAIL → inspect → root cause → patch → targeted retest → continue
 ```
 
 No blind retries.
@@ -232,7 +202,7 @@ Freeze Power BI promotion if it would regress Planner, Outlook, shared policy, w
 
 Implementation is not delivery.
 
-A read capability is delivered only when:
+A live read requires:
 
 ```text
 SEMANTIC CONTRACT
@@ -255,7 +225,7 @@ EXACT TARGET RESOLUTION
 = DELIVERED MUTATION
 ```
 
-Use explicit capability states such as:
+Use explicit capability states:
 
 ```text
 PLANNED
@@ -269,50 +239,41 @@ BLOCKED
 
 ## Product-specific first baselines
 
-### Baseline PBI-A — authenticated read discovery
+### PBI-A — authenticated read discovery
 
-Using the controlled existing report target, prove session readiness and semantic discovery of workspace, report and page without mutation.
+Using a controlled existing report target, prove session readiness and semantic discovery of workspace, report and page without mutation.
 
-### Baseline PBI-B — report structure read
+### PBI-B — report structure read
 
 Read and normalize useful report/page/visual/model metadata through semantic or developer surfaces.
 
-### Baseline PBI-C — first controlled reversible mutation
+### PBI-C — first controlled reversible mutation
 
-Perform one bounded report edit in controlled scope, prove the exact target, read back the result and restore/compensate where feasible.
+Perform one bounded report edit in controlled scope, prove exact target, read back the result and restore/compensate where feasible.
 
-### Baseline PBI-D — report-building workflow
+### PBI-D — report-building workflow
 
 Prove a small end-to-end workflow such as page/visual creation or model edit using the highest-level available execution path and complete evidence.
 
-Each baseline should be independently versionable and demonstrable.
+Each baseline should be independently demonstrable and versionable.
 
 ## CI / integration rules
 
-- Prefer PR validation for feature branches and full validation on the integration/main baseline; avoid equivalent duplicate CI work.
+- Prefer short-lived branches and PR validation.
+- Avoid equivalent duplicate CI work when repository protections permit.
 - Fast gates precede expensive browser/container/live acceptance gates.
 - Security and acceptance requirements are never removed for speed.
-- Integrate by waves when several independent lanes compose one baseline.
-- Merge automatically when required gates executed and are GREEN and no real blocker exists.
+- Use merge-queue or equivalent serialized integration validation when concurrent GREEN PRs can invalidate one another.
+- Merge automatically only when required gates actually executed and are GREEN.
 - Revalidate the shared M365 baseline after Power BI integration changes.
 
 ## Worker isolation rule
 
-Power BI remains isolated from Planner and Outlook at process/container, profile, state, evidence and logging boundaries. Delivery pressure must never justify sharing browser credential/session state across application workers.
+Power BI remains isolated from Planner and Outlook at process/container, profile, state, evidence and logging boundaries. Delivery pressure never justifies sharing browser credential/session state across application workers.
 
-## WIP and critical path
+## Resume rule
 
-The Controller lane continuously asks:
-
-```text
-What is the shortest safe path to the next demonstrable Power BI capability?
-```
-
-Finish/integrate current waves before opening unlimited future backlog work. Parallel work is useful only when it does not starve live acceptance and integration.
-
-## Conversation / agent restart rule
-
-Any new execution session must first reconcile:
+Any resumed execution session first reconciles:
 
 ```text
 current m365 main
@@ -323,9 +284,9 @@ current m365 main
 + tenant/live evidence
 ```
 
-Then continue the highest-priority safe wave. Conversation memory is not a gate.
+Conversation memory is not a gate.
 
-## Permanent execution algorithm
+## Permanent algorithm
 
 ```text
 CHECK PBI-001
@@ -334,9 +295,9 @@ RECONCILE LIVE STATE
    ↓
 IDENTIFY NEXT DEMONSTRABLE BASELINE
    ↓
-FORM DELIVERY WAVE
+SELECT MINIMUM USEFUL WORK SET
    ↓
-PARALLEL IMPLEMENTATION
+BOUNDED PARALLEL IMPLEMENTATION
    ↓
 FAST GATES
    ↓
@@ -352,7 +313,7 @@ BASELINE GREEN
    ↓
 VERSION + EVIDENCE
    ↓
-NEXT WAVE
+NEXT BASELINE
 ```
 
 This operating model remains active for the Power BI program unless explicitly superseded by a documented design decision.
