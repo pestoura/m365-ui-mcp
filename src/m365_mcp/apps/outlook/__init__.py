@@ -1,15 +1,10 @@
 """Outlook application foundation and reserved read-only models.
 
-OUT-001 creates an application-owned package boundary, OUT-002 adds synthetic
-isolated fixtures, OUT-003 adds semantic shell/navigation requirements,
-OUT-004 adds evidence-neutral capability discovery, OUT-005 adds sanitized
-primary-mailbox context verification, OUT-006 adds scoped shared-mailbox
-context verification, OUT-007 adds bounded readiness/smoke projection,
-OUT-010 adds message listing, OUT-011 adds synthetic message get/read,
-OUT-012 adds bounded synthetic mail search, OUT-013 adds explicit synthetic
-conversation/thread reads, and OUT-014 adds attachment metadata/list reads.
-Outlook remains RESERVED and exposes no public MCP registrar or browser
-operation surface.
+OUT-001..OUT-007 establish the inert application/readiness foundation.
+OUT-010..OUT-014 add synthetic-only read models. OUT-015 adds controlled
+attachment retrieval into an injected artifact sink; no attachment bytes or
+raw storage locator are projected. Outlook remains RESERVED and exposes no
+public MCP registrar or browser operation surface.
 """
 
 from m365_mcp.apps.outlook.attachment_metadata import (
@@ -17,6 +12,12 @@ from m365_mcp.apps.outlook.attachment_metadata import (
     SyntheticAttachment,
     default_synthetic_attachments,
     list_fixture_attachment_metadata,
+)
+from m365_mcp.apps.outlook.attachment_retrieval import (
+    AttachmentArtifactSink,
+    AttachmentRetrievalResult,
+    SyntheticAttachmentPayload,
+    retrieve_synthetic_attachment,
 )
 from m365_mcp.apps.outlook.conversation_reads import (
     ConversationReadResult,
@@ -28,6 +29,15 @@ from m365_mcp.apps.outlook.discovery import (
     DiscoveryState,
     OutlookCapabilityCandidate,
     default_outlook_discovery_candidates,
+)
+from m365_mcp.apps.outlook.folder_reads import (
+    FolderListResult,
+    FolderNavigationResult,
+    FolderNode,
+    SyntheticFolder,
+    default_synthetic_folders,
+    list_fixture_folders,
+    navigate_fixture_folder,
 )
 from m365_mcp.apps.outlook.mail_search import (
     MailSearchRequest,
@@ -75,9 +85,14 @@ from m365_mcp.apps.outlook.shell_contracts import (
 )
 
 __all__ = [
+    "AttachmentArtifactSink",
     "AttachmentMetadataResult",
+    "AttachmentRetrievalResult",
     "ConversationReadResult",
     "DiscoveryState",
+    "FolderListResult",
+    "FolderNavigationResult",
+    "FolderNode",
     "MailSearchRequest",
     "MailSearchResult",
     "MessageGetRequest",
@@ -100,18 +115,24 @@ __all__ = [
     "SharedMailboxContextState",
     "SharedMailboxObservation",
     "SyntheticAttachment",
+    "SyntheticAttachmentPayload",
     "SyntheticConversation",
+    "SyntheticFolder",
     "default_outlook_discovery_candidates",
     "default_outlook_fixture",
     "default_synthetic_attachments",
     "default_synthetic_conversations",
+    "default_synthetic_folders",
     "evaluate_outlook_readiness",
     "foundation_manifest",
     "get_fixture_message",
     "list_fixture_attachment_metadata",
+    "list_fixture_folders",
     "list_fixture_messages",
+    "navigate_fixture_folder",
     "outlook_shell_contracts",
     "read_fixture_conversation",
+    "retrieve_synthetic_attachment",
     "search_fixture_messages",
     "verify_primary_mailbox_context",
     "verify_shared_mailbox_context",
