@@ -6,7 +6,8 @@ attachment retrieval into an injected artifact sink; no attachment bytes or
 raw storage locator are projected. OUT-016..OUT-019 add folder, category,
 follow-up and pin/snooze read state. OUT-020 adds a synthetic-only bounded
 calendar listing and OUT-021 adds synthetic-only calendar event list/get/search
-using relative day offsets only. Outlook remains RESERVED and exposes no public
+using relative day offsets only, and OUT-022 derives bounded free-busy
+availability from those events. Outlook remains RESERVED and exposes no public
 MCP registrar or browser operation surface.
 """
 
@@ -21,6 +22,13 @@ from m365_mcp.apps.outlook.attachment_retrieval import (
     AttachmentRetrievalResult,
     SyntheticAttachmentPayload,
     retrieve_synthetic_attachment,
+)
+from m365_mcp.apps.outlook.availability_reads import (
+    AvailabilityResult,
+    AvailabilitySlot,
+    AvailabilityState,
+    AvailabilityWindow,
+    read_fixture_availability,
 )
 from m365_mcp.apps.outlook.calendar_events import (
     EventProjection,
@@ -143,6 +151,10 @@ __all__ = [
     "AttachmentArtifactSink",
     "AttachmentMetadataResult",
     "AttachmentRetrievalResult",
+    "AvailabilityResult",
+    "AvailabilitySlot",
+    "AvailabilityState",
+    "AvailabilityWindow",
     "CalendarColorToken",
     "CalendarKind",
     "CalendarListResult",
@@ -223,6 +235,7 @@ __all__ = [
     "list_fixture_messages",
     "navigate_fixture_folder",
     "outlook_shell_contracts",
+    "read_fixture_availability",
     "read_fixture_calendar",
     "read_fixture_conversation",
     "read_fixture_follow_up_state",
