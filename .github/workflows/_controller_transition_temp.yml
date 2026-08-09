@@ -1,0 +1,206 @@
+name: Temporary controller Wave M/N transition
+
+on:
+  push:
+    branches:
+      - control/wave-m-integrating-stage-wave-n
+
+permissions:
+  contents: write
+
+jobs:
+  transition:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply scoped fail-closed transition
+        shell: bash
+        run: |
+          cp docs/m365-transition/execution-index.json /tmp/execution-index.previous.json
+          python - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          path = Path('docs/m365-transition/execution-index.json')
+          text = path.read_text(encoding='utf-8')
+
+          def object_span(key: str) -> tuple[int, int, str]:
+              pattern = re.compile(
+                  rf'    \{{\n      "key": "{re.escape(key)}",.*?(?=\n    \}},\n    \{{\n      "key":)',
+                  re.DOTALL,
+              )
+              match = pattern.search(text)
+              if match is None:
+                  raise SystemExit(f'object not found: {key}')
+              return match.start(), match.end(), match.group(0)
+
+          def replace_field(key: str, field: str, old: str, new: str) -> None:
+              global text
+              start, end, obj = object_span(key)
+              pattern = re.compile(
+                  rf'("{re.escape(field)}": "){re.escape(old)}(")'
+              )
+              updated, count = pattern.subn(rf'\g<1>{new}\g<2>', obj, count=1)
+              if count != 1:
+                  raise SystemExit(
+                      f'expected one {key}.{field} {old}->{new}, got {count}'
+                  )
+              text = text[:start] + updated + text[end:]
+
+          def replace_literal(key: str, old: str, new: str) -> None:
+              global text
+              start, end, obj = object_span(key)
+              if obj.count(old) != 1:
+                  raise SystemExit(
+                      f'expected one literal in {key}: {old!r}; got {obj.count(old)}'
+                  )
+              updated = obj.replace(old, new, 1)
+              text = text[:start] + updated + text[end:]
+
+          lane_prs = {
+              'OUT-098': 455,
+              'OUT-100': 456,
+              'OUT-101': 457,
+              'OUT-102': 458,
+              'OUT-103': 459,
+          }
+          evidence = (
+              '[\n'
+              '        "pr:465",\n'
+              '        "gha:31338015810/jds-effective-plan",\n'
+              '        "main:3b76706cee8a883067e1a9ff2076d5376269ae8a"\n'
+              '      ]'
+          )
+          for key, pr in lane_prs.items():
+              replace_field(key, 'state', 'IN_PROGRESS', 'INTEGRATING')
+              replace_literal(key, '"prs": []', f'"prs": [{pr}]')
+              replace_literal(key, '"evidence": []', f'"evidence": {evidence}')
+              replace_field(
+                  key,
+                  'implementationState',
+                  'IMPLEMENTED_NOT_ATTESTED',
+                  'IMPLEMENTED_MOCK_ONLY',
+              )
+
+          marker = '    {\n      "key": "REL-026",'
+          if text.count(marker) != 1:
+              raise SystemExit('REL-026 insertion marker not unique')
+          wave_n = '''    {
+      "key": "OUT-104",
+      "releaseBand": "0.7.x-people-todo-shared",
+      "phase": "12-people-todo-shared",
+      "dependencies": ["OUT-103"],
+      "state": "READY",
+      "riskClass": "SAFE_WRITE",
+      "wave": "wave-n-out-104-109",
+      "branch": "wave-n/out-104-task-mutations",
+      "issue": null,
+      "prs": [],
+      "evidence": [],
+      "implementationState": "SPECIFIED_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-105",
+      "releaseBand": "0.7.x-people-todo-shared",
+      "phase": "12-people-todo-shared",
+      "dependencies": ["OUT-104"],
+      "state": "READY",
+      "riskClass": "SAFE_WRITE",
+      "wave": "wave-n-out-104-109",
+      "branch": "wave-n/out-105-task-scheduling",
+      "issue": null,
+      "prs": [],
+      "evidence": [],
+      "implementationState": "SPECIFIED_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-106",
+      "releaseBand": "0.7.x-people-todo-shared",
+      "phase": "12-people-todo-shared",
+      "dependencies": ["OUT-105"],
+      "state": "READY",
+      "riskClass": "SAFE_WRITE",
+      "wave": "wave-n-out-104-109",
+      "branch": "wave-n/out-106-task-important-myday",
+      "issue": null,
+      "prs": [],
+      "evidence": [],
+      "implementationState": "SPECIFIED_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-107",
+      "releaseBand": "0.7.x-people-todo-shared",
+      "phase": "12-people-todo-shared",
+      "dependencies": ["OUT-106"],
+      "state": "READY",
+      "riskClass": "SAFE_WRITE",
+      "wave": "wave-n-out-104-109",
+      "branch": "wave-n/out-107-task-steps",
+      "issue": null,
+      "prs": [],
+      "evidence": [],
+      "implementationState": "SPECIFIED_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-108",
+      "releaseBand": "0.7.x-people-todo-shared",
+      "phase": "12-people-todo-shared",
+      "dependencies": ["OUT-107"],
+      "state": "READY",
+      "riskClass": "SAFE_WRITE",
+      "wave": "wave-n-out-104-109",
+      "branch": "wave-n/out-108-task-notes-attachments",
+      "issue": null,
+      "prs": [],
+      "evidence": [],
+      "implementationState": "SPECIFIED_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+    {
+      "key": "OUT-109",
+      "releaseBand": "0.7.x-people-todo-shared",
+      "phase": "12-people-todo-shared",
+      "dependencies": ["OUT-108"],
+      "state": "READY",
+      "riskClass": "SAFE_WRITE",
+      "wave": "wave-n-out-104-109",
+      "branch": "wave-n/out-109-flagged-email-relationship",
+      "issue": null,
+      "prs": [],
+      "evidence": [],
+      "implementationState": "SPECIFIED_ONLY",
+      "liveSupportState": "UNOBSERVED",
+      "blockerCode": null
+    },
+'''
+          text = text.replace(marker, wave_n + marker, 1)
+          json.loads(text)
+          path.write_text(text, encoding='utf-8')
+          PY
+          python scripts/check_execution_index.py \
+            --index docs/m365-transition/execution-index.json \
+            --previous /tmp/execution-index.previous.json
+      - name: Commit transition
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/m365-transition/execution-index.json
+          git diff --cached --quiet && exit 1
+          git commit -m 'chore(control): mark Wave M integrating and stage Wave N'
+          git push origin HEAD:${GITHUB_REF_NAME}
