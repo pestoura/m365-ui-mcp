@@ -4,8 +4,8 @@ OUT-001 creates an application-owned package boundary, OUT-002 adds synthetic
 isolated fixtures, OUT-003 adds semantic shell/navigation requirements,
 OUT-004 adds evidence-neutral capability discovery, OUT-005 adds sanitized
 primary-mailbox context verification, OUT-006 adds scoped shared-mailbox
-context verification, OUT-007 adds bounded readiness/smoke projection, and
-OUT-010 adds a synthetic-only bounded message-list semantic model.
+context verification, OUT-007 adds bounded readiness/smoke projection,
+OUT-010 adds message listing, and OUT-011 adds synthetic message get/read.
 Outlook remains RESERVED and exposes no public MCP registrar or browser
 operation surface.
 """
@@ -22,6 +22,11 @@ from m365_mcp.apps.outlook.mailbox_context import (
     verify_primary_mailbox_context,
 )
 from m365_mcp.apps.outlook.manifest import OutlookFoundationManifest, foundation_manifest
+from m365_mcp.apps.outlook.message_get import (
+    MessageGetRequest,
+    MessageGetResult,
+    get_fixture_message,
+)
 from m365_mcp.apps.outlook.message_list import (
     MessageListItem,
     MessageListRequest,
@@ -52,6 +57,8 @@ from m365_mcp.apps.outlook.shell_contracts import (
 
 __all__ = [
     "DiscoveryState",
+    "MessageGetRequest",
+    "MessageGetResult",
     "MessageListItem",
     "MessageListRequest",
     "MessageListResult",
@@ -73,6 +80,7 @@ __all__ = [
     "default_outlook_fixture",
     "evaluate_outlook_readiness",
     "foundation_manifest",
+    "get_fixture_message",
     "list_fixture_messages",
     "outlook_shell_contracts",
     "verify_primary_mailbox_context",
