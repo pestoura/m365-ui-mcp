@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
-from m365_mcp.apps.outlook.meeting_responses import MeetingResponseKind
 from m365_mcp.apps.outlook.readiness import OutlookReadinessReport
 
 _MAX_MESSAGE_CHARS = 4000
 
 
+class MeetingResponseMessageKind(StrEnum):
+    ACCEPT = "ACCEPT"
+    TENTATIVE = "TENTATIVE"
+    DECLINE = "DECLINE"
+
+
 @dataclass(frozen=True)
 class SyntheticMeetingResponseMessage:
     meeting_key: str
-    response: MeetingResponseKind
+    response: MeetingResponseMessageKind
     message_text: str
 
     def __post_init__(self) -> None:
@@ -34,7 +40,7 @@ class SyntheticMeetingResponseMessage:
 @dataclass(frozen=True)
 class MeetingResponseMessageResult:
     meeting_key: str
-    response: MeetingResponseKind
+    response: MeetingResponseMessageKind
     changed: bool
     verified: bool
     response_sent: bool = False
@@ -85,6 +91,7 @@ def prepare_response_with_message(
 
 
 __all__ = [
+    "MeetingResponseMessageKind",
     "MeetingResponseMessageResult",
     "SyntheticMeetingResponseMessage",
     "prepare_response_with_message",
