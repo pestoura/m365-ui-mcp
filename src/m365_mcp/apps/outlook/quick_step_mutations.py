@@ -83,7 +83,8 @@ def _apply_update(
     replacement: SyntheticQuickStep,
 ) -> tuple[SyntheticQuickStep, ...]:
     without = [
-        step for step in sorted(steps, key=lambda item: item.order)
+        step
+        for step in sorted(steps, key=lambda item: item.order)
         if step.quick_step_key != replacement.quick_step_key
     ]
     target_index = replacement.order - 1
@@ -112,16 +113,24 @@ def mutate_quick_steps(
             raise ValueError("CREATE requires a new quick_step_key")
         if request.step.order != len(steps) + 1:
             raise ValueError("CREATE order must append to the Quick Step catalog")
-        if (request.step.destructive or request.step.outbound) and not allow_sensitive_definition:
-            raise PermissionError("sensitive Quick Step definition requires explicit policy allowance")
+        if (
+            request.step.destructive or request.step.outbound
+        ) and not allow_sensitive_definition:
+            raise PermissionError(
+                "sensitive Quick Step definition requires explicit policy allowance"
+            )
         updated = steps + (request.step,)
         changed = True
     elif request.action is QuickStepMutationAction.UPDATE:
         assert request.step is not None
         if current is None:
             raise ValueError("UPDATE requires an existing quick_step_key")
-        if (request.step.destructive or request.step.outbound) and not allow_sensitive_definition:
-            raise PermissionError("sensitive Quick Step definition requires explicit policy allowance")
+        if (
+            request.step.destructive or request.step.outbound
+        ) and not allow_sensitive_definition:
+            raise PermissionError(
+                "sensitive Quick Step definition requires explicit policy allowance"
+            )
         updated = _apply_update(steps, request.step)
         changed = request.step != current
     else:
@@ -131,7 +140,9 @@ def mutate_quick_steps(
         else:
             updated = _ordered(
                 tuple(
-                    step for step in steps if step.quick_step_key != request.quick_step_key
+                    step
+                    for step in steps
+                    if step.quick_step_key != request.quick_step_key
                 )
             )
             changed = True
