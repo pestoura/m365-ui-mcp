@@ -4,9 +4,10 @@ COMMON_AUTH_SELECTORS = ("auth.login_email_input", "auth.mfa_number_display")
 
 
 def _contract_set():
+    from m365_mcp.ui_contract_projection import project_ui_contract_set
     from m365_mcp.ui_contract_store import load_ui_contract_set
 
-    return load_ui_contract_set()
+    return project_ui_contract_set(load_ui_contract_set(), "planner")
 
 
 def _planner_fragment_specs():
