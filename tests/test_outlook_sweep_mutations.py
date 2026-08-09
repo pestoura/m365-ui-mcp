@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-# Cumulative revalidation trigger: current Wave G integration baseline.
-
 import pytest
 
 from m365_mcp.application_registry import (
@@ -14,6 +12,8 @@ from m365_mcp.idempotency_v2 import reserve_operation
 from m365_mcp.state_identity import resource_state_identity
 from m365_mcp.tool_registry import default_tool_registry
 from m365_mcp.typed_locks import state_lock
+
+# Cumulative revalidation trigger: current Wave G integration baseline.
 
 
 def _ready() -> readiness.OutlookReadinessReport:
