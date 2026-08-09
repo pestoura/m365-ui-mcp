@@ -1,4 +1,4 @@
-"""Tenant-neutral synthetic draft state shared by Outlook Wave D lanes."""
+"""Tenant-neutral synthetic draft state shared by Outlook Wave D/E lanes."""
 
 from __future__ import annotations
 
@@ -26,6 +26,8 @@ class SyntheticDraft:
     importance: str = "NORMAL"
     sensitivity: str = "NORMAL"
     signature_key: str | None = None
+    read_receipt_requested: bool = False
+    delivery_receipt_requested: bool = False
     synthetic: bool = True
 
     def __post_init__(self) -> None:
