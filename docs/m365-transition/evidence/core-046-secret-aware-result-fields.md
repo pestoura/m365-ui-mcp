@@ -1,6 +1,6 @@
 # CORE-046 — Secret-aware result fields
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_045**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -50,11 +50,13 @@ A STANDARD field may also be deliberately configured as `REDACTED`, allowing app
 - CORE-044 reduces/selects result content.
 - CORE-045 references separately retained artifacts/evidence without exposing locators.
 - CORE-046 governs whether individual result fields may be emitted in clear text.
-- CORE-047 will add execution provenance without weakening these field-exposure rules.
+- CORE-047 adds execution provenance without weakening these field-exposure rules.
 
 ## Security/privacy boundary
 
 Secret-aware projection is metadata-driven rather than name-heuristic-driven. It does not inspect cookies, tokens, browser storage, authentication headers or Microsoft tenant state. A value classified as SECRET is never present in the projected result or redaction metadata.
+
+The enum value `SECRET` is a classification label, not credential material; the local S105 suppression documents this distinction without weakening Bandit/Ruff globally.
 
 ## Acceptance coverage
 
@@ -70,4 +72,6 @@ Tests prove:
 
 ## Dependency gate
 
-This work is stacked on CORE-045. CORE-045 itself remains blocked behind CORE-044, and CORE-044 remains blocked until CORE-043 completes Phase 4. CORE-046 must therefore remain stacked until those predecessors are merged and post-merge GREEN.
+CORE-045 is merged at `34968a01d06d1ae5ef2c5315d417d3c884d6e029` and its post-merge CI/documentation gates are fully GREEN, including both image Trivy scans and CycloneDX SBOM validation.
+
+CORE-046 is therefore unblocked for integration. This revision re-triggers all mandatory gates against the current `main`; historical stacked or preventive runs are not accepted as merge evidence.
