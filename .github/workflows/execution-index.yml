@@ -46,11 +46,12 @@ jobs:
           set -euo pipefail
           previous="${RUNNER_TEMP}/execution-index.previous.json"
 
-          # A main -> integration/** PR is ancestry synchronization, not a new
-          # controller state transition. Every transition in the main history
-          # has already passed this gate individually. Re-check the current
-          # index statically, but do not collapse that accepted history into a
-          # synthetic direct transition from the older integration baseline.
+          # Default-branch -> integration/** PRs synchronize ancestry. The
+          # controller transitions contained in the default-branch history
+          # already passed this gate individually, so re-collapsing that history
+          # into one direct transition from an older integration baseline would
+          # reject valid accepted history. Validate the current index statically
+          # for this one sync shape; all other PRs/pushes retain --previous.
           if [[ "$EVENT_NAME" == "pull_request" ]] && \
              [[ "$HEAD_REF" == "$DEFAULT_BRANCH" ]] && \
              [[ "$BASE_REF" == integration/* ]]; then
