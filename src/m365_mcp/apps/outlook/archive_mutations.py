@@ -89,13 +89,14 @@ def apply_fixture_archive_mutation(
     if request.action is ArchiveMutationAction.ARCHIVE:
         target = _ARCHIVE_FOLDER
     else:
+        restore_target = request.restore_folder_key
+        if restore_target is None:
+            raise RuntimeError("validated restore target unexpectedly absent")
         wrong_source = current.folder_key != _ARCHIVE_FOLDER
-        already_elsewhere = current.folder_key != request.restore_folder_key
+        already_elsewhere = current.folder_key != restore_target
         if wrong_source and already_elsewhere:
             raise ValueError("restore requires message to be archived")
-        target = request.restore_folder_key
-        if target is None:
-            raise RuntimeError("validated restore target unexpectedly absent")
+        target = restore_target
 
     if target not in fixture.folders:
         raise ValueError("target folder does not exist in synthetic fixture")
