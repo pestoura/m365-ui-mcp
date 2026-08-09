@@ -169,3 +169,6 @@ def test_out032_remains_reserved_and_not_public() -> None:
     outlook = default_application_registry().get(ApplicationKey.OUTLOOK)
     assert outlook.state is ApplicationState.RESERVED
     assert default_tool_registry().by_application("outlook") == ()
+
+
+# Revalidated against the current Wave B integration base; no live-support claim.
