@@ -82,18 +82,27 @@ def test_task_create_update_complete_delete_have_exact_read_back() -> None:
 def test_task_create_and_delete_are_idempotent() -> None:
     fixture = mock_ui.default_outlook_fixture()
     lists, tasks = todo_task_reads.default_synthetic_todo()
+    create = todo_task_mutations.TodoTaskMutationRequest(
+        todo_task_mutations.TodoTaskAction.CREATE,
+        "task-delta",
+        "todo-default",
+        "Synthetic delta",
+    )
+    tasks, first = todo_task_mutations.apply_todo_task_mutation(
+        fixture,
+        lists,
+        tasks,
+        create,
+        readiness=_ready(),
+    )
     _, repeated = todo_task_mutations.apply_todo_task_mutation(
         fixture,
         lists,
         tasks,
-        todo_task_mutations.TodoTaskMutationRequest(
-            todo_task_mutations.TodoTaskAction.CREATE,
-            "task-alpha",
-            "todo-default",
-            "Review synthetic item",
-        ),
+        create,
         readiness=_ready(),
     )
+    assert first.changed is True
     assert repeated.changed is False
     _, absent = todo_task_mutations.apply_todo_task_mutation(
         fixture,
