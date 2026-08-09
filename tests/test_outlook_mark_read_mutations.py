@@ -123,3 +123,6 @@ def test_projection_excludes_browser_and_session_primitives() -> None:
         "storage_state",
     ):
         assert forbidden not in projection
+
+
+# Revalidated against the current Wave B integration base; no live-support claim.
