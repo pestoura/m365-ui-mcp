@@ -12,11 +12,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from m365_browser_worker.account_context import AccountContext, unverified_account_context
+from m365_browser_worker.apps.planner import PlannerWorkerAdapter
 from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
 from m365_browser_worker.protocol import (
-    PlanArguments,
-    TaskArguments,
     WorkerOperation,
     WorkerRequestEnvelope,
     WorkerResponseEnvelope,
@@ -130,6 +129,13 @@ def create_app(
         except PlannerMcpError as exc:
             raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
 
+    planner_adapter = PlannerWorkerAdapter(
+        is_mock=_is_mock,
+        capability_guard=capability_guard,
+        data_provider=mock_data,
+    )
+    app.state.planner_adapter = planner_adapter
+
     @app.get("/livez")
     async def livez() -> dict[str, object]:
         return {"alive": True, "version": __version__}
@@ -224,58 +230,26 @@ def create_app(
 
     @app.get("/planner/plans")
     async def plans() -> dict[str, Any]:
-        if _is_mock():
-            return {"plans": mock_data.PLANS}
-        capability_guard("plans.read")
-        return {"plans": []}
+        return await planner_adapter.plan_list()
 
     @app.get("/planner/plans/{plan_id}")
     async def plan_get(plan_id: str) -> dict[str, Any]:
-        if not _is_mock():
-            capability_guard("plans.read")
-            return {"plan": None}
-        plan = mock_data.plan(plan_id)
-        if plan is None:
-            raise HTTPException(status_code=404, detail={"error": "PLAN_NOT_FOUND"})
-        return {"plan": plan}
+        return await planner_adapter.plan_get(plan_id)
 
     @app.get("/planner/tasks")
     async def task_list(plan_id: str) -> dict[str, Any]:
-        if not _is_mock():
-            capability_guard("tasks.read")
-            return {"tasks": []}
-        return {"plan_id": plan_id, "tasks": mock_data.tasks_for(plan_id)}
+        return await planner_adapter.task_list(plan_id)
 
     @app.get("/planner/tasks/{task_id}")
     async def task_get(task_id: str) -> dict[str, Any]:
-        if not _is_mock():
-            capability_guard("tasks.read")
-            return {"task": None}
-        task = mock_data.task(task_id)
-        if task is None:
-            raise HTTPException(status_code=404, detail={"error": "TASK_NOT_FOUND"})
-        return {"task": task}
+        return await planner_adapter.task_get(task_id)
 
     @app.get("/planner/plans/{plan_id}/snapshot")
     async def snapshot(plan_id: str) -> dict[str, Any]:
-        if not _is_mock():
-            capability_guard("project_snapshot.read")
-            return {"plan": None, "tasks": []}
-        plan = mock_data.plan(plan_id)
-        if plan is None:
-            raise HTTPException(status_code=404, detail={"error": "PLAN_NOT_FOUND"})
-        tasks = mock_data.tasks_for(plan_id)
-        return {
-            "plan": plan,
-            "tasks": tasks,
-            "buckets": plan.get("buckets", []),
-            "counts": {"tasks": len(tasks)},
-            "read_only": True,
-        }
+        return await planner_adapter.project_snapshot(plan_id)
 
     async def dispatch_semantic_operation(request: WorkerRequestEnvelope) -> dict[str, Any]:
         operation = request.operation
-        arguments = request.arguments
 
         if operation is WorkerOperation.AUTH_STATUS:
             return await auth_status()
@@ -289,24 +263,8 @@ def create_app(
             return await account_context()
         if operation is WorkerOperation.ACCOUNT_LICENSE:
             return await account_license()
-        if operation is WorkerOperation.PLANNER_PLAN_LIST:
-            return await plans()
-        if operation is WorkerOperation.PLANNER_PLAN_GET:
-            if not isinstance(arguments, PlanArguments):
-                raise HTTPException(status_code=422, detail="plan arguments required")
-            return await plan_get(arguments.plan_id)
-        if operation is WorkerOperation.PLANNER_TASK_LIST:
-            if not isinstance(arguments, PlanArguments):
-                raise HTTPException(status_code=422, detail="plan arguments required")
-            return await task_list(arguments.plan_id)
-        if operation is WorkerOperation.PLANNER_TASK_GET:
-            if not isinstance(arguments, TaskArguments):
-                raise HTTPException(status_code=422, detail="task arguments required")
-            return await task_get(arguments.task_id)
-        if operation is WorkerOperation.PLANNER_PROJECT_SNAPSHOT:
-            if not isinstance(arguments, PlanArguments):
-                raise HTTPException(status_code=422, detail="plan arguments required")
-            return await snapshot(arguments.plan_id)
+        if planner_adapter.owns(operation):
+            return await planner_adapter.dispatch(request)
 
         raise HTTPException(status_code=422, detail="unsupported worker operation")
 
