@@ -1,0 +1,67 @@
+name: Temporary controller transition
+
+on:
+  push:
+    branches:
+      - control/wave-l-accepted-activate-wave-m
+
+permissions:
+  contents: write
+
+jobs:
+  transition:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply scoped fail-closed transition
+        shell: bash
+        run: |
+          cp docs/m365-transition/execution-index.json /tmp/execution-index.previous.json
+          python - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          path = Path('docs/m365-transition/execution-index.json')
+          text = path.read_text(encoding='utf-8')
+          original = text
+
+          def replace_field(key: str, field: str, old: str, new: str) -> None:
+              global text
+              pattern = re.compile(
+                  rf'("key": "{re.escape(key)}".*?"{re.escape(field)}": "){re.escape(old)}(")',
+                  re.DOTALL,
+              )
+              text, count = pattern.subn(rf'\g<1>{new}\g<2>', text, count=1)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one {key}.{field} {old}->{new}, got {count}')
+
+          for key in ('OUT-092', 'OUT-093', 'OUT-094', 'OUT-095', 'OUT-096', 'OUT-097'):
+              replace_field(key, 'state', 'INTEGRATING', 'ACCEPTED')
+
+          for key in ('OUT-098', 'OUT-100', 'OUT-101', 'OUT-102', 'OUT-103'):
+              replace_field(key, 'state', 'READY', 'IN_PROGRESS')
+              replace_field(key, 'implementationState', 'SPECIFIED_ONLY', 'IMPLEMENTED_NOT_ATTESTED')
+
+          if text == original:
+              raise SystemExit('transition produced no changes')
+          json.loads(text)
+          path.write_text(text, encoding='utf-8')
+          PY
+          python scripts/check_execution_index.py \
+            --index docs/m365-transition/execution-index.json \
+            --previous /tmp/execution-index.previous.json
+      - name: Commit transition
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/m365-transition/execution-index.json
+          git diff --cached --quiet && exit 1
+          git commit -m 'chore(control): accept Wave L and activate Wave M'
+          git push origin HEAD:${GITHUB_REF_NAME}
