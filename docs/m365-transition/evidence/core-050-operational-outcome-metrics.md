@@ -1,6 +1,6 @@
 # CORE-050 — Drift/read-back/indeterminate metrics
 
-Status: **PREIMPLEMENTED_STACKED_AWAITING_CORE_049**
+Status: **IMPLEMENTED_AWAITING_CURRENT_BASE_GATES**
 
 ## Objective
 
@@ -39,6 +39,6 @@ Samples aggregate only by application/signal/outcome. There is no field for reso
 
 Tests prove valid projections, rejection of invalid signal/outcome pairs, positive occurrence invariants, deterministic aggregation and independent detected/resolved indeterminate counters.
 
-## Dependency gate
+## Current integration gate
 
-This work is stacked on CORE-049 and cannot merge until CORE-049 and all preceding Phase 5 work are merged and post-merge GREEN.
+CORE-049 and all preceding Phase 5 work are merged. The current `main` is post-merge GREEN at `24e39ad2cf9372fcd218067bd8d6ad798773b52b`. This revision deliberately re-triggers the complete mandatory gate suite against that exact integration base; previous stacked GREEN evidence is not reused for merge.
