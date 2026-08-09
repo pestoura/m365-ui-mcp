@@ -4,9 +4,9 @@ OUT-001 creates an application-owned package boundary, OUT-002 adds synthetic
 isolated fixtures, OUT-003 adds semantic shell/navigation requirements,
 OUT-004 adds evidence-neutral capability discovery, OUT-005 adds sanitized
 primary-mailbox context verification, OUT-006 adds a shared-mailbox scoped
-context model, and OUT-007 adds bounded readiness/smoke projection. Outlook
-remains RESERVED and exposes no public MCP registrar or browser operation
-surface.
+context model, OUT-007 adds bounded readiness/smoke projection, and OUT-010
+adds a synthetic-only bounded message-list semantic model. Outlook remains
+RESERVED and exposes no public MCP registrar or browser operation surface.
 """
 
 from m365_mcp.apps.outlook.discovery import (
@@ -21,6 +21,12 @@ from m365_mcp.apps.outlook.mailbox_context import (
     verify_primary_mailbox_context,
 )
 from m365_mcp.apps.outlook.manifest import OutlookFoundationManifest, foundation_manifest
+from m365_mcp.apps.outlook.message_list import (
+    MessageListItem,
+    MessageListRequest,
+    MessageListResult,
+    list_fixture_messages,
+)
 from m365_mcp.apps.outlook.mock_ui import (
     MockMessage,
     OutlookMockFixture,
@@ -45,6 +51,9 @@ from m365_mcp.apps.outlook.shell_contracts import (
 
 __all__ = [
     "DiscoveryState",
+    "MessageListItem",
+    "MessageListRequest",
+    "MessageListResult",
     "MockMessage",
     "OutlookCapabilityCandidate",
     "OutlookFoundationManifest",
@@ -63,6 +72,7 @@ __all__ = [
     "default_outlook_fixture",
     "evaluate_outlook_readiness",
     "foundation_manifest",
+    "list_fixture_messages",
     "outlook_shell_contracts",
     "verify_primary_mailbox_context",
     "verify_shared_mailbox_context",
