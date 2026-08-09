@@ -6,12 +6,18 @@ OUT-004 adds evidence-neutral capability discovery, OUT-005 adds sanitized
 primary-mailbox context verification, OUT-006 adds scoped shared-mailbox
 context verification, OUT-007 adds bounded readiness/smoke projection,
 OUT-010 adds message listing, OUT-011 adds synthetic message get/read,
-OUT-012 adds bounded synthetic mail search, and OUT-013 adds explicit
-synthetic conversation/thread reads.
+OUT-012 adds bounded synthetic mail search, OUT-013 adds explicit synthetic
+conversation/thread reads, and OUT-014 adds attachment metadata/list reads.
 Outlook remains RESERVED and exposes no public MCP registrar or browser
 operation surface.
 """
 
+from m365_mcp.apps.outlook.attachment_metadata import (
+    AttachmentMetadataResult,
+    SyntheticAttachment,
+    default_synthetic_attachments,
+    list_fixture_attachment_metadata,
+)
 from m365_mcp.apps.outlook.conversation_reads import (
     ConversationReadResult,
     SyntheticConversation,
@@ -69,6 +75,7 @@ from m365_mcp.apps.outlook.shell_contracts import (
 )
 
 __all__ = [
+    "AttachmentMetadataResult",
     "ConversationReadResult",
     "DiscoveryState",
     "MailSearchRequest",
@@ -92,13 +99,16 @@ __all__ = [
     "SharedMailboxContext",
     "SharedMailboxContextState",
     "SharedMailboxObservation",
+    "SyntheticAttachment",
     "SyntheticConversation",
     "default_outlook_discovery_candidates",
     "default_outlook_fixture",
+    "default_synthetic_attachments",
     "default_synthetic_conversations",
     "evaluate_outlook_readiness",
     "foundation_manifest",
     "get_fixture_message",
+    "list_fixture_attachment_metadata",
     "list_fixture_messages",
     "outlook_shell_contracts",
     "read_fixture_conversation",
