@@ -99,7 +99,11 @@ class SyntheticSchedulingPoll:
         vote_keys = tuple((item.option_key, item.participant_key) for item in self.votes)
         if len(set(vote_keys)) != len(vote_keys):
             raise ValueError("poll contains duplicate participant vote")
-        unknown = tuple(vote.option_key for vote in self.votes if vote.option_key not in option_keys)
+        unknown = tuple(
+            vote.option_key
+            for vote in self.votes
+            if vote.option_key not in option_keys
+        )
         if unknown:
             raise ValueError("poll vote references an unknown option_key")
 
@@ -307,12 +311,11 @@ def apply_synthetic_poll_mutation(
         else:
             raise ValueError("unsupported synthetic poll action")
 
+    remaining_polls = tuple(
+        item for item in polls if item.poll_key != request.poll_key
+    )
     new_catalog = tuple(
-        sorted(
-            (item for item in polls if item.poll_key != request.poll_key)
-            + (updated_poll,),
-            key=lambda item: item.poll_key,
-        )
+        sorted(remaining_polls + (updated_poll,), key=lambda item: item.poll_key)
     )
     read_back = read_synthetic_poll_results(
         new_catalog,
