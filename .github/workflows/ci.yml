@@ -43,6 +43,9 @@ jobs:
       - name: Contract/schema validation gate (P-001)
         run: python scripts/check_contracts.py
 
+      - name: Policy metadata completeness gate (REL-008)
+        run: python scripts/check_policy_metadata.py
+
       - name: Pytest (mock UI only, never touches real Planner)
         run: pytest -q
 
