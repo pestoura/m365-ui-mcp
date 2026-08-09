@@ -106,18 +106,26 @@ def apply_recipient_assignment(
     if len(resolved) != len(set(resolved)):
         raise ValueError("recipient queries resolve to duplicate identities")
 
-    field_name = {
-        RecipientField.TO: "to_keys",
-        RecipientField.CC: "cc_keys",
-        RecipientField.BCC: "bcc_keys",
-    }[request.field]
-    previous = getattr(current, field_name)
-    replacement = replace(current, **{field_name: resolved})
+    if request.field is RecipientField.TO:
+        previous = current.to_keys
+        replacement = replace(current, to_keys=resolved)
+    elif request.field is RecipientField.CC:
+        previous = current.cc_keys
+        replacement = replace(current, cc_keys=resolved)
+    else:
+        previous = current.bcc_keys
+        replacement = replace(current, bcc_keys=resolved)
+
     updated = tuple(
         replacement if item.draft_key == request.draft_key else item for item in drafts
     )
     read_back = next(item for item in updated if item.draft_key == request.draft_key)
-    if getattr(read_back, field_name) != resolved:
+    read_back_keys = {
+        RecipientField.TO: read_back.to_keys,
+        RecipientField.CC: read_back.cc_keys,
+        RecipientField.BCC: read_back.bcc_keys,
+    }[request.field]
+    if read_back_keys != resolved:
         raise RuntimeError("synthetic read-back did not prove recipient assignment")
 
     return updated, RecipientAssignmentResult(
