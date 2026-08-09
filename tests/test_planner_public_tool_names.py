@@ -4,7 +4,6 @@ import m365_mcp.apps.planner.public_surface as public_surface
 import m365_mcp.tool_registry as tool_registry
 import planner_mcp.tools as legacy_tools
 
-
 EXPECTED_PUBLIC_NAMES = (
     "planner_health",
     "planner_readiness",
