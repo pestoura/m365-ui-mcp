@@ -3,8 +3,10 @@
 OUT-001..OUT-007 establish the inert application/readiness foundation.
 OUT-010..OUT-014 add synthetic-only read models. OUT-015 adds controlled
 attachment retrieval into an injected artifact sink; no attachment bytes or
-raw storage locator are projected. Outlook remains RESERVED and exposes no
-public MCP registrar or browser operation surface.
+raw storage locator are projected. OUT-016..OUT-019 add folder, category,
+follow-up and pin/snooze read state. OUT-020 adds a synthetic-only bounded
+calendar listing. Outlook remains RESERVED and exposes no public MCP registrar
+or browser operation surface.
 """
 
 from m365_mcp.apps.outlook.attachment_metadata import (
@@ -18,6 +20,16 @@ from m365_mcp.apps.outlook.attachment_retrieval import (
     AttachmentRetrievalResult,
     SyntheticAttachmentPayload,
     retrieve_synthetic_attachment,
+)
+from m365_mcp.apps.outlook.calendar_list import (
+    CalendarColorToken,
+    CalendarKind,
+    CalendarListResult,
+    CalendarNode,
+    SyntheticCalendar,
+    default_synthetic_calendars,
+    list_fixture_calendars,
+    read_fixture_calendar,
 )
 from m365_mcp.apps.outlook.category_reads import (
     CategoryAssignment,
@@ -118,6 +130,10 @@ __all__ = [
     "AttachmentArtifactSink",
     "AttachmentMetadataResult",
     "AttachmentRetrievalResult",
+    "CalendarColorToken",
+    "CalendarKind",
+    "CalendarListResult",
+    "CalendarNode",
     "CategoryAssignment",
     "CategoryColorToken",
     "CategoryListResult",
@@ -159,12 +175,14 @@ __all__ = [
     "SnoozeState",
     "SyntheticAttachment",
     "SyntheticAttachmentPayload",
+    "SyntheticCalendar",
     "SyntheticCategory",
     "SyntheticConversation",
     "SyntheticFolder",
     "default_outlook_discovery_candidates",
     "default_outlook_fixture",
     "default_synthetic_attachments",
+    "default_synthetic_calendars",
     "default_synthetic_categories",
     "default_synthetic_category_assignments",
     "default_synthetic_conversations",
@@ -175,6 +193,7 @@ __all__ = [
     "foundation_manifest",
     "get_fixture_message",
     "list_fixture_attachment_metadata",
+    "list_fixture_calendars",
     "list_fixture_categories",
     "list_fixture_folders",
     "list_fixture_follow_up_state",
@@ -182,6 +201,7 @@ __all__ = [
     "list_fixture_messages",
     "navigate_fixture_folder",
     "outlook_shell_contracts",
+    "read_fixture_calendar",
     "read_fixture_conversation",
     "read_fixture_follow_up_state",
     "read_fixture_message_categories",
