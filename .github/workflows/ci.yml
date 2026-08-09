@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "feat/**"]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -14,7 +14,7 @@ env:
 
 jobs:
   quality:
-    name: compile / lint / type / contracts / tests
+    name: fast quality / compile / lint / type / contracts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +46,62 @@ jobs:
       - name: Policy metadata completeness gate (REL-008)
         run: python scripts/check_policy_metadata.py
 
+      - name: Repository secret invariant check
+        run: python scripts/check_no_secrets.py
+
+  security:
+    name: filesystem / dependency / secret scanning
+    needs: [quality]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Trivy filesystem scan - dependencies (CRITICAL,HIGH)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Trivy secret scanning (blocking)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "1"
+
+      - name: Trivy misconfiguration scan (advisory)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: misconfig
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+  validation:
+    name: tests / package / isolated acceptance
+    needs: [quality]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
       - name: Pytest (mock UI only, never touches real Planner)
         run: pytest -q
 
@@ -66,7 +122,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: quality-artifacts
+          name: validation-artifacts
           path: |
             artifacts/
             dist/
@@ -74,6 +130,7 @@ jobs:
 
   images:
     name: build images / trivy / sbom
+    needs: [security, validation]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,7 +195,10 @@ jobs:
       - name: Validate SBOMs exist in the workspace and are valid CycloneDX
         run: |
           python - <<'PY'
-          import json, pathlib, sys
+          import json
+          import pathlib
+          import sys
+
           ok = True
           for name in ("sbom-control-plane.cdx.json", "sbom-browser-worker.cdx.json"):
               path = pathlib.Path("artifacts") / name
@@ -151,8 +211,11 @@ jobs:
                   print(f"INVALID_CYCLONEDX {path}")
                   ok = False
               else:
-                  print(f"OK {path} specVersion={doc['specVersion']} "
-                        f"components={len(doc.get('components', []))}")
+                  component_count = len(doc.get("components", []))
+                  print(
+                      f"OK {path} specVersion={doc['specVersion']} "
+                      f"components={component_count}"
+                  )
           sys.exit(0 if ok else 1)
           PY
 
@@ -162,42 +225,3 @@ jobs:
           name: sbom-and-scan-artifacts
           path: artifacts/
           if-no-files-found: error
-
-  security:
-    name: filesystem / dependency / secret scanning
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Trivy filesystem scan - dependencies (CRITICAL,HIGH)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "1"
-
-      - name: Trivy secret scanning (blocking)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: secret
-          severity: CRITICAL,HIGH,MEDIUM
-          exit-code: "1"
-
-      - name: Trivy misconfiguration scan (advisory)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: misconfig
-          severity: CRITICAL,HIGH
-          exit-code: "0"
-
-      - name: Repository secret invariant check
-        run: python scripts/check_no_secrets.py
