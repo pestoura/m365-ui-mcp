@@ -19,7 +19,13 @@ def _run(index: Path, previous: Path | None = None) -> subprocess.CompletedProce
     command = [sys.executable, str(SCRIPT_PATH), "--index", str(index)]
     if previous is not None:
         command.extend(["--previous", str(previous)])
-    return subprocess.run(command, capture_output=True, check=False, text=True)
+    # Test-only execution: no shell, fixed interpreter/script, pytest-controlled temp paths.
+    return subprocess.run(  # noqa: S603
+        command,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
 
 
 def _write(path: Path, document: dict[str, Any]) -> None:
