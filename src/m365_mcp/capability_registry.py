@@ -3,6 +3,8 @@
 CORE-011 introduces scope-aware capability identity only. Effective support is
 computed later from auth/account/UI/runtime/policy evidence by CORE-012; this
 registry therefore contains no tenant content and makes no live-support claim.
+PLN-MIG-003 moves Planner-owned capability declarations out of this generic core
+while retaining the application-neutral registry schema and composition boundary.
 """
 
 from __future__ import annotations
@@ -117,30 +119,8 @@ class CapabilityRegistry:
         )
 
 
-def _planner_capability(capability: str, container_scope: str) -> ScopedCapability:
-    return ScopedCapability(
-        application=ApplicationKey.PLANNER.value,
-        surface="planner_web",
-        account_scope="professional_session",
-        container_scope=container_scope,
-        capability=capability,
-    )
-
-
 def default_capability_registry() -> CapabilityRegistry:
-    """Return current scoped definitions without overstating live support."""
-    return CapabilityRegistry(
-        (
-            _planner_capability("plans.read", "account"),
-            _planner_capability("tasks.read", "plan"),
-            _planner_capability("buckets.read", "plan"),
-            _planner_capability("dependencies.read", "plan"),
-            _planner_capability("scheduling.read", "plan"),
-            _planner_capability("goals.read", "plan"),
-            _planner_capability("sprints.read", "plan"),
-            _planner_capability("resources.read", "plan"),
-            _planner_capability("custom_fields.read", "plan"),
-            _planner_capability("portfolios.read", "account"),
-            _planner_capability("project_snapshot.read", "plan"),
-        )
-    )
+    """Compose current scoped definitions from application-owned modules."""
+    from m365_mcp.apps.planner.capability_registry import planner_capability_definitions
+
+    return CapabilityRegistry(planner_capability_definitions())

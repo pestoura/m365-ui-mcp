@@ -1,5 +1,6 @@
 """Planner application-owned semantic definitions."""
 
+from m365_mcp.apps.planner.capability_registry import planner_capability_definitions
 from m365_mcp.apps.planner.schemas import (
     PlannerSemanticSchema,
     common_read_output_schema,
@@ -14,6 +15,7 @@ __all__ = [
     "common_read_output_schema",
     "empty_input_schema",
     "id_input_schema",
+    "planner_capability_definitions",
     "planner_semantic_schemas",
     "planner_tool_definitions",
 ]
