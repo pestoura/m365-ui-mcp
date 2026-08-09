@@ -57,7 +57,7 @@ def test_flag_unflag_and_complete_are_verified() -> None:
     unflagged, third = flag_mutations.apply_fixture_flag_mutation(
         fixture,
         flag_mutations.FlagMutationRequest(
-            flag_mutations.FlagMutationAction.UNFLAG,
+            flag_mutations.PinMutationAction.UNPIN,
             "msg-001",
         ),
         readiness=_ready(),
@@ -139,4 +139,4 @@ def test_out033_remains_reserved_and_not_public() -> None:
     assert default_tool_registry().by_application("outlook") == ()
 
 
-# Revalidated against the current Wave B integration base; no live-support claim.
+# Revalidated against cumulative Wave B through OUT-032; no live claim.
