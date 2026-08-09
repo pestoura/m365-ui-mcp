@@ -40,4 +40,4 @@ Every definition remains bound to `application=planner`, `surface=planner_web` a
 
 ## Current integration gate
 
-PLN-MIG-001 and PLN-MIG-002 are merged. The current cross-lane `main` also includes CORE-041 and is post-merge GREEN at `5469821deab86505e51b19dfab3905ae35295eee`. This revision deliberately re-triggers every mandatory PR gate against that current integration base; previous GREEN evidence is not reused for merge.
+PLN-MIG-001 and PLN-MIG-002 are merged. The current cross-lane `main` is post-merge GREEN at `cd64ad70c4a1608f1948d46be51eeef3506c3124`, including CORE through CORE-048. This revision deliberately re-triggers every mandatory PR gate against that exact integration base; previous GREEN evidence is not reused for merge.
