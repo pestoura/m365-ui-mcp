@@ -1,0 +1,38 @@
+schemaVersion: jds.validation/v1
+kind: ValidationCampaign
+id: VAL-M365-OUTLOOK-LIVE-PROMOTION
+product: m365-ui-mcp
+objective: Govern the transition from the current synthetic Outlook repository baseline to an evidence-backed live UI/public semantic capability without conflating merged implementation with live support.
+state: BLOCKED
+candidate:
+  version: wave-l-out-092-097-main-baseline
+  commit: e9c3811886d53aed6e2710eff438e3b14ceec451
+  artifactDigest: null
+environment: Microsoft 365 private browser worker / authenticated tenant promotion
+observations:
+  - id: OBS-WAVE-L-INTEGRATION
+    required: true
+    result: PASS
+    status: RESOLVED
+    summary: Wave L OUT-092..097 synthetic calendar scheduling semantics are integrated on main while Outlook remains RESERVED and live support remains unobserved.
+    changeRecord: null
+    evidence: 'pr:454; main:e9c3811886d53aed6e2710eff438e3b14ceec451'
+  - id: OBS-EXECUTION-INDEX-RECONCILIATION
+    required: true
+    result: BLOCKED
+    status: OPEN
+    summary: The canonical execution index on this main baseline still marks OUT-092..097 IN_PROGRESS and must be reconciled before a later promotion decision relies on controller state.
+    changeRecord: null
+    evidence: 'docs/m365-transition/execution-index.json:OUT-092..097'
+  - id: OBS-OUTLOOK-LIVE-ATTESTATION
+    required: true
+    result: BLOCKED
+    status: OPEN
+    summary: Outlook remains LIVE UNOBSERVED with zero public Outlook tools; no live UIContract/read-back evidence currently supports public capability promotion.
+    changeRecord: null
+    evidence: 'outlook:RESERVED; live:UNOBSERVED; public-tools:0'
+promotionRecommendation: HOLD
+timestamps:
+  startedAt: '2026-08-09T21:12:00Z'
+  updatedAt: '2026-08-09T21:12:00Z'
+  closedAt: null

@@ -1,0 +1,35 @@
+apiVersion: engineering.jarvas/v1
+kind: ReleaseMaintenanceProfile
+standard: JDS-002
+mode: ACTIVE
+platform:
+  repository: pestoura/jarvas-engineering-platform
+  ref: 15b112042886747216f6291656e354e92f64090b
+
+product:
+  name: m365-ui-mcp
+  acceptedReleaseMutable: false
+  plannerPublicToolCount: 17
+  outlookPublicToolCount: 0
+  outlookSupportState: RESERVED_LIVE_UNOBSERVED
+
+currentState:
+  repositoryHeadAtAdoption: e9c3811886d53aed6e2710eff438e3b14ceec451
+  mainBaseline: wave-l-out-092-097-merged
+  outlookImplementationState: IMPLEMENTED_MOCK_ONLY
+  outlookLiveSupportState: UNOBSERVED
+  waveMStateAtAdoption: FEATURE_LANES_OFF_MAIN
+
+rules:
+  functionalChangeAfterCandidateEvidenceRequiresNewCandidateIdentity: true
+  acceptedReleaseChangeRequiresNewReleaseIdentity: true
+  mergeImpliesRuntimePromotion: false
+  mergeImpliesLiveSupport: false
+  syntheticImplementationImpliesLiveSupport: false
+  requireLiveUiAttestationBeforePublicOutlookPromotion: true
+  requireExecutionIndexReconciliation: true
+  deferNonBlockingImprovementAllowed: true
+
+paths:
+  changes: changes
+  validation: validation
