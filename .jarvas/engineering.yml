@@ -1,0 +1,40 @@
+apiVersion: engineering.jarvas/v1
+kind: ProjectEngineeringProfile
+
+metadata:
+  name: m365-ui-mcp
+
+spec:
+  standard: JDS-1.0
+  platformRef: 9ee1147ea85bbb5bbb733d252bab9ccbb113f5ef
+  criticality: high
+
+  detection:
+    enabled: true
+
+  capabilities:
+    add:
+      - docs.validate
+      - python.quality
+      - shell.quality
+      - config.schema
+      - security.secret-scan
+      - security.sca
+      - package.build
+      - container.build
+      - security.container-scan
+      - security.sbom
+      - runtime.isolated-acceptance
+      - browser.playwright
+      - release.evidence
+    remove: []
+
+  delivery:
+    releaseStrategy: versioned
+    liveAcceptance: conditional
+    requireEvidenceManifest: true
+
+  execution:
+    strategy: integration-wave
+
+  overrides: {}
