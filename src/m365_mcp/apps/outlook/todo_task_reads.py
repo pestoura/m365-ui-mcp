@@ -125,6 +125,17 @@ def _validate(
         raise ValueError("task list_key must reference a synthetic To Do list")
 
 
+def _catalog(
+    lists: tuple[SyntheticTodoList, ...] | None,
+    tasks: tuple[SyntheticTodoTask, ...] | None,
+) -> tuple[tuple[SyntheticTodoList, ...], tuple[SyntheticTodoTask, ...]]:
+    default_lists, default_tasks = default_synthetic_todo()
+    use_lists = default_lists if lists is None else lists
+    use_tasks = default_tasks if tasks is None else tasks
+    _validate(use_lists, use_tasks)
+    return use_lists, use_tasks
+
+
 def read_fixture_todo(
     fixture: OutlookMockFixture,
     *,
@@ -133,10 +144,7 @@ def read_fixture_todo(
     tasks: tuple[SyntheticTodoTask, ...] | None = None,
 ) -> dict[str, object]:
     _gate(fixture, readiness)
-    default_lists, default_tasks = default_synthetic_todo()
-    use_lists = default_lists if lists is None else lists
-    use_tasks = default_tasks if tasks is None else tasks
-    _validate(use_lists, use_tasks)
+    use_lists, use_tasks = _catalog(lists, tasks)
     list_projection = tuple(
         {"list_key": item.list_key, "display_name": item.display_name}
         for item in use_lists
@@ -156,12 +164,12 @@ def list_fixture_tasks(
     lists: tuple[SyntheticTodoList, ...] | None = None,
     tasks: tuple[SyntheticTodoTask, ...] | None = None,
 ) -> tuple[SyntheticTodoTask, ...]:
-    data = read_fixture_todo(fixture, readiness=readiness, lists=lists, tasks=tasks)
-    available = {item["list_key"] for item in data["lists"]}  # type: ignore[index]
+    _gate(fixture, readiness)
+    use_lists, use_tasks = _catalog(lists, tasks)
+    available = {item.list_key for item in use_lists}
     if list_key not in available:
         raise ValueError("synthetic To Do list_key not found")
-    source = default_synthetic_todo()[1] if tasks is None else tasks
-    return tuple(item for item in source if item.list_key == list_key)
+    return tuple(item for item in use_tasks if item.list_key == list_key)
 
 
 __all__ = [
