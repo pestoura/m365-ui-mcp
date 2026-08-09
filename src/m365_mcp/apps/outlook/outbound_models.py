@@ -1,8 +1,8 @@
-"""Fail-closed synthetic outbound intent foundation for Outlook Wave E.
+"""Fail-closed synthetic outbound intent foundation for Outlook Waves E/F.
 
-No type in this module sends, schedules, replies to, or otherwise mutates a real
-Microsoft mailbox. Approval binding remains deliberately unavailable until
-semantic Outlook outbound tools are registered and can participate in the
+No type in this module sends, schedules, replies to, forwards, resends, or otherwise
+mutates a real Microsoft mailbox. Approval binding remains deliberately unavailable
+until semantic Outlook outbound tools are registered and can participate in the
 canonical CORE-035/CORE-036 approval-plan lifecycle.
 """
 
@@ -17,6 +17,8 @@ class OutboundIntentKind(StrEnum):
     SEND_DRAFT = "SEND_DRAFT"
     REPLY = "REPLY"
     REPLY_ALL = "REPLY_ALL"
+    FORWARD = "FORWARD"
+    RESEND = "RESEND"
 
 
 class OutboundApprovalState(StrEnum):
@@ -52,9 +54,10 @@ class SyntheticOutboundIntent:
         elif self.kind is OutboundIntentKind.SEND_DRAFT:
             if self.scheduled_slot is not None or self.source_message_key is not None:
                 raise ValueError("send-draft accepts only draft_key")
-        else:
-            if self.source_message_key is None or self.scheduled_slot is not None:
-                raise ValueError("reply intents require source_message_key and no schedule")
+        elif self.source_message_key is None or self.scheduled_slot is not None:
+            raise ValueError(
+                "message-derived outbound intents require source_message_key and no schedule"
+            )
 
     @property
     def executable(self) -> bool:
