@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import json
 
-from m365_mcp.apps.planner.ui_contracts import (
-    planner_selector_names,
-    planner_ui_contract_fragment_specs,
-)
+from m365_mcp.apps.planner import ui_contracts as planner_ui_contracts
 from m365_mcp.contracts import contracts_dir
 from m365_mcp.ui_contract_store import load_ui_contract_set
 
@@ -18,7 +15,7 @@ def test_planner_fragment_specs_match_canonical_contract_set() -> None:
     planner_fragments = tuple(
         fragment for fragment in contract_set.fragments if fragment.application == "planner"
     )
-    specs = planner_ui_contract_fragment_specs()
+    specs = planner_ui_contracts.planner_ui_contract_fragment_specs()
 
     assert len(planner_fragments) == len(specs) == 3
     for fragment, spec in zip(planner_fragments, specs, strict=True):
@@ -31,7 +28,7 @@ def test_planner_fragment_specs_match_canonical_contract_set() -> None:
 
 def test_planner_partition_preserves_eight_app_selectors_and_ten_legacy_selectors() -> None:
     contract_set = load_ui_contract_set()
-    planner_selectors = planner_selector_names()
+    planner_selectors = planner_ui_contracts.planner_selector_names()
 
     assert len(planner_selectors) == 8
     assert len(set(planner_selectors)) == 8
@@ -58,6 +55,9 @@ def test_legacy_contract_selector_order_and_metadata_remain_identical() -> None:
 
 
 def test_planner_fragment_declarations_contain_no_selector_values() -> None:
-    for spec in planner_ui_contract_fragment_specs():
+    for spec in planner_ui_contracts.planner_ui_contract_fragment_specs():
         assert spec.fragment_id.startswith("planner.")
-        assert all(selector.startswith(("plan.", "task.", "account.")) for selector in spec.selector_names)
+        assert all(
+            selector.startswith(("plan.", "task.", "account."))
+            for selector in spec.selector_names
+        )
