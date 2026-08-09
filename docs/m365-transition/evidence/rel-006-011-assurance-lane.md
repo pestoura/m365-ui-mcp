@@ -36,14 +36,14 @@ No feature implementation module was modified. No product behaviour changed.
 | --- | --- |
 | `compileall src tests scripts` | PASS |
 | `ruff check .` | PASS |
-| `mypy` | PASS (128 source files) |
+| `mypy` | PASS (130 source files) |
 | `scripts/check_docs.py` | PASS (0 errors, 0 warnings) |
 | `scripts/check_contracts.py` | PASS |
 | `scripts/check_policy_metadata.py` | PASS (17 tools, 0 violations) |
 | `scripts/check_no_secrets.py` | PASS |
 | `scripts/check_base_image_pinning.py` | PASS |
 | `scripts/isolated_acceptance.py` | PASS (25 checks, 10 IA families, 0 unmapped) |
-| `pytest` | 519 passed (baseline on `main` @ e1c6b13: 483); the lane adds 36 assurance tests over the integration base, which advances during the concurrent Outlook chain |
+| `pytest` | 536 passed (baseline on `main` @ 5a0b668: 500); the lane adds 36 assurance tests over the integration base, which advances during the concurrent Outlook chain |
 
 Negative controls were exercised locally for the REL-010 detector: injected
 `{"token": ...}`, `Bearer ...` and `{"cookie": ...}` payloads all fail the
