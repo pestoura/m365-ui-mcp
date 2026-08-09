@@ -59,7 +59,8 @@ def test_outlook_discovery_capabilities_are_declared_without_execution_promotion
     assert all(item.surface == "outlook_web" for item in definitions)
     assert all(item.account_scope == "professional_session" for item in definitions)
     assert all(item.container_scope == "account" for item in definitions)
-    assert applications.get(application_registry.ApplicationKey.OUTLOOK).state is application_registry.ApplicationState.RESERVED
+    outlook = applications.get(application_registry.ApplicationKey.OUTLOOK)
+    assert outlook.state is application_registry.ApplicationState.RESERVED
     assert tool_registry.default_tool_registry().by_application("outlook") == ()
 
 
