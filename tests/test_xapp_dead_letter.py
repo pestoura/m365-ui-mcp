@@ -1,6 +1,5 @@
 from m365_mcp import xapp_dead_letter
 
-
 _DIGEST = "a" * 64
 
 
