@@ -22,7 +22,12 @@ class OooDeclineNewInvitationsIntent:
     def __post_init__(self) -> None:
         if not self.policy_key or self.policy_key != self.policy_key.strip():
             raise ValueError("policy_key must be a non-empty semantic token")
-        if any(char.isspace() for char in self.policy_key) or "@" in self.policy_key or "://" in self.policy_key:
+        invalid_key = (
+            any(char.isspace() for char in self.policy_key)
+            or "@" in self.policy_key
+            or "://" in self.policy_key
+        )
+        if invalid_key:
             raise ValueError("policy_key must be opaque and must not encode an address or URL")
         if not self.schedule.synthetic or self.schedule.live_support_state != "UNOBSERVED":
             raise ValueError("decline-new-invitations requires a synthetic relative schedule")
