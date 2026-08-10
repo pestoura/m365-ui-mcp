@@ -41,7 +41,12 @@ class EmailPollOption:
 
     def __post_init__(self) -> None:
         _key("option_key", self.option_key)
-        if not self.label or self.label != self.label.strip() or len(self.label) > _MAX_TEXT:
+        invalid_label = (
+            not self.label
+            or self.label != self.label.strip()
+            or len(self.label) > _MAX_TEXT
+        )
+        if invalid_label:
             raise ValueError("poll option label must be bounded and trimmed")
 
 
@@ -68,7 +73,12 @@ class SyntheticEmailPoll:
 
     def __post_init__(self) -> None:
         _key("poll_key", self.poll_key)
-        if not self.question or self.question != self.question.strip() or len(self.question) > _MAX_TEXT:
+        invalid_question = (
+            not self.question
+            or self.question != self.question.strip()
+            or len(self.question) > _MAX_TEXT
+        )
+        if invalid_question:
             raise ValueError("poll question must be bounded and trimmed")
         if len(self.options) > _MAX_OPTIONS or len(self.votes) > _MAX_VOTES:
             raise ValueError("email poll exceeds bounded size")
@@ -107,7 +117,10 @@ def read_email_poll_results(
         raise ValueError("synthetic poll_key must resolve exactly once")
     poll = matches[0]
     tallies = tuple(
-        (option.option_key, sum(1 for vote in poll.votes if vote.option_key == option.option_key))
+        (
+            option.option_key,
+            sum(1 for vote in poll.votes if vote.option_key == option.option_key),
+        )
         for option in sorted(poll.options, key=lambda item: item.option_key)
     )
     return EmailPollResult(poll.poll_key, poll.state, tallies, len(poll.votes))
@@ -150,14 +163,32 @@ def apply_email_poll_action(
         if action is EmailPollAction.ADD_OPTION:
             if option is None:
                 raise ValueError("ADD_OPTION requires option")
-            options = current.options if option in current.options else current.options + (option,)
-            updated_poll = SyntheticEmailPoll(current.poll_key, current.question, current.state, options, current.votes)
+            options = (
+                current.options if option in current.options else current.options + (option,)
+            )
+            updated_poll = SyntheticEmailPoll(
+                current.poll_key,
+                current.question,
+                current.state,
+                options,
+                current.votes,
+            )
         elif action is EmailPollAction.REMOVE_OPTION:
             if option_key is None:
                 raise ValueError("REMOVE_OPTION requires option_key")
-            options = tuple(item for item in current.options if item.option_key != option_key)
-            votes = tuple(item for item in current.votes if item.option_key != option_key)
-            updated_poll = SyntheticEmailPoll(current.poll_key, current.question, current.state, options, votes)
+            options = tuple(
+                item for item in current.options if item.option_key != option_key
+            )
+            votes = tuple(
+                item for item in current.votes if item.option_key != option_key
+            )
+            updated_poll = SyntheticEmailPoll(
+                current.poll_key,
+                current.question,
+                current.state,
+                options,
+                votes,
+            )
         elif action is EmailPollAction.RECORD_VOTE:
             if option_key is None or participant_key is None:
                 raise ValueError("RECORD_VOTE requires option_key and participant_key")
