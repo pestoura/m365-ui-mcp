@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from m365_mcp.apps.outlook.readiness import OutlookReadinessReport
 
-
 _MAX_WEEK_MINUTES = 7 * 24 * 60
 _SLOT_MINUTES = 15
 
