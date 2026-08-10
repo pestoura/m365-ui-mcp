@@ -1,12 +1,21 @@
 from pathlib import Path
-
-from scripts.check_container_hardening import check_container_hardening
+import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_rel_004_repository_container_hardening_has_no_findings() -> None:
-    assert check_container_hardening(ROOT) == ()
+def test_rel_004_repository_container_hardening_checker_passes() -> None:
+    completed = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/check_container_hardening.py")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "REL-004 PASS" in completed.stdout
 
 
 def test_rel_004_checker_covers_both_runtime_images_and_network_boundary() -> None:
