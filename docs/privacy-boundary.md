@@ -169,6 +169,34 @@ committed.
 **PRIV-065 — Decommission.** On end of life: destroy the profile volume, prune the state volume,
 and record the disposition (`GOV-120`).
 
+**PRIV-066 — Mailbox, calendar and contact content is never persisted.** The following data
+classes are read-through only: they may exist transiently in memory to build a tool result, and
+they are never written to the state database, evidence records, artifacts, logs or metrics.
+
+| Class | Examples | Persistence | Notes |
+| --- | --- | --- | --- |
+| Message content | subject, preview, body, quoted history | none | a digest may be persisted only where an idempotency key requires it, never the text |
+| Message participants | from, to, cc, bcc, reply-to addresses and display names | none | addresses are redacted at emission (`PRIV-062`) |
+| Attachment content | file bytes, extracted text | none | only sanitized metadata (kind, size class, count) may cross the surface |
+| Calendar content | event subject, body, location, notes, attachment names | none | free/busy state may be reported as an availability shape without content |
+| Attendee data | attendee addresses, response state, organiser identity | none | reported only as counts/shapes where required |
+| Contact data | contact names, addresses, phone numbers, organisation | none | never cached for lookup convenience |
+| Folder/category structure | folder names, category names | none | structural names are treated as content, not metadata |
+
+**PRIV-067 — Retention is declared per class, not per feature.** A new capability that introduces
+a data class not listed above must extend this table, state its retention, and pass privacy review
+before the capability ships. "It is only shown to the operator" is not a retention justification;
+the surface itself is an emission point subject to `PRIV-062`.
+
+**PRIV-068 — No content-derived cache or index.** No search index, embedding, summary cache or
+"recently seen" store is built over mailbox, calendar or contact content. Composite operations
+(digests, triage, runbooks) recompute from a fresh read; they do not accumulate a shadow copy.
+
+**PRIV-069 — Reserved applications inherit the strictest rule.** While an application is
+`RESERVED` (mock-backed, zero public tools, live unobserved), its data classes are treated as if
+they were live: the mock fixtures must not contain real personal data, and no fixture may be
+promoted into evidence as if it were tenant content.
+
 ---
 
 ## 7. Password handling
@@ -225,5 +253,6 @@ boundary, and must state which `PRIV-xxx` requirement forbids the action.
 | PRIV-030…036 | Browser profile isolation |
 | PRIV-050…053 | Prohibited mounts and data paths |
 | PRIV-060…065 | Data handling and retention |
+| PRIV-066…069 | Mailbox/calendar/contact content classes |
 | PRIV-070…074 | Password handling |
 | PRIV-080…083 | Boundary violations |

@@ -16,6 +16,9 @@ services:
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
+    # SEC-109: bound the blast radius of a wedged or hostile Chromium.
+    mem_limit: 2g
+    pids_limit: 512
     read_only: false          # Chromium requires a writable profile directory
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m
@@ -44,6 +47,9 @@ services:
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
+    # SEC-109: bound the blast radius of the async control-plane service.
+    mem_limit: 512m
+    pids_limit: 256
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m

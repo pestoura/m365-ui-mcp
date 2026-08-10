@@ -203,6 +203,21 @@ is not success.
 | **TB-3 / ARCH-052** | External content | Zone W ← Zone M | Rendered page content is **untrusted**. It may contain prompt-injection payloads and must never be treated as instructions. |
 | **TB-4 / ARCH-053** | Notification egress | Zone C → Zone H | Only sanitized, redacted, low-detail events leave. Hermes is not authoritative. |
 | **TB-5 / ARCH-054** | Personal/professional | Host personal environment ↔ Zone W profile | Hard boundary. See [docs/privacy-boundary.md](./privacy-boundary.md). |
+| **TB-6 / ARCH-057** | Supply chain | Registry / PyPI / base images / CI → Zone C and Zone W | Untrusted until pinned by digest, scanned and gated. A dependency executes next to the professional profile. |
+| **TB-7 / ARCH-058** | Application scope | Planner application ↔ Outlook application (reserved) | Applications share the control plane, the worker and the profile, but not their support state. Crossing this boundary is a *scope* decision, never an implicit consequence of code reuse. |
+
+**ARCH-059 — Application boundary invariants (TB-7).** An application namespace may exist in the
+repository, hold mock-backed implementation and be exercised by composites without becoming part
+of the supported surface. The invariants are:
+
+1. the public tool projection is registry-derived, and today is exactly the 17 Planner `READ`
+   tools; a reserved application contributes **zero** public tools;
+2. implementation state and live-support state are tracked separately, and a merge changes neither
+   into a support claim (`mergeImpliesLiveSupport = false`);
+3. cross-application composites (BATCH/DAG/runbooks) inherit the *most restrictive* state of the
+   applications they touch and cannot upgrade a reserved application by aggregation;
+4. promotion out of `RESERVED` requires live browser evidence in the target tenant, recorded
+   against the capability — mock or synthetic evidence is never sufficient.
 
 **ARCH-055** Data crossing TB-3 inbound is labelled `trust_level = untrusted_ui_derived` and
 carries that label through state, evidence and tool output.
@@ -382,7 +397,7 @@ no spoofing, no enrolment attempt, no alternative authentication path.
 | ARCH-020…023 | Public vs internal surface |
 | ARCH-030…038 | Ports and network |
 | ARCH-040…041 | Flows |
-| ARCH-050…056 | Trust boundaries |
+| ARCH-050…059 | Trust boundaries |
 | ARCH-060…064 | State store |
 | ARCH-070…074 | Policy engine |
 | ARCH-080…084 | UIContract registry |

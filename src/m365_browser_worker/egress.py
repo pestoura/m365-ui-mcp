@@ -31,6 +31,17 @@ _ALLOWED_HOST_SUFFIXES = (
     "azureedge.net",
 )
 
+# Denied even though their parent suffix is allowlisted: these are API surfaces,
+# not the reviewed Microsoft 365 web UI. Graph is a non-dependency (ADR-008) and
+# must never silently become the execution substrate (THR-134, SEC-116).
+_DENIED_API_HOSTS = (
+    "graph.microsoft.com",
+    "api.office.com",
+)
+_DENIED_API_HOST_PREFIXES = (
+    "graph.",
+)
+
 
 @dataclass(frozen=True)
 class EgressDecision:
@@ -61,6 +72,8 @@ def evaluate_browser_egress(url: str) -> EgressDecision:
         return EgressDecision(False, "HOST_MISSING")
 
     if any(_host_matches(hostname, suffix) for suffix in _ALLOWED_HOST_SUFFIXES):
+        if hostname in _DENIED_API_HOSTS or hostname.startswith(_DENIED_API_HOST_PREFIXES):
+            return EgressDecision(False, "API_SURFACE_DENIED")
         return EgressDecision(True, "MICROSOFT_M365_ALLOWLIST")
 
     return EgressDecision(False, "HOST_NOT_ALLOWLISTED")
