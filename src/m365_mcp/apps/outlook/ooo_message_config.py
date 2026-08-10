@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from m365_mcp.apps.outlook.readiness import OutlookReadinessReport
 
-
 _MAX_MESSAGE_CHARS = 2000
 
 
