@@ -2176,7 +2176,7 @@
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
       "dependencies": ["XAPP-028"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
       "branch": "integration/hardening-a-rel-001-005",
@@ -2187,7 +2187,8 @@
         "docs/m365-transition/hardening/rel-001-threat-model.md",
         "docs/m365-transition/evidence/rel-001-005-hardening-lane.md",
         "gha:31427001546/ci",
-        "main:f2f0440f7f471604d10f0a13eda9200820978d33"
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "main:c86b8747c2cf28573bd2286274cb43c8ed20992c"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
@@ -2198,7 +2199,7 @@
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
       "dependencies": ["REL-001"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
       "branch": "integration/hardening-a-rel-001-005",
@@ -2209,7 +2210,8 @@
         "docs/m365-transition/hardening/rel-002-trust-boundary-review.md",
         "docs/m365-transition/evidence/rel-001-005-hardening-lane.md",
         "gha:31427001546/ci",
-        "main:f2f0440f7f471604d10f0a13eda9200820978d33"
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "main:c86b8747c2cf28573bd2286274cb43c8ed20992c"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
@@ -2220,7 +2222,7 @@
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
       "dependencies": ["REL-002"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
       "branch": "integration/hardening-a-rel-001-005",
@@ -2231,7 +2233,8 @@
         "docs/m365-transition/hardening/rel-003-privacy-retention-review.md",
         "docs/m365-transition/evidence/rel-001-005-hardening-lane.md",
         "gha:31427001546/ci",
-        "main:f2f0440f7f471604d10f0a13eda9200820978d33"
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "main:c86b8747c2cf28573bd2286274cb43c8ed20992c"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
@@ -2242,7 +2245,7 @@
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
       "dependencies": ["REL-003"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
       "branch": "integration/hardening-a-rel-001-005",
@@ -2252,7 +2255,8 @@
         "pr:575",
         "docs/m365-transition/evidence/rel-001-005-hardening-lane.md",
         "gha:31427001546/ci",
-        "main:f2f0440f7f471604d10f0a13eda9200820978d33"
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "main:c86b8747c2cf28573bd2286274cb43c8ed20992c"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
@@ -2263,7 +2267,7 @@
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
       "dependencies": ["REL-004"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
       "branch": "integration/hardening-a-rel-001-005",
@@ -2274,7 +2278,8 @@
         "pr:574",
         "docs/m365-transition/evidence/rel-001-005-hardening-lane.md",
         "gha:31427001546/ci",
-        "main:f2f0440f7f471604d10f0a13eda9200820978d33"
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "main:c86b8747c2cf28573bd2286274cb43c8ed20992c"
       ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
