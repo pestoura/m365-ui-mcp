@@ -18,7 +18,9 @@
       "wave": null,
       "branch": "engineering/m365-jds-phase-a",
       "issue": 357,
-      "prs": [390],
+      "prs": [
+        390
+      ],
       "evidence": [
         "docs/m365-transition/evidence/m365-jds-phase-a.md",
         "gha:31306569764/jds-effective-plan",
@@ -32,13 +34,17 @@
       "key": "M365-CONTROL-001",
       "releaseBand": "0.9.x-hardening",
       "phase": "delivery-controller",
-      "dependencies": ["M365-JDS-001"],
+      "dependencies": [
+        "M365-JDS-001"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "control-index-bootstrap",
       "branch": "engineering/m365-control-index",
       "issue": 358,
-      "prs": [391],
+      "prs": [
+        391
+      ],
       "evidence": [
         "docs/m365-transition/execution-index.json",
         "scripts/check_execution_index.py",
@@ -53,14 +59,21 @@
       "key": "OUT-053",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "9-outlook-email-productivity",
-      "dependencies": ["OUT-052"],
+      "dependencies": [
+        "OUT-052"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-f-out-053-057",
       "branch": "wave-f/out-053-forward",
       "issue": null,
-      "prs": [385],
-      "evidence": ["pr:392", "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"],
+      "prs": [
+        385
+      ],
+      "evidence": [
+        "pr:392",
+        "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"
+      ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
@@ -69,14 +82,21 @@
       "key": "OUT-054",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "9-outlook-email-productivity",
-      "dependencies": ["OUT-053"],
+      "dependencies": [
+        "OUT-053"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-f-out-053-057",
       "branch": "wave-f/out-054-resend",
       "issue": null,
-      "prs": [386],
-      "evidence": ["pr:392", "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"],
+      "prs": [
+        386
+      ],
+      "evidence": [
+        "pr:392",
+        "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"
+      ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
@@ -85,14 +105,21 @@
       "key": "OUT-055",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "9-outlook-email-productivity",
-      "dependencies": ["OUT-054"],
+      "dependencies": [
+        "OUT-054"
+      ],
       "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "wave-f-out-053-057",
       "branch": "wave-f/out-055-sent-item-readback",
       "issue": null,
-      "prs": [387],
-      "evidence": ["pr:392", "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"],
+      "prs": [
+        387
+      ],
+      "evidence": [
+        "pr:392",
+        "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"
+      ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
@@ -101,14 +128,21 @@
       "key": "OUT-056",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "9-outlook-email-productivity",
-      "dependencies": ["OUT-055"],
+      "dependencies": [
+        "OUT-055"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-f-out-053-057",
       "branch": "wave-f/out-056-recall",
       "issue": null,
-      "prs": [388],
-      "evidence": ["pr:392", "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"],
+      "prs": [
+        388
+      ],
+      "evidence": [
+        "pr:392",
+        "main:08d4b8ee83567c1f496a11069fabbc9631e2627d"
+      ],
       "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
@@ -117,13 +151,17 @@
       "key": "OUT-057",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "9-outlook-email-productivity",
-      "dependencies": ["OUT-056"],
+      "dependencies": [
+        "OUT-056"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-f-out-053-057",
       "branch": "wave-f/out-057-recall-status",
       "issue": null,
-      "prs": [389],
+      "prs": [
+        389
+      ],
       "evidence": [
         "pr:392",
         "gha:31307838928/jds-effective-plan",
@@ -137,13 +175,17 @@
       "key": "OUT-060",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-057"],
+      "dependencies": [
+        "OUT-057"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-060-sweep",
       "issue": null,
-      "prs": [394],
+      "prs": [
+        394
+      ],
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
@@ -158,13 +200,17 @@
       "key": "OUT-061",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-060"],
+      "dependencies": [
+        "OUT-060"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-061-rule-reads",
       "issue": null,
-      "prs": [395],
+      "prs": [
+        395
+      ],
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
@@ -179,13 +225,17 @@
       "key": "OUT-062",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-061"],
+      "dependencies": [
+        "OUT-061"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-062-rule-crud",
       "issue": null,
-      "prs": [396],
+      "prs": [
+        396
+      ],
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
@@ -200,13 +250,17 @@
       "key": "OUT-063",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-062"],
+      "dependencies": [
+        "OUT-062"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-063-rule-state-order",
       "issue": null,
-      "prs": [397],
+      "prs": [
+        397
+      ],
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
@@ -221,13 +275,17 @@
       "key": "OUT-064",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-063"],
+      "dependencies": [
+        "OUT-063"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-g-out-060-064",
       "branch": "wave-g/out-064-rule-logic",
       "issue": null,
-      "prs": [398],
+      "prs": [
+        398
+      ],
       "evidence": [
         "pr:401",
         "gha:31312156744/jds-effective-plan",
@@ -242,13 +300,17 @@
       "key": "OUT-065",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-064"],
+      "dependencies": [
+        "OUT-064"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-065-quick-step-reads",
       "issue": null,
-      "prs": [408],
+      "prs": [
+        408
+      ],
       "evidence": [
         "pr:413",
         "gha:31317363864/jds-effective-plan",
@@ -263,13 +325,17 @@
       "key": "OUT-066",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-065"],
+      "dependencies": [
+        "OUT-065"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-066-quick-step-crud",
       "issue": null,
-      "prs": [409],
+      "prs": [
+        409
+      ],
       "evidence": [
         "pr:413",
         "gha:31317363864/jds-effective-plan",
@@ -284,13 +350,17 @@
       "key": "OUT-067",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-066"],
+      "dependencies": [
+        "OUT-066"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-067-quick-step-execution-policy",
       "issue": null,
-      "prs": [410],
+      "prs": [
+        410
+      ],
       "evidence": [
         "pr:413",
         "gha:31317363864/jds-effective-plan",
@@ -305,13 +375,17 @@
       "key": "OUT-068",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-067"],
+      "dependencies": [
+        "OUT-067"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-068-conditional-formatting",
       "issue": null,
-      "prs": [411],
+      "prs": [
+        411
+      ],
       "evidence": [
         "pr:413",
         "gha:31317363864/jds-effective-plan",
@@ -326,13 +400,17 @@
       "key": "OUT-069",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-068"],
+      "dependencies": [
+        "OUT-068"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-h-out-065-069",
       "branch": "wave-h/out-069-forwarding-settings",
       "issue": null,
-      "prs": [412],
+      "prs": [
+        412
+      ],
       "evidence": [
         "pr:413",
         "gha:31317363864/jds-effective-plan",
@@ -347,13 +425,17 @@
       "key": "OUT-070",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-069"],
+      "dependencies": [
+        "OUT-069"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-i-out-070-075",
       "branch": "wave-i/out-070-undo-send",
       "issue": null,
-      "prs": [417],
+      "prs": [
+        417
+      ],
       "evidence": [
         "pr:423",
         "gha:31320849466/jds-effective-plan",
@@ -368,13 +450,17 @@
       "key": "OUT-071",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-070"],
+      "dependencies": [
+        "OUT-070"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-i-out-070-075",
       "branch": "wave-i/out-071-view-focused-conversation",
       "issue": null,
-      "prs": [418],
+      "prs": [
+        418
+      ],
       "evidence": [
         "pr:423",
         "gha:31320849466/jds-effective-plan",
@@ -389,13 +475,17 @@
       "key": "OUT-072",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-071"],
+      "dependencies": [
+        "OUT-071"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-i-out-070-075",
       "branch": "wave-i/out-072-notification-settings",
       "issue": null,
-      "prs": [419],
+      "prs": [
+        419
+      ],
       "evidence": [
         "pr:423",
         "gha:31320849466/jds-effective-plan",
@@ -410,13 +500,17 @@
       "key": "OUT-073",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-072"],
+      "dependencies": [
+        "OUT-072"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-i-out-070-075",
       "branch": "wave-i/out-073-signature-management",
       "issue": null,
-      "prs": [420],
+      "prs": [
+        420
+      ],
       "evidence": [
         "pr:423",
         "gha:31320849466/jds-effective-plan",
@@ -431,13 +525,17 @@
       "key": "OUT-074",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-073"],
+      "dependencies": [
+        "OUT-073"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-i-out-070-075",
       "branch": "wave-i/out-074-mail-template-management",
       "issue": null,
-      "prs": [421],
+      "prs": [
+        421
+      ],
       "evidence": [
         "pr:423",
         "gha:31320849466/jds-effective-plan",
@@ -452,13 +550,17 @@
       "key": "OUT-075",
       "releaseBand": "0.5.x-outlook-mail",
       "phase": "10-outlook-automation",
-      "dependencies": ["OUT-074"],
+      "dependencies": [
+        "OUT-074"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-i-out-070-075",
       "branch": "wave-i/out-075-my-templates-snippets",
       "issue": null,
-      "prs": [422],
+      "prs": [
+        422
+      ],
       "evidence": [
         "pr:423",
         "gha:31320849466/jds-effective-plan",
@@ -473,13 +575,17 @@
       "key": "OUT-080",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-075"],
+      "dependencies": [
+        "OUT-075"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-j-out-080-085",
       "branch": "wave-j/out-080-appointment-crud",
       "issue": null,
-      "prs": [427],
+      "prs": [
+        427
+      ],
       "evidence": [
         "pr:433",
         "gha:31328549575/jds-effective-plan",
@@ -493,13 +599,17 @@
       "key": "OUT-081",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-080"],
+      "dependencies": [
+        "OUT-080"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-j-out-080-085",
       "branch": "wave-j/out-081-meeting-create-update",
       "issue": null,
-      "prs": [428],
+      "prs": [
+        428
+      ],
       "evidence": [
         "pr:433",
         "gha:31328549575/jds-effective-plan",
@@ -513,13 +623,17 @@
       "key": "OUT-082",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-081"],
+      "dependencies": [
+        "OUT-081"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-j-out-080-085",
       "branch": "wave-j/out-082-attendee-resource-management",
       "issue": null,
-      "prs": [429],
+      "prs": [
+        429
+      ],
       "evidence": [
         "pr:433",
         "gha:31328549575/jds-effective-plan",
@@ -533,13 +647,17 @@
       "key": "OUT-083",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-082"],
+      "dependencies": [
+        "OUT-082"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-j-out-080-085",
       "branch": "wave-j/out-083-teams-meeting-option",
       "issue": null,
-      "prs": [430],
+      "prs": [
+        430
+      ],
       "evidence": [
         "pr:433",
         "gha:31328549575/jds-effective-plan",
@@ -553,13 +671,17 @@
       "key": "OUT-084",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-083"],
+      "dependencies": [
+        "OUT-083"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-j-out-080-085",
       "branch": "wave-j/out-084-recurrence-series",
       "issue": null,
-      "prs": [431],
+      "prs": [
+        431
+      ],
       "evidence": [
         "pr:433",
         "gha:31328549575/jds-effective-plan",
@@ -573,13 +695,17 @@
       "key": "OUT-085",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-084"],
+      "dependencies": [
+        "OUT-084"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-j-out-080-085",
       "branch": "wave-j/out-085-reminder-category-private-show-as",
       "issue": null,
-      "prs": [432],
+      "prs": [
+        432
+      ],
       "evidence": [
         "pr:433",
         "gha:31328549575/jds-effective-plan",
@@ -593,13 +719,17 @@
       "key": "OUT-086",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-085"],
+      "dependencies": [
+        "OUT-085"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-k-out-086-091",
       "branch": "wave-k/out-086-meeting-response",
       "issue": null,
-      "prs": [436],
+      "prs": [
+        436
+      ],
       "evidence": [
         "pr:442",
         "gha:31332110378/jds-effective-plan",
@@ -614,13 +744,17 @@
       "key": "OUT-087",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-086"],
+      "dependencies": [
+        "OUT-086"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-k-out-086-091",
       "branch": "wave-k/out-087-response-message",
       "issue": null,
-      "prs": [437],
+      "prs": [
+        437
+      ],
       "evidence": [
         "pr:442",
         "gha:31332110378/jds-effective-plan",
@@ -635,13 +769,17 @@
       "key": "OUT-088",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-087"],
+      "dependencies": [
+        "OUT-087"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-k-out-086-091",
       "branch": "wave-k/out-088-propose-new-time",
       "issue": null,
-      "prs": [438],
+      "prs": [
+        438
+      ],
       "evidence": [
         "pr:442",
         "gha:31332110378/jds-effective-plan",
@@ -656,13 +794,17 @@
       "key": "OUT-089",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-088"],
+      "dependencies": [
+        "OUT-088"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-k-out-086-091",
       "branch": "wave-k/out-089-forward-meeting",
       "issue": null,
-      "prs": [439],
+      "prs": [
+        439
+      ],
       "evidence": [
         "pr:442",
         "gha:31332110378/jds-effective-plan",
@@ -677,13 +819,17 @@
       "key": "OUT-090",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-089"],
+      "dependencies": [
+        "OUT-089"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-k-out-086-091",
       "branch": "wave-k/out-090-cancel-meeting",
       "issue": null,
-      "prs": [440],
+      "prs": [
+        440
+      ],
       "evidence": [
         "pr:442",
         "gha:31332110378/jds-effective-plan",
@@ -698,13 +844,17 @@
       "key": "OUT-091",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-090"],
+      "dependencies": [
+        "OUT-090"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-k-out-086-091",
       "branch": "wave-k/out-091-organizer-response-tracking",
       "issue": null,
-      "prs": [441],
+      "prs": [
+        441
+      ],
       "evidence": [
         "pr:442",
         "gha:31332110378/jds-effective-plan",
@@ -719,13 +869,17 @@
       "key": "OUT-092",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-091"],
+      "dependencies": [
+        "OUT-091"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-l-out-092-097",
       "branch": "wave-l/out-092-find-common-slot",
       "issue": null,
-      "prs": [453],
+      "prs": [
+        453
+      ],
       "evidence": [
         "pr:454",
         "gha:31334330879/jds-effective-plan",
@@ -739,13 +893,17 @@
       "key": "OUT-093",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-092"],
+      "dependencies": [
+        "OUT-092"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-l-out-092-097",
       "branch": "wave-l/out-093-room-resource-search",
       "issue": null,
-      "prs": [448],
+      "prs": [
+        448
+      ],
       "evidence": [
         "pr:454",
         "gha:31334330879/jds-effective-plan",
@@ -759,13 +917,17 @@
       "key": "OUT-094",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-093"],
+      "dependencies": [
+        "OUT-093"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-l-out-092-097",
       "branch": "wave-l/out-094-scheduling-poll",
       "issue": null,
-      "prs": [449],
+      "prs": [
+        449
+      ],
       "evidence": [
         "pr:454",
         "gha:31334330879/jds-effective-plan",
@@ -779,13 +941,17 @@
       "key": "OUT-095",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-094"],
+      "dependencies": [
+        "OUT-094"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-l-out-092-097",
       "branch": "wave-l/out-095-shared-calendar-membership",
       "issue": null,
-      "prs": [450],
+      "prs": [
+        450
+      ],
       "evidence": [
         "pr:454",
         "gha:31334330879/jds-effective-plan",
@@ -799,13 +965,17 @@
       "key": "OUT-096",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-095"],
+      "dependencies": [
+        "OUT-095"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-l-out-092-097",
       "branch": "wave-l/out-096-calendar-permission-delegation",
       "issue": null,
-      "prs": [451],
+      "prs": [
+        451
+      ],
       "evidence": [
         "pr:454",
         "gha:31334330879/jds-effective-plan",
@@ -819,13 +989,17 @@
       "key": "OUT-097",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-096"],
+      "dependencies": [
+        "OUT-096"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-l-out-092-097",
       "branch": "wave-l/out-097-calendar-publish",
       "issue": null,
-      "prs": [452],
+      "prs": [
+        452
+      ],
       "evidence": [
         "pr:454",
         "gha:31334330879/jds-effective-plan",
@@ -839,13 +1013,17 @@
       "key": "OUT-098",
       "releaseBand": "0.6.x-calendar",
       "phase": "11-calendar-write-scheduling",
-      "dependencies": ["OUT-097"],
+      "dependencies": [
+        "OUT-097"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-m-out-098-103",
       "branch": "wave-m/out-098-working-context-settings",
       "issue": null,
-      "prs": [455],
+      "prs": [
+        455
+      ],
       "evidence": [
         "pr:465",
         "gha:31338015810/jds-effective-plan",
@@ -859,13 +1037,17 @@
       "key": "OUT-100",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-098"],
+      "dependencies": [
+        "OUT-098"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-m-out-098-103",
       "branch": "wave-m/out-100-contact-crud",
       "issue": null,
-      "prs": [456],
+      "prs": [
+        456
+      ],
       "evidence": [
         "pr:465",
         "gha:31338015810/jds-effective-plan",
@@ -879,13 +1061,17 @@
       "key": "OUT-101",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-100"],
+      "dependencies": [
+        "OUT-100"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-m-out-098-103",
       "branch": "wave-m/out-101-contact-preferences",
       "issue": null,
-      "prs": [457],
+      "prs": [
+        457
+      ],
       "evidence": [
         "pr:465",
         "gha:31338015810/jds-effective-plan",
@@ -899,13 +1085,17 @@
       "key": "OUT-102",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-101"],
+      "dependencies": [
+        "OUT-101"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-m-out-098-103",
       "branch": "wave-m/out-102-contact-list-crud",
       "issue": null,
-      "prs": [458],
+      "prs": [
+        458
+      ],
       "evidence": [
         "pr:465",
         "gha:31338015810/jds-effective-plan",
@@ -919,13 +1109,17 @@
       "key": "OUT-103",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-102"],
+      "dependencies": [
+        "OUT-102"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-m-out-098-103",
       "branch": "wave-m/out-103-contact-list-membership",
       "issue": null,
-      "prs": [459],
+      "prs": [
+        459
+      ],
       "evidence": [
         "pr:465",
         "gha:31338015810/jds-effective-plan",
@@ -939,13 +1133,17 @@
       "key": "OUT-104",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-103"],
+      "dependencies": [
+        "OUT-103"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-n-out-104-109",
       "branch": "wave-n/out-104-task-mutations",
       "issue": null,
-      "prs": [468],
+      "prs": [
+        468
+      ],
       "evidence": [
         "pr:474",
         "gha:31339325608/jds-effective-plan",
@@ -959,13 +1157,17 @@
       "key": "OUT-105",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-104"],
+      "dependencies": [
+        "OUT-104"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-n-out-104-109",
       "branch": "wave-n/out-105-task-scheduling",
       "issue": null,
-      "prs": [469],
+      "prs": [
+        469
+      ],
       "evidence": [
         "pr:474",
         "gha:31339325608/jds-effective-plan",
@@ -979,13 +1181,17 @@
       "key": "OUT-106",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-105"],
+      "dependencies": [
+        "OUT-105"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-n-out-104-109",
       "branch": "wave-n/out-106-task-important-myday",
       "issue": null,
-      "prs": [470],
+      "prs": [
+        470
+      ],
       "evidence": [
         "pr:474",
         "gha:31339325608/jds-effective-plan",
@@ -999,13 +1205,17 @@
       "key": "OUT-107",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-106"],
+      "dependencies": [
+        "OUT-106"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-n-out-104-109",
       "branch": "wave-n/out-107-task-steps",
       "issue": null,
-      "prs": [471],
+      "prs": [
+        471
+      ],
       "evidence": [
         "pr:474",
         "gha:31339325608/jds-effective-plan",
@@ -1019,13 +1229,17 @@
       "key": "OUT-108",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-107"],
+      "dependencies": [
+        "OUT-107"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-n-out-104-109",
       "branch": "wave-n/out-108-task-notes-attachments",
       "issue": null,
-      "prs": [472],
+      "prs": [
+        472
+      ],
       "evidence": [
         "pr:474",
         "gha:31339325608/jds-effective-plan",
@@ -1039,13 +1253,17 @@
       "key": "OUT-109",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-108"],
+      "dependencies": [
+        "OUT-108"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-n-out-104-109",
       "branch": "wave-n/out-109-flagged-email-relationship",
       "issue": null,
-      "prs": [473],
+      "prs": [
+        473
+      ],
       "evidence": [
         "pr:474",
         "gha:31339325608/jds-effective-plan",
@@ -1059,13 +1277,17 @@
       "key": "OUT-110",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-109"],
+      "dependencies": [
+        "OUT-109"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-o-out-110-115",
       "branch": "wave-o/out-110-email-to-task",
       "issue": null,
-      "prs": [477],
+      "prs": [
+        477
+      ],
       "evidence": [
         "pr:483",
         "gha:31343439935/jds-effective-plan",
@@ -1079,13 +1301,17 @@
       "key": "OUT-111",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-110"],
+      "dependencies": [
+        "OUT-110"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-o-out-110-115",
       "branch": "wave-o/out-111-shared-mailbox-discovery",
       "issue": null,
-      "prs": [478],
+      "prs": [
+        478
+      ],
       "evidence": [
         "pr:483",
         "gha:31343439935/jds-effective-plan",
@@ -1099,13 +1325,17 @@
       "key": "OUT-112",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-111"],
+      "dependencies": [
+        "OUT-111"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-o-out-110-115",
       "branch": "wave-o/out-112-shared-mailbox-search-read",
       "issue": null,
-      "prs": [479],
+      "prs": [
+        479
+      ],
       "evidence": [
         "pr:483",
         "gha:31343439935/jds-effective-plan",
@@ -1119,13 +1349,17 @@
       "key": "OUT-113",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-112"],
+      "dependencies": [
+        "OUT-112"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-o-out-110-115",
       "branch": "wave-o/out-113-shared-mailbox-organization",
       "issue": null,
-      "prs": [480],
+      "prs": [
+        480
+      ],
       "evidence": [
         "pr:483",
         "gha:31343439935/jds-effective-plan",
@@ -1139,13 +1373,17 @@
       "key": "OUT-114",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-113"],
+      "dependencies": [
+        "OUT-113"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-o-out-110-115",
       "branch": "wave-o/out-114-shared-mailbox-rules",
       "issue": null,
-      "prs": [481],
+      "prs": [
+        481
+      ],
       "evidence": [
         "pr:483",
         "gha:31343439935/jds-effective-plan",
@@ -1159,13 +1397,17 @@
       "key": "OUT-115",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-114"],
+      "dependencies": [
+        "OUT-114"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-o-out-110-115",
       "branch": "wave-o/out-115-shared-mailbox-auto-replies",
       "issue": null,
-      "prs": [482],
+      "prs": [
+        482
+      ],
       "evidence": [
         "pr:483",
         "gha:31343439935/jds-effective-plan",
@@ -1179,13 +1421,17 @@
       "key": "OUT-116",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-115"],
+      "dependencies": [
+        "OUT-115"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-p-out-116-120",
       "branch": "wave-p/out-116-shared-mailbox-send-as",
       "issue": null,
-      "prs": [486],
+      "prs": [
+        486
+      ],
       "evidence": [
         "pr:491",
         "gha:31345056692/jds-effective-plan",
@@ -1199,13 +1445,17 @@
       "key": "OUT-117",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-116"],
+      "dependencies": [
+        "OUT-116"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-p-out-116-120",
       "branch": "wave-p/out-117-shared-mailbox-send-on-behalf",
       "issue": null,
-      "prs": [487],
+      "prs": [
+        487
+      ],
       "evidence": [
         "pr:491",
         "gha:31345056692/jds-effective-plan",
@@ -1219,13 +1469,17 @@
       "key": "OUT-118",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-117"],
+      "dependencies": [
+        "OUT-117"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-p-out-116-120",
       "branch": "wave-p/out-118-shared-calendar-linkage",
       "issue": null,
-      "prs": [488],
+      "prs": [
+        488
+      ],
       "evidence": [
         "pr:491",
         "gha:31345056692/jds-effective-plan",
@@ -1239,13 +1493,17 @@
       "key": "OUT-119",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "12-people-todo-shared",
-      "dependencies": ["OUT-118"],
+      "dependencies": [
+        "OUT-118"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-p-out-116-120",
       "branch": "wave-p/out-119-capability-difference-reporting",
       "issue": null,
-      "prs": [489],
+      "prs": [
+        489
+      ],
       "evidence": [
         "pr:491",
         "gha:31345056692/jds-effective-plan",
@@ -1259,13 +1517,17 @@
       "key": "OUT-120",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-119"],
+      "dependencies": [
+        "OUT-119"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-p-out-116-120",
       "branch": "wave-p/out-120-junk-not-junk-reporting",
       "issue": null,
-      "prs": [490],
+      "prs": [
+        490
+      ],
       "evidence": [
         "pr:491",
         "gha:31345056692/jds-effective-plan",
@@ -1279,13 +1541,17 @@
       "key": "OUT-121",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-120"],
+      "dependencies": [
+        "OUT-120"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-q-out-121-126",
       "branch": "wave-q/out-121-phishing-reporting",
       "issue": null,
-      "prs": [494],
+      "prs": [
+        494
+      ],
       "evidence": [
         "pr:500",
         "gha:31348499207/jds-effective-plan",
@@ -1299,13 +1565,17 @@
       "key": "OUT-122",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-121"],
+      "dependencies": [
+        "OUT-121"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-q-out-121-126",
       "branch": "wave-q/out-122-sender-safety-management",
       "issue": null,
-      "prs": [495],
+      "prs": [
+        495
+      ],
       "evidence": [
         "pr:500",
         "gha:31348499207/jds-effective-plan",
@@ -1319,13 +1589,17 @@
       "key": "OUT-123",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-122"],
+      "dependencies": [
+        "OUT-122"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-q-out-121-126",
       "branch": "wave-q/out-123-domain-safety-management",
       "issue": null,
-      "prs": [496],
+      "prs": [
+        496
+      ],
       "evidence": [
         "pr:500",
         "gha:31348499207/jds-effective-plan",
@@ -1339,13 +1613,17 @@
       "key": "OUT-124",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-123"],
+      "dependencies": [
+        "OUT-123"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-q-out-121-126",
       "branch": "wave-q/out-124-security-status-reads",
       "issue": null,
-      "prs": [497],
+      "prs": [
+        497
+      ],
       "evidence": [
         "pr:500",
         "gha:31348499207/jds-effective-plan",
@@ -1359,13 +1637,17 @@
       "key": "OUT-125",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-124"],
+      "dependencies": [
+        "OUT-124"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-q-out-121-126",
       "branch": "wave-q/out-125-purview-encryption-options",
       "issue": null,
-      "prs": [498],
+      "prs": [
+        498
+      ],
       "evidence": [
         "pr:500",
         "gha:31348499207/jds-effective-plan",
@@ -1379,13 +1661,17 @@
       "key": "OUT-126",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-125"],
+      "dependencies": [
+        "OUT-125"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-q-out-121-126",
       "branch": "wave-q/out-126-smime-capability-status",
       "issue": null,
-      "prs": [499],
+      "prs": [
+        499
+      ],
       "evidence": [
         "pr:500",
         "gha:31348499207/jds-effective-plan",
@@ -1399,13 +1685,17 @@
       "key": "OUT-127",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-126"],
+      "dependencies": [
+        "OUT-126"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-r-out-127-132",
       "branch": "wave-r/out-127-smime-sign-encrypt",
       "issue": null,
-      "prs": [503],
+      "prs": [
+        503
+      ],
       "evidence": [
         "pr:509",
         "gha:31350061982/jds-effective-plan",
@@ -1419,13 +1709,17 @@
       "key": "OUT-128",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-127"],
+      "dependencies": [
+        "OUT-127"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-r-out-127-132",
       "branch": "wave-r/out-128-retention-archive-controls",
       "issue": null,
-      "prs": [504],
+      "prs": [
+        504
+      ],
       "evidence": [
         "pr:509",
         "gha:31350061982/jds-effective-plan",
@@ -1439,13 +1733,17 @@
       "key": "OUT-129",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "13-security-compliance-visible",
-      "dependencies": ["OUT-128"],
+      "dependencies": [
+        "OUT-128"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-r-out-127-132",
       "branch": "wave-r/out-129-compliance-error-mapping",
       "issue": null,
-      "prs": [505],
+      "prs": [
+        505
+      ],
       "evidence": [
         "pr:509",
         "gha:31350061982/jds-effective-plan",
@@ -1459,13 +1757,17 @@
       "key": "OUT-130",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-129"],
+      "dependencies": [
+        "OUT-129"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-r-out-127-132",
       "branch": "wave-r/out-130-automatic-reply-config",
       "issue": null,
-      "prs": [506],
+      "prs": [
+        506
+      ],
       "evidence": [
         "pr:509",
         "gha:31350061982/jds-effective-plan",
@@ -1479,13 +1781,17 @@
       "key": "OUT-131",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-130"],
+      "dependencies": [
+        "OUT-130"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-r-out-127-132",
       "branch": "wave-r/out-131-ooo-message-config",
       "issue": null,
-      "prs": [507],
+      "prs": [
+        507
+      ],
       "evidence": [
         "pr:509",
         "gha:31350061982/jds-effective-plan",
@@ -1499,13 +1805,17 @@
       "key": "OUT-132",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-131"],
+      "dependencies": [
+        "OUT-131"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-r-out-127-132",
       "branch": "wave-r/out-132-ooo-schedule",
       "issue": null,
-      "prs": [508],
+      "prs": [
+        508
+      ],
       "evidence": [
         "pr:509",
         "gha:31350061982/jds-effective-plan",
@@ -1519,13 +1829,17 @@
       "key": "OUT-133",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-132"],
+      "dependencies": [
+        "OUT-132"
+      ],
       "state": "ACCEPTED",
       "riskClass": "SAFE_WRITE",
       "wave": "wave-s-out-133-138",
       "branch": "wave-s/out-133-ooo-calendar-block",
       "issue": null,
-      "prs": [512],
+      "prs": [
+        512
+      ],
       "evidence": [
         "pr:518",
         "gha:31369288470/jds-effective-plan",
@@ -1539,13 +1853,17 @@
       "key": "OUT-134",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-133"],
+      "dependencies": [
+        "OUT-133"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-s-out-133-138",
       "branch": "wave-s/out-134-ooo-decline-new-invitations",
       "issue": null,
-      "prs": [513],
+      "prs": [
+        513
+      ],
       "evidence": [
         "pr:518",
         "gha:31369288470/jds-effective-plan",
@@ -1559,13 +1877,17 @@
       "key": "OUT-135",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-134"],
+      "dependencies": [
+        "OUT-134"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-s-out-133-138",
       "branch": "wave-s/out-135-ooo-cancel-existing-meetings",
       "issue": null,
-      "prs": [514],
+      "prs": [
+        514
+      ],
       "evidence": [
         "pr:518",
         "gha:31369288470/jds-effective-plan",
@@ -1579,13 +1901,17 @@
       "key": "OUT-136",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-135"],
+      "dependencies": [
+        "OUT-135"
+      ],
       "state": "ACCEPTED",
       "riskClass": "OUTBOUND_GOVERNED",
       "wave": "wave-s-out-133-138",
       "branch": "wave-s/out-136-email-poll-management",
       "issue": null,
-      "prs": [515],
+      "prs": [
+        515
+      ],
       "evidence": [
         "pr:518",
         "gha:31369288470/jds-effective-plan",
@@ -1599,13 +1925,17 @@
       "key": "OUT-137",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-136"],
+      "dependencies": [
+        "OUT-136"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-s-out-133-138",
       "branch": "wave-s/out-137-m365-group-discovery",
       "issue": null,
-      "prs": [516],
+      "prs": [
+        516
+      ],
       "evidence": [
         "pr:518",
         "gha:31369288470/jds-effective-plan",
@@ -1619,13 +1949,17 @@
       "key": "OUT-138",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-137"],
+      "dependencies": [
+        "OUT-137"
+      ],
       "state": "ACCEPTED",
       "riskClass": "READ",
       "wave": "wave-s-out-133-138",
       "branch": "wave-s/out-138-group-calendar-mail-review",
       "issue": null,
-      "prs": [517],
+      "prs": [
+        517
+      ],
       "evidence": [
         "pr:518",
         "gha:31369288470/jds-effective-plan",
@@ -1639,7 +1973,9 @@
       "key": "OUT-139",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-138"],
+      "dependencies": [
+        "OUT-138"
+      ],
       "state": "SUPERSEDED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-t-out-139-140",
@@ -1655,13 +1991,17 @@
       "key": "OUT-140",
       "releaseBand": "0.7.x-people-todo-shared",
       "phase": "14-ooo-polls-groups-advanced",
-      "dependencies": ["OUT-139"],
+      "dependencies": [
+        "OUT-139"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-t-out-139-140",
       "branch": "wave-t/out-140-specific-addin-framework",
       "issue": null,
-      "prs": [521],
+      "prs": [
+        521
+      ],
       "evidence": [
         "pr:522",
         "gha:31371417228/jds-effective-plan",
@@ -1675,13 +2015,17 @@
       "key": "XAPP-001",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["OUT-140"],
+      "dependencies": [
+        "OUT-140"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-u-xapp-001-006",
       "branch": "wave-u/xapp-001-direct-executor-contract",
       "issue": null,
-      "prs": [525],
+      "prs": [
+        525
+      ],
       "evidence": [
         "pr:531",
         "gha:31374844743/jds-effective-plan",
@@ -1695,13 +2039,17 @@
       "key": "XAPP-002",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-001"],
+      "dependencies": [
+        "XAPP-001"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-u-xapp-001-006",
       "branch": "wave-u/xapp-002-batch-request-contract",
       "issue": null,
-      "prs": [526],
+      "prs": [
+        526
+      ],
       "evidence": [
         "pr:531",
         "gha:31374844743/jds-effective-plan",
@@ -1715,13 +2063,17 @@
       "key": "XAPP-003",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-002"],
+      "dependencies": [
+        "XAPP-002"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-u-xapp-001-006",
       "branch": "wave-u/xapp-003-bounded-batch-scheduler",
       "issue": null,
-      "prs": [527],
+      "prs": [
+        527
+      ],
       "evidence": [
         "pr:531",
         "gha:31374844743/jds-effective-plan",
@@ -1735,13 +2087,17 @@
       "key": "XAPP-004",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-003"],
+      "dependencies": [
+        "XAPP-003"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-u-xapp-001-006",
       "branch": "wave-u/xapp-004-per-node-governance",
       "issue": null,
-      "prs": [528],
+      "prs": [
+        528
+      ],
       "evidence": [
         "pr:531",
         "gha:31374844743/jds-effective-plan",
@@ -1755,13 +2111,17 @@
       "key": "XAPP-005",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-004"],
+      "dependencies": [
+        "XAPP-004"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-u-xapp-001-006",
       "branch": "wave-u/xapp-005-dag-contract",
       "issue": null,
-      "prs": [529],
+      "prs": [
+        529
+      ],
       "evidence": [
         "pr:531",
         "gha:31374844743/jds-effective-plan",
@@ -1775,13 +2135,17 @@
       "key": "XAPP-006",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-005"],
+      "dependencies": [
+        "XAPP-005"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-u-xapp-001-006",
       "branch": "wave-u/xapp-006-dag-scheduler",
       "issue": null,
-      "prs": [530],
+      "prs": [
+        530
+      ],
       "evidence": [
         "pr:531",
         "gha:31374844743/jds-effective-plan",
@@ -1795,13 +2159,17 @@
       "key": "XAPP-007",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-006"],
+      "dependencies": [
+        "XAPP-006"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-v-xapp-007-012",
       "branch": "wave-v/xapp-007-typed-output-input-bindings",
       "issue": null,
-      "prs": [534],
+      "prs": [
+        534
+      ],
       "evidence": [
         "pr:540",
         "gha:31387610590/jds-effective-plan",
@@ -1815,13 +2183,17 @@
       "key": "XAPP-008",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-007"],
+      "dependencies": [
+        "XAPP-007"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-v-xapp-007-012",
       "branch": "wave-v/xapp-008-cancellation-deadline-propagation",
       "issue": null,
-      "prs": [535],
+      "prs": [
+        535
+      ],
       "evidence": [
         "pr:540",
         "gha:31387610590/jds-effective-plan",
@@ -1835,13 +2207,17 @@
       "key": "XAPP-009",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-008"],
+      "dependencies": [
+        "XAPP-008"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-v-xapp-007-012",
       "branch": "wave-v/xapp-009-checkpoint-resume",
       "issue": null,
-      "prs": [536],
+      "prs": [
+        536
+      ],
       "evidence": [
         "pr:540",
         "gha:31387610590/jds-effective-plan",
@@ -1855,13 +2231,17 @@
       "key": "XAPP-010",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-009"],
+      "dependencies": [
+        "XAPP-009"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-v-xapp-007-012",
       "branch": "wave-v/xapp-010-dead-letter-manual-intervention",
       "issue": null,
-      "prs": [537],
+      "prs": [
+        537
+      ],
       "evidence": [
         "pr:540",
         "gha:31387610590/jds-effective-plan",
@@ -1875,13 +2255,17 @@
       "key": "XAPP-011",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-010"],
+      "dependencies": [
+        "XAPP-010"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-v-xapp-007-012",
       "branch": "wave-v/xapp-011-runbook-registry-versioning",
       "issue": null,
-      "prs": [538],
+      "prs": [
+        538
+      ],
       "evidence": [
         "pr:540",
         "gha:31387610590/jds-effective-plan",
@@ -1895,13 +2279,17 @@
       "key": "XAPP-012",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-011"],
+      "dependencies": [
+        "XAPP-011"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-v-xapp-007-012",
       "branch": "wave-v/xapp-012-runbook-canonical-serialization",
       "issue": null,
-      "prs": [539],
+      "prs": [
+        539
+      ],
       "evidence": [
         "pr:540",
         "gha:31387610590/jds-effective-plan",
@@ -1915,13 +2303,17 @@
       "key": "XAPP-013",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-012"],
+      "dependencies": [
+        "XAPP-012"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-w-xapp-013-016-020-021",
       "branch": "wave-w/xapp-013-runbook-promotion",
       "issue": null,
-      "prs": [543],
+      "prs": [
+        543
+      ],
       "evidence": [
         "pr:549",
         "gha:31391882357/jds-effective-plan",
@@ -1935,13 +2327,17 @@
       "key": "XAPP-014",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-013"],
+      "dependencies": [
+        "XAPP-013"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-w-xapp-013-016-020-021",
       "branch": "wave-w/xapp-014-hybrid-escalation-policy",
       "issue": null,
-      "prs": [544],
+      "prs": [
+        544
+      ],
       "evidence": [
         "pr:549",
         "gha:31391882357/jds-effective-plan",
@@ -1955,13 +2351,17 @@
       "key": "XAPP-015",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-014"],
+      "dependencies": [
+        "XAPP-014"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-w-xapp-013-016-020-021",
       "branch": "wave-w/xapp-015-agentic-budgets",
       "issue": null,
-      "prs": [545],
+      "prs": [
+        545
+      ],
       "evidence": [
         "pr:549",
         "gha:31391882357/jds-effective-plan",
@@ -1975,13 +2375,17 @@
       "key": "XAPP-016",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-015"],
+      "dependencies": [
+        "XAPP-015"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-w-xapp-013-016-020-021",
       "branch": "wave-w/xapp-016-minimum-context-shaping",
       "issue": null,
-      "prs": [546],
+      "prs": [
+        546
+      ],
       "evidence": [
         "pr:549",
         "gha:31391882357/jds-effective-plan",
@@ -1995,13 +2399,17 @@
       "key": "XAPP-020",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-016"],
+      "dependencies": [
+        "XAPP-016"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-w-xapp-013-016-020-021",
       "branch": "wave-w/xapp-020-outlook-inbox-digest",
       "issue": null,
-      "prs": [547],
+      "prs": [
+        547
+      ],
       "evidence": [
         "pr:549",
         "gha:31391882357/jds-effective-plan",
@@ -2015,13 +2423,17 @@
       "key": "XAPP-021",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-020"],
+      "dependencies": [
+        "XAPP-020"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-w-xapp-013-016-020-021",
       "branch": "wave-w/xapp-021-outlook-mail-triage",
       "issue": null,
-      "prs": [548],
+      "prs": [
+        548
+      ],
       "evidence": [
         "pr:549",
         "gha:31391882357/jds-effective-plan",
@@ -2035,13 +2447,17 @@
       "key": "XAPP-022",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-021"],
+      "dependencies": [
+        "XAPP-021"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-x-xapp-022-027",
       "branch": "wave-x/xapp-022-outlook-person-context",
       "issue": null,
-      "prs": [552],
+      "prs": [
+        552
+      ],
       "evidence": [
         "pr:558",
         "gha:31419349718/jds-effective-plan",
@@ -2055,13 +2471,17 @@
       "key": "XAPP-023",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-022"],
+      "dependencies": [
+        "XAPP-022"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-x-xapp-022-027",
       "branch": "wave-x/xapp-023-outlook-daily-work-context",
       "issue": null,
-      "prs": [553],
+      "prs": [
+        553
+      ],
       "evidence": [
         "pr:558",
         "gha:31419349718/jds-effective-plan",
@@ -2075,13 +2495,17 @@
       "key": "XAPP-024",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-023"],
+      "dependencies": [
+        "XAPP-023"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-x-xapp-022-027",
       "branch": "wave-x/xapp-024-m365-batch-planner-outlook",
       "issue": null,
-      "prs": [554],
+      "prs": [
+        554
+      ],
       "evidence": [
         "pr:558",
         "gha:31419349718/jds-effective-plan",
@@ -2095,13 +2519,17 @@
       "key": "XAPP-025",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-024"],
+      "dependencies": [
+        "XAPP-024"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-x-xapp-022-027",
       "branch": "wave-x/xapp-025-m365-dag-planner-outlook",
       "issue": null,
-      "prs": [555],
+      "prs": [
+        555
+      ],
       "evidence": [
         "pr:558",
         "gha:31419349718/jds-effective-plan",
@@ -2115,13 +2543,17 @@
       "key": "XAPP-026",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-025"],
+      "dependencies": [
+        "XAPP-025"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-x-xapp-022-027",
       "branch": "wave-x/xapp-026-meeting-preparation-runbook",
       "issue": null,
-      "prs": [556],
+      "prs": [
+        556
+      ],
       "evidence": [
         "pr:558",
         "gha:31419349718/jds-effective-plan",
@@ -2135,13 +2567,17 @@
       "key": "XAPP-027",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-026"],
+      "dependencies": [
+        "XAPP-026"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-x-xapp-022-027",
       "branch": "wave-x/xapp-027-project-mail-follow-up-runbook",
       "issue": null,
-      "prs": [557],
+      "prs": [
+        557
+      ],
       "evidence": [
         "pr:558",
         "gha:31419349718/jds-effective-plan",
@@ -2155,13 +2591,17 @@
       "key": "XAPP-028",
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
-      "dependencies": ["XAPP-027"],
+      "dependencies": [
+        "XAPP-027"
+      ],
       "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-y-xapp-028",
       "branch": "wave-y/xapp-028-daily-m365-context-runbook",
       "issue": null,
-      "prs": [561],
+      "prs": [
+        561
+      ],
       "evidence": [
         "pr:562",
         "gha:31421231531/jds-effective-plan",
@@ -2175,15 +2615,30 @@
       "key": "REL-001",
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
-      "dependencies": ["XAPP-028"],
-      "state": "IN_PROGRESS",
+      "dependencies": [
+        "XAPP-028"
+      ],
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
-      "branch": "hardening/rel-001-threat-model",
+      "branch": "hardening/rel-001-005-lane",
       "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
+      "prs": [
+        568
+      ],
+      "evidence": [
+        "pr:568",
+        "pr:574",
+        "pr:575",
+        "gha:31427001546/ci-full-including-images-trivy-sbom",
+        "gha:31427000546/canonical-docs",
+        "gha:31426999395/jds-effective-plan",
+        "gha:31426998938/release-governance",
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "doc:docs/threat-model.md",
+        "evidence:docs/m365-transition/evidence/rel-001-005-hardening-lane.md"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
       "blockerCode": null
     },
@@ -2191,15 +2646,30 @@
       "key": "REL-002",
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
-      "dependencies": ["REL-001"],
-      "state": "IN_PROGRESS",
+      "dependencies": [
+        "REL-001"
+      ],
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
-      "branch": "hardening/rel-002-trust-boundary",
+      "branch": "hardening/rel-001-005-lane",
       "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
+      "prs": [
+        569
+      ],
+      "evidence": [
+        "pr:569",
+        "pr:574",
+        "pr:575",
+        "gha:31427001546/ci-full-including-images-trivy-sbom",
+        "gha:31427000546/canonical-docs",
+        "gha:31426999395/jds-effective-plan",
+        "gha:31426998938/release-governance",
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "doc:docs/security.md",
+        "evidence:docs/m365-transition/evidence/rel-001-005-hardening-lane.md"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
       "blockerCode": null
     },
@@ -2207,15 +2677,30 @@
       "key": "REL-003",
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
-      "dependencies": ["REL-002"],
-      "state": "IN_PROGRESS",
+      "dependencies": [
+        "REL-002"
+      ],
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
-      "branch": "hardening/rel-003-privacy-retention",
+      "branch": "hardening/rel-001-005-lane",
       "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
+      "prs": [
+        570
+      ],
+      "evidence": [
+        "pr:570",
+        "pr:574",
+        "pr:575",
+        "gha:31427001546/ci-full-including-images-trivy-sbom",
+        "gha:31427000546/canonical-docs",
+        "gha:31426999395/jds-effective-plan",
+        "gha:31426998938/release-governance",
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "doc:docs/privacy-boundary.md",
+        "evidence:docs/m365-transition/evidence/rel-001-005-hardening-lane.md"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
       "blockerCode": null
     },
@@ -2223,15 +2708,30 @@
       "key": "REL-004",
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
-      "dependencies": ["REL-003"],
-      "state": "IN_PROGRESS",
+      "dependencies": [
+        "REL-003"
+      ],
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
-      "branch": "hardening/rel-004-container-hardening-parity",
+      "branch": "hardening/rel-001-005-lane",
       "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
+      "prs": [
+        574
+      ],
+      "evidence": [
+        "pr:574",
+        "pr:575",
+        "superseded:571",
+        "gha:31427001546/ci-full-including-images-trivy-sbom",
+        "gha:31427000546/canonical-docs",
+        "gha:31426999395/jds-effective-plan",
+        "gha:31426998938/release-governance",
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "doc:docs/security.md#9a",
+        "evidence:docs/m365-transition/evidence/rel-001-005-hardening-lane.md"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
       "blockerCode": null
     },
@@ -2239,15 +2739,30 @@
       "key": "REL-005",
       "releaseBand": "0.9.x-hardening",
       "phase": "16-acceptance-hardening-release",
-      "dependencies": ["REL-004"],
-      "state": "IN_PROGRESS",
+      "dependencies": [
+        "REL-004"
+      ],
+      "state": "ACCEPTED",
       "riskClass": "ASSURANCE",
       "wave": "hardening-a-rel-001-005",
-      "branch": "hardening/rel-005-egress-control-acceptance",
+      "branch": "hardening/rel-001-005-lane",
       "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
+      "prs": [
+        575
+      ],
+      "evidence": [
+        "pr:574",
+        "pr:575",
+        "superseded:572",
+        "gha:31427001546/ci-full-including-images-trivy-sbom",
+        "gha:31427000546/canonical-docs",
+        "gha:31426999395/jds-effective-plan",
+        "gha:31426998938/release-governance",
+        "main:f2f0440f7f471604d10f0a13eda9200820978d33",
+        "doc:src/m365_browser_worker/egress.py",
+        "evidence:docs/m365-transition/evidence/rel-001-005-hardening-lane.md"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "NOT_APPLICABLE",
       "blockerCode": null
     },
@@ -2255,13 +2770,18 @@
       "key": "REL-026",
       "releaseBand": "0.9.x-hardening",
       "phase": "delivery-economics",
-      "dependencies": ["M365-JDS-001", "M365-CONTROL-001"],
+      "dependencies": [
+        "M365-JDS-001",
+        "M365-CONTROL-001"
+      ],
       "state": "IN_PROGRESS",
       "riskClass": "OBSERVABILITY",
       "wave": "delivery-economics-baseline",
       "branch": "engineering/rel-026-delivery-economics",
       "issue": 367,
-      "prs": [399],
+      "prs": [
+        399
+      ],
       "evidence": [
         "pr:399",
         "docs/m365-transition/evidence/rel-026-baseline.md",
@@ -2278,7 +2798,9 @@
       "key": "REL-027",
       "releaseBand": "0.9.x-hardening",
       "phase": "delivery-hygiene",
-      "dependencies": ["M365-CONTROL-001"],
+      "dependencies": [
+        "M365-CONTROL-001"
+      ],
       "state": "DEFERRED",
       "riskClass": "GOVERNANCE",
       "wave": null,
