@@ -2,7 +2,6 @@ from pathlib import Path
 
 from scripts.check_container_hardening import check_container_hardening
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
