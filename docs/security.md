@@ -264,7 +264,36 @@ mounted into any container (`PRIV-050`).
 control plane only. They are never shared.
 
 **SEC-109** Resource limits (memory, pids) are applied to bound the blast radius of a wedged or
-hostile Chromium. *(PLANNED)*
+hostile Chromium. Both services declare `mem_limit` and `pids_limit` in the compose deployment;
+the worker is sized for Chromium and the control plane is sized for an async Python service. A
+service without both limits fails the container hardening parity gate.
+
+---
+
+## 9a. Container hardening parity matrix
+
+**REL-004** Container hardening parity with the Planner/Hermes baseline is a declared,
+machine-checked control set rather than an assertion spread across unrelated tests.
+
+Parity is asserted against the Planner/Hermes container baseline. Every row is machine-checked by
+`tests/test_rel_004_container_hardening_parity.py` against `docker-compose.yml` and the two
+Dockerfiles, so drift fails CI rather than being discovered in deployment.
+
+| Control | Control plane | Browser worker | Reference |
+| --- | --- | --- | --- |
+| Non-root runtime user | `planner` (uid 10001) | `pwuser` (image-provided) | `SEC-100` |
+| `no-new-privileges` | required | required | `SEC-101` |
+| `cap_drop: [ALL]` | required | required | `SEC-102` |
+| Read-only root filesystem | required | documented exception (writable profile) | `SEC-103` |
+| tmpfs scratch with `noexec,nosuid` | required | required (plus sized `/dev/shm`) | `SEC-104` |
+| No published port beyond loopback | `127.0.0.1` only | none | `SEC-105` |
+| No Docker socket mount | required | required | `SEC-106` |
+| No host/home/personal bind mount | required | required | `SEC-107`, `PRIV-050` |
+| Single-owner named volume | `mcp-state` | `browser-profile` | `SEC-108` |
+| Memory limit | required | required | `SEC-109` |
+| PID limit | required | required | `SEC-109` |
+| Base image pinned by digest | required | required | `SEC-110` |
+| Installer toolchain removed from runtime image | required | required | `SEC-110`, `SEC-111` |
 
 ---
 
@@ -288,6 +317,22 @@ reviewed changes, not automatic.
 
 **SEC-115 — CI never touches a live tenant.** CI runs in mock mode only, with no live credentials
 present in the pipeline (`ARCH-084`).
+
+**SEC-116 — Closed browser egress policy.** The browser worker evaluates every request URL against
+a fail-closed allowlist before it leaves the browser:
+
+1. `about:`, `blob:` and `data:` are local browser resources and do not constitute network egress;
+2. any non-`https` scheme is blocked (`NON_HTTPS_BLOCKED`);
+3. a host is allowed only when it matches a reviewed Microsoft 365 suffix
+   (`MICROSOFT_M365_ALLOWLIST`); everything else is blocked (`HOST_NOT_ALLOWLISTED`);
+4. **API surfaces are denied even inside allowed Microsoft suffixes.** `graph.microsoft.com` and
+   the other Graph endpoints are blocked with `API_SURFACE_DENIED`, because the product substrate
+   is the reviewed UI and Graph is a non-dependency (ADR-008, `THR-134`);
+5. the decision is enforced at the Playwright route handler, which aborts blocked requests; there
+   is no proxy, fetch or generic navigation primitive to bypass it.
+
+Adding a host suffix, or removing a denied API surface, is a reviewed policy change with recorded
+evidence — never an incidental edit.
 
 ---
 
@@ -321,5 +366,5 @@ material in their message or context.
 | SEC-070…072 | Service-to-service authentication |
 | SEC-080…090 | Provenance, evidence, audit |
 | SEC-100…109 | Container and runtime hardening |
-| SEC-110…115 | Supply chain |
+| SEC-110…116 | Supply chain and egress |
 | SEC-120 | Error taxonomy |

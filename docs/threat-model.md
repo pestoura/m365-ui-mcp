@@ -186,6 +186,23 @@ Legend for **Status**: `IMPLEMENTED` (control exists today), `PARTIAL`, `PLANNED
 | **THR-123** | Tampering | Insider changes policy, selectors or gates | Change control, review, ADR requirement for policy/mutation changes (`GOV-020`, `GOV-030`) | PARTIAL | Single-maintainer projects cannot enforce four-eyes. **Medium-High** — explicitly accepted. |
 | **THR-124** | Information disclosure | Secret committed to the repo | Secret scanning in CI; `.gitignore` for profiles/state/artifacts; documented prohibition (`SEC-002`) | IMPLEMENTED | History rewrite required if it ever happens. **Low-Medium.** |
 
+### 4.14 Microsoft 365 application scope (Planner + reserved Outlook surface)
+
+The product scope is no longer Planner-only: the repository contains an Outlook application
+namespace that is **RESERVED** — implemented against mock fixtures, with **zero public Outlook
+tools** and no observed live behaviour. The threats below are enumerated for that scope now, so
+the model is not retrofitted after a live promotion.
+
+| ID | STRIDE | Threat | Controls | Status | Residual risk |
+| --- | --- | --- | --- | --- | --- |
+| **THR-130** | Elevation | A reserved Outlook capability is exposed on the public MCP surface before live acceptance, so callers believe mailbox/calendar operations are supported | Public projection is registry-derived and asserted to be exactly the 17 Planner `READ` tools; the Outlook namespace registers no public tool; support state is evidence-derived, never merge-derived | IMPLEMENTED | A future registration mistake is caught by the regression suite, not prevented structurally. **Low-Medium.** |
+| **THR-131** | Spoofing | Mock/synthetic acceptance evidence is presented as live tenant evidence, producing a false support claim | Support claims require live browser evidence (`GOV-090`); mock runs are labelled and the acceptance report carries its own mode; live-attestation tokens are rejected repository-wide | IMPLEMENTED | Human narrative outside the evidence path can still overstate. **Low-Medium.** |
+| **THR-132** | Information disclosure | Mailbox, calendar or contact content (subjects, bodies, attendees, addresses) is persisted, logged or attached to evidence | Content of these classes is not persisted (`PRIV-066`); redaction at write time (`PRIV-062`); retention rules are declared per data class and gated (`PRIV-067`) | IMPLEMENTED | Novel content-bearing fields must be classified when added. **Medium.** |
+| **THR-133** | Elevation | Prompt injection planted in a mail body, meeting invitation or task comment drives a cross-application action (read Planner, then act in mail) | UI-derived data is `untrusted_ui_derived` and never an instruction (`ARCH-055`, `ARCH-056`); cross-application composites are read-only in mock and carry no outbound path; mutations remain disabled | PARTIAL | Cross-application aggregation increases injected-content reach once writes exist. **Medium-High.** |
+| **THR-134** | Elevation | The browser worker reaches a Microsoft API surface (for example Graph) instead of the reviewed UI, silently changing the support substrate | Graph is a non-dependency (ADR-008); the browser egress policy denies Graph hosts explicitly and fails closed outside the reviewed allowlist (`SEC-116`) | IMPLEMENTED | Only the browser path is constrained; a future non-browser client would need its own control. **Low.** |
+| **THR-135** | Tampering | Outbound mail or calendar writes are attempted from an unattested contract or without approval | No outbound or write tool exists; mutation classes are metadata-gated and approval-bound; the policy metadata gate fails closed on any allowed non-`READ` tool | IMPLEMENTED | Depends on the gate staying in the required set. **Low.** |
+| **THR-136** | Repudiation | A capability is promoted from `RESERVED` to live-supported without a recorded attestation of who observed what, in which tenant | Live support state is tracked separately from implementation state in the execution index; promotion requires recorded live evidence | PARTIAL | Index integrity is enforced by CI; the attestation content is still human-authored. **Medium.** |
+
 ---
 
 ## 5. Highest residual risks (honest summary)
