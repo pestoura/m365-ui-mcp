@@ -17,7 +17,10 @@ def test_archive_preference_is_idempotent_and_policy_respecting() -> None:
         current,
         retention_archive_controls.ArchivePreference.ARCHIVE_WHEN_ELIGIBLE,
     )
-    assert updated.archive_preference is retention_archive_controls.ArchivePreference.ARCHIVE_WHEN_ELIGIBLE
+    assert (
+        updated.archive_preference
+        is retention_archive_controls.ArchivePreference.ARCHIVE_WHEN_ELIGIBLE
+    )
     assert updated.tenant_policy_enforced is True
     assert result.policy_respected is True
     assert result.dispatched is False
