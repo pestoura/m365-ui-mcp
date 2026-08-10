@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -48,12 +48,6 @@ jobs:
           set -euo pipefail
           previous="${RUNNER_TEMP}/execution-index.previous.json"
 
-          # Default-branch -> integration/** PRs synchronize ancestry. The
-          # controller transitions contained in the default-branch history
-          # already passed this gate individually, so re-collapsing that history
-          # into one direct transition from an older integration baseline would
-          # reject valid accepted history. Validate the current index statically
-          # for this one sync shape; all other PRs/pushes retain --previous.
           if [[ "$EVENT_NAME" == "pull_request" ]] && \
              [[ "$HEAD_REF" == "$DEFAULT_BRANCH" ]] && \
              [[ "$BASE_REF" == integration/* ]]; then
@@ -80,171 +74,7 @@ jobs:
             python scripts/check_execution_index.py
           fi
 
-  temporary-controller-transition:
-    name: temporary Wave O -> P transition
+  temporary-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Apply and commit minimal controller transition
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git log -1 --pretty=%s | grep -Fq '[controller-applied]'; then
-            echo "controller already applied; no-op"
-            exit 0
-          fi
-
-          git show HEAD^:docs/m365-transition/execution-index.json > /tmp/execution-index.previous.json
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("docs/m365-transition/execution-index.json")
-          text = path.read_text(encoding="utf-8")
-          evidence = '''"evidence": [
-                "pr:483",
-                "gha:31343439935/jds-effective-plan",
-                "main:030ea78bd3febc6ed8c1195fd2700cf8b1d69ad6"
-              ]'''
-          lane_prs = {
-              "OUT-110": 477,
-              "OUT-111": 478,
-              "OUT-112": 479,
-              "OUT-113": 480,
-              "OUT-114": 481,
-              "OUT-115": 482,
-          }
-
-          def once(block: str, old: str, new: str, key: str) -> str:
-              if block.count(old) != 1:
-                  raise SystemExit(f"{key}: expected one {old!r}")
-              return block.replace(old, new, 1)
-
-          for key, pr in lane_prs.items():
-              marker = f'    {{\n      "key": "{key}",'
-              start = text.find(marker)
-              if start < 0:
-                  raise SystemExit(f"{key}: item not found")
-              end = text.find("\n    },", start)
-              if end < 0:
-                  raise SystemExit(f"{key}: item terminator not found")
-              end += len("\n    },")
-              block = text[start:end]
-              block = once(block, '"state": "IN_PROGRESS"', '"state": "INTEGRATING"', key)
-              block = once(block, '"prs": []', f'"prs": [{pr}]', key)
-              block = once(block, '"evidence": []', evidence, key)
-              block = once(
-                  block,
-                  '"implementationState": "SPECIFIED_ONLY"',
-                  '"implementationState": "IMPLEMENTED_MOCK_ONLY"',
-                  key,
-              )
-              if '"liveSupportState": "UNOBSERVED"' not in block:
-                  raise SystemExit(f"{key}: live invariant changed")
-              text = text[:start] + block + text[end:]
-
-          for key in ("OUT-116", "OUT-117", "OUT-118", "OUT-119", "OUT-120"):
-              if f'"key": "{key}"' in text:
-                  raise SystemExit(f"{key}: duplicate staging refused")
-
-          new_items = '''    {
-              "key": "OUT-116",
-              "releaseBand": "0.7.x-people-todo-shared",
-              "phase": "12-people-todo-shared",
-              "dependencies": ["OUT-115"],
-              "state": "READY",
-              "riskClass": "OUTBOUND_GOVERNED",
-              "wave": "wave-p-out-116-120",
-              "branch": "wave-p/out-116-shared-mailbox-send-as",
-              "issue": null,
-              "prs": [],
-              "evidence": [],
-              "implementationState": "SPECIFIED_ONLY",
-              "liveSupportState": "UNOBSERVED",
-              "blockerCode": null
-            },
-            {
-              "key": "OUT-117",
-              "releaseBand": "0.7.x-people-todo-shared",
-              "phase": "12-people-todo-shared",
-              "dependencies": ["OUT-116"],
-              "state": "READY",
-              "riskClass": "OUTBOUND_GOVERNED",
-              "wave": "wave-p-out-116-120",
-              "branch": "wave-p/out-117-shared-mailbox-send-on-behalf",
-              "issue": null,
-              "prs": [],
-              "evidence": [],
-              "implementationState": "SPECIFIED_ONLY",
-              "liveSupportState": "UNOBSERVED",
-              "blockerCode": null
-            },
-            {
-              "key": "OUT-118",
-              "releaseBand": "0.7.x-people-todo-shared",
-              "phase": "12-people-todo-shared",
-              "dependencies": ["OUT-117"],
-              "state": "READY",
-              "riskClass": "READ",
-              "wave": "wave-p-out-116-120",
-              "branch": "wave-p/out-118-shared-calendar-linkage",
-              "issue": null,
-              "prs": [],
-              "evidence": [],
-              "implementationState": "SPECIFIED_ONLY",
-              "liveSupportState": "UNOBSERVED",
-              "blockerCode": null
-            },
-            {
-              "key": "OUT-119",
-              "releaseBand": "0.7.x-people-todo-shared",
-              "phase": "12-people-todo-shared",
-              "dependencies": ["OUT-118"],
-              "state": "READY",
-              "riskClass": "READ",
-              "wave": "wave-p-out-116-120",
-              "branch": "wave-p/out-119-capability-difference-reporting",
-              "issue": null,
-              "prs": [],
-              "evidence": [],
-              "implementationState": "SPECIFIED_ONLY",
-              "liveSupportState": "UNOBSERVED",
-              "blockerCode": null
-            },
-            {
-              "key": "OUT-120",
-              "releaseBand": "0.7.x-people-todo-shared",
-              "phase": "13-security-compliance-visible",
-              "dependencies": ["OUT-119"],
-              "state": "READY",
-              "riskClass": "OUTBOUND_GOVERNED",
-              "wave": "wave-p-out-116-120",
-              "branch": "wave-p/out-120-junk-not-junk-reporting",
-              "issue": null,
-              "prs": [],
-              "evidence": [],
-              "implementationState": "SPECIFIED_ONLY",
-              "liveSupportState": "UNOBSERVED",
-              "blockerCode": null
-            },
-'''
-          anchor = '    {\n      "key": "REL-026",'
-          if text.count(anchor) != 1:
-              raise SystemExit("REL-026 anchor mismatch")
-          path.write_text(text.replace(anchor, new_items + anchor, 1), encoding="utf-8")
-          PY
-
-          python scripts/check_execution_index.py --previous /tmp/execution-index.previous.json
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/m365-transition/execution-index.json
-          test "$(git diff --cached --name-only)" = "docs/m365-transition/execution-index.json"
-          git commit -m "control: stage Wave P [controller-applied]"
-          git push
+      - run: echo controller-smoke-ok
