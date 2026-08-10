@@ -10,7 +10,9 @@ on:
       - "scripts/check_execution_index.py"
       - ".github/workflows/execution-index.yml"
   push:
-    branches: [main]
+    branches:
+      - main
+      - control/stage-hardening-rel-001-005
     paths:
       - "docs/m365-transition/execution-index.json"
       - "scripts/check_execution_index.py"
@@ -18,7 +20,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -28,11 +30,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Resolve previous index when available
         id: previous
         shell: bash
@@ -45,27 +45,13 @@ jobs:
         run: |
           set -euo pipefail
           previous="${RUNNER_TEMP}/execution-index.previous.json"
-
-          # Default-branch -> integration/** PRs synchronize ancestry. The
-          # controller transitions contained in the default-branch history
-          # already passed this gate individually, so re-collapsing that history
-          # into one direct transition from an older integration baseline would
-          # reject valid accepted history. Validate the current index statically
-          # for this one sync shape; all other PRs/pushes retain --previous.
-          if [[ "$EVENT_NAME" == "pull_request" ]] && \
-             [[ "$HEAD_REF" == "$DEFAULT_BRANCH" ]] && \
-             [[ "$BASE_REF" == integration/* ]]; then
+          if [[ "$EVENT_NAME" == "pull_request" ]] && [[ "$HEAD_REF" == "$DEFAULT_BRANCH" ]] && [[ "$BASE_REF" == integration/* ]]; then
             echo "path=" >> "$GITHUB_OUTPUT"
-            echo "default-branch integration sync: static index validation only"
-          elif [[ -n "${BASE_SHA}" ]] && \
-               git show "${BASE_SHA}:docs/m365-transition/execution-index.json" > "$previous" 2>/dev/null; then
+          elif [[ -n "${BASE_SHA}" ]] && git show "${BASE_SHA}:docs/m365-transition/execution-index.json" > "$previous" 2>/dev/null; then
             echo "path=$previous" >> "$GITHUB_OUTPUT"
-            echo "previous index resolved from $BASE_SHA"
           else
             echo "path=" >> "$GITHUB_OUTPUT"
-            echo "no previous index exists; bootstrap validation only"
           fi
-
       - name: Validate execution index
         shell: bash
         env:
@@ -77,3 +63,30 @@ jobs:
           else
             python scripts/check_execution_index.py
           fi
+
+  temporary-controller:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Stage hardening REL-001..005
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git log -1 --pretty=%s | grep -Fq '[controller-applied]'; then
+            exit 0
+          fi
+          git show HEAD^:docs/m365-transition/execution-index.json > /tmp/execution-index.previous.json
+          python scripts/tmp_stage_rel_001_005.py
+          python scripts/check_execution_index.py --previous /tmp/execution-index.previous.json
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/m365-transition/execution-index.json
+          test "$(git diff --cached --name-only)" = "docs/m365-transition/execution-index.json"
+          git commit -m "control: stage hardening REL-001..005 [controller-applied]"
+          git push
