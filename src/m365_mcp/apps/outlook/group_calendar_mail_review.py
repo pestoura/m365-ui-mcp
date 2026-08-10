@@ -5,13 +5,33 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from m365_mcp.apps.outlook.m365_group_reads import SyntheticM365Group
 from m365_mcp.apps.outlook.readiness import OutlookReadinessReport
 
 
 class GroupSurfaceStatus(StrEnum):
     READ_ONLY_SYNTHETIC = "READ_ONLY_SYNTHETIC"
     NOT_AVAILABLE = "NOT_AVAILABLE"
+
+
+@dataclass(frozen=True)
+class GroupInteractionReviewInput:
+    group_key: str
+    calendar_available: bool
+    mailbox_available: bool
+    synthetic: bool = True
+    live_support_state: str = "UNOBSERVED"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.group_key
+            or self.group_key != self.group_key.strip()
+            or any(char.isspace() for char in self.group_key)
+        ):
+            raise ValueError("group_key must be a non-empty semantic token")
+        if "@" in self.group_key or "://" in self.group_key or "/" in self.group_key:
+            raise ValueError("group_key must not encode an address or URL")
+        if not self.synthetic or self.live_support_state != "UNOBSERVED":
+            raise ValueError("group review input must remain synthetic and live-unobserved")
 
 
 @dataclass(frozen=True)
@@ -43,15 +63,13 @@ class GroupInteractionReview:
 
 
 def review_group_calendar_mail_interactions(
-    group: SyntheticM365Group,
+    group: GroupInteractionReviewInput,
     *,
     readiness: OutlookReadinessReport,
 ) -> GroupInteractionReview:
     """Review only the synthetic capability shape of group calendar/mail surfaces."""
     if not readiness.ready_for_readonly_discovery:
         raise ValueError("Outlook read-only discovery is not ready")
-    if not group.synthetic or group.live_support_state != "UNOBSERVED":
-        raise ValueError("synthetic group evidence is required")
     calendar_status = (
         GroupSurfaceStatus.READ_ONLY_SYNTHETIC
         if group.calendar_available
@@ -67,6 +85,7 @@ def review_group_calendar_mail_interactions(
 
 __all__ = [
     "GroupInteractionReview",
+    "GroupInteractionReviewInput",
     "GroupSurfaceStatus",
     "review_group_calendar_mail_interactions",
 ]
