@@ -270,7 +270,10 @@ service without both limits fails the container hardening parity gate.
 
 ---
 
-## 9a. Container hardening parity matrix (REL-004)
+## 9a. Container hardening parity matrix
+
+**REL-004** Container hardening parity with the Planner/Hermes baseline is a declared,
+machine-checked control set rather than an assertion spread across unrelated tests.
 
 Parity is asserted against the Planner/Hermes container baseline. Every row is machine-checked by
 `tests/test_rel_004_container_hardening_parity.py` against `docker-compose.yml` and the two

@@ -139,6 +139,9 @@ def test_runtime_images_drop_the_installer_toolchain() -> None:
 
 def test_parity_matrix_is_documented_and_references_this_suite() -> None:
     text = SECURITY_DOC.read_text(encoding="utf-8")
-    assert "## 9a. Container hardening parity matrix (REL-004)" in text
+    assert "## 9a. Container hardening parity matrix" in text
+    # REL-004 must be *defined* (bold-prefixed) in a canonical doc so the
+    # documentation gate can resolve the reference instead of warning on it.
+    assert "**REL-004**" in text
     assert "tests/test_rel_004_container_hardening_parity.py" in text
     assert "*(PLANNED)*" not in text.split("**SEC-109**", maxsplit=1)[1].split("---")[0]
