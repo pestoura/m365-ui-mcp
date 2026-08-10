@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 REQUIRED_TMPFS_FLAGS = ("rw", "noexec", "nosuid", "nodev")
 
 
@@ -55,8 +54,10 @@ def check_container_hardening(root: Path) -> tuple[str, ...]:
         )
         if len(tmpfs_lines) != 1:
             findings.append(f"{name}: exactly one /tmp tmpfs entry is required")
-        elif any(flag not in tmpfs_lines[0].split(":", 1)[1].split(",") for flag in REQUIRED_TMPFS_FLAGS):
-            findings.append(f"{name}: /tmp must use rw,noexec,nosuid,nodev")
+        else:
+            flags = tmpfs_lines[0].split(":", 1)[1].split(",")
+            if any(flag not in flags for flag in REQUIRED_TMPFS_FLAGS):
+                findings.append(f"{name}: /tmp must use rw,noexec,nosuid,nodev")
 
     if "read_only: true" not in control:
         findings.append("control-plane: read_only filesystem is required")
