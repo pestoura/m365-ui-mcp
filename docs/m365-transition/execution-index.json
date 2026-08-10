@@ -2156,14 +2156,18 @@
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
       "dependencies": ["XAPP-027"],
-      "state": "IN_PROGRESS",
+      "state": "INTEGRATING",
       "riskClass": "GOVERNANCE",
       "wave": "wave-y-xapp-028",
       "branch": "wave-y/xapp-028-daily-m365-context-runbook",
       "issue": null,
-      "prs": [],
-      "evidence": [],
-      "implementationState": "SPECIFIED_ONLY",
+      "prs": [561],
+      "evidence": [
+        "pr:562",
+        "gha:31421231531/jds-effective-plan",
+        "main:fbbd3c24b9ff7c9e5e5b74556699de0f6de9061b"
+      ],
+      "implementationState": "IMPLEMENTED_MOCK_ONLY",
       "liveSupportState": "UNOBSERVED",
       "blockerCode": null
     },
