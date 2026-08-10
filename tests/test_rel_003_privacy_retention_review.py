@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 REVIEW = ROOT / "docs/m365-transition/hardening/rel-003-privacy-retention-review.md"
 
