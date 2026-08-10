@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 _REQUIRED_POLICY_MARKERS = (
     'if scheme != "https":',
     'return EgressDecision(False, "NON_HTTPS_BLOCKED")',
