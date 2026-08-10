@@ -1,5 +1,3 @@
-from dataclasses import fields
-
 import pytest
 
 from m365_mcp.xapp_dead_letter import (
@@ -44,7 +42,7 @@ def test_prepare_manual_intervention_never_executes_action() -> None:
     assert plan.state is DeadLetterState.RESOLUTION_PREPARED
     assert plan.action is ManualInterventionAction.RETRY
     assert plan.execution_performed is False
-    assert {field.name for field in fields(ManualInterventionPlan)} == {
+    assert set(ManualInterventionPlan.__dataclass_fields__) == {
         "node_id",
         "checkpoint_digest",
         "action",
