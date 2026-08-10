@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -74,7 +74,32 @@ jobs:
             python scripts/check_execution_index.py
           fi
 
-  temporary-smoke:
+  temporary-controller:
     runs-on: ubuntu-latest
     steps:
-      - run: echo controller-smoke-ok
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Apply Wave O to P controller transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git log -1 --pretty=%s | grep -Fq '[controller-applied]'; then
+            echo "controller already applied; no-op"
+            exit 0
+          fi
+          git show HEAD^:docs/m365-transition/execution-index.json > /tmp/execution-index.previous.json
+          python scripts/tmp_wave_o_stage_p.py
+          python scripts/check_execution_index.py --previous /tmp/execution-index.previous.json
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/m365-transition/execution-index.json
+          test "$(git diff --cached --name-only)" = "docs/m365-transition/execution-index.json"
+          git commit -m "control: stage Wave P [controller-applied]"
+          git push
