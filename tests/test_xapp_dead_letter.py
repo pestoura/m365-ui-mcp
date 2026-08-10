@@ -1,11 +1,11 @@
-import m365_mcp.xapp_dead_letter as dead_letter
+from m365_mcp import xapp_dead_letter
 
 
 _DIGEST = "a" * 64
 
 
 def test_dead_letter_record_projects_bounded_manual_state() -> None:
-    record = dead_letter.DeadLetterRecord(
+    record = xapp_dead_letter.DeadLetterRecord(
         node_id="node-a",
         checkpoint_digest=_DIGEST,
         reason_code="RETRY_EXHAUSTED",
@@ -22,22 +22,22 @@ def test_dead_letter_record_projects_bounded_manual_state() -> None:
 
 
 def test_prepare_manual_intervention_never_executes_action() -> None:
-    record = dead_letter.DeadLetterRecord(
+    record = xapp_dead_letter.DeadLetterRecord(
         node_id="node-a",
         checkpoint_digest=_DIGEST,
         reason_code="INDETERMINATE_STATE",
         attempt_count=1,
     )
 
-    plan = dead_letter.prepare_manual_intervention(
+    plan = xapp_dead_letter.prepare_manual_intervention(
         record,
-        dead_letter.ManualInterventionAction.RETRY,
+        xapp_dead_letter.ManualInterventionAction.RETRY,
     )
 
-    assert plan.state is dead_letter.DeadLetterState.RESOLUTION_PREPARED
-    assert plan.action is dead_letter.ManualInterventionAction.RETRY
+    assert plan.state is xapp_dead_letter.DeadLetterState.RESOLUTION_PREPARED
+    assert plan.action is xapp_dead_letter.ManualInterventionAction.RETRY
     assert plan.execution_performed is False
-    assert set(dead_letter.ManualInterventionPlan.__dataclass_fields__) == {
+    assert set(xapp_dead_letter.ManualInterventionPlan.__dataclass_fields__) == {
         "node_id",
         "checkpoint_digest",
         "action",
@@ -47,18 +47,18 @@ def test_prepare_manual_intervention_never_executes_action() -> None:
 
 
 def test_manual_intervention_fails_closed_for_non_waiting_record() -> None:
-    record = dead_letter.DeadLetterRecord(
+    record = xapp_dead_letter.DeadLetterRecord(
         node_id="node-a",
         checkpoint_digest=_DIGEST,
         reason_code="OPERATOR_REQUIRED",
         attempt_count=2,
-        state=dead_letter.DeadLetterState.CLOSED,
+        state=xapp_dead_letter.DeadLetterState.CLOSED,
     )
 
     try:
-        dead_letter.prepare_manual_intervention(
+        xapp_dead_letter.prepare_manual_intervention(
             record,
-            dead_letter.ManualInterventionAction.ABORT,
+            xapp_dead_letter.ManualInterventionAction.ABORT,
         )
     except ValueError as exc:
         assert "not waiting" in str(exc)
@@ -68,14 +68,14 @@ def test_manual_intervention_fails_closed_for_non_waiting_record() -> None:
 
 def test_dead_letter_rejects_unbounded_or_locator_like_input() -> None:
     try:
-        dead_letter.DeadLetterRecord("node-a", _DIGEST, "RETRY_EXHAUSTED", 101)
+        xapp_dead_letter.DeadLetterRecord("node-a", _DIGEST, "RETRY_EXHAUSTED", 101)
     except ValueError as exc:
         assert "attempt_count" in str(exc)
     else:
         raise AssertionError("expected ValueError for unbounded attempt count")
 
     try:
-        dead_letter.DeadLetterRecord(
+        xapp_dead_letter.DeadLetterRecord(
             "node-a",
             _DIGEST,
             "https://example.invalid",
@@ -87,10 +87,10 @@ def test_dead_letter_rejects_unbounded_or_locator_like_input() -> None:
         raise AssertionError("expected ValueError for locator-like reason code")
 
     try:
-        dead_letter.ManualInterventionPlan(
+        xapp_dead_letter.ManualInterventionPlan(
             node_id="node-a",
             checkpoint_digest=_DIGEST,
-            action=dead_letter.ManualInterventionAction.SKIP,
+            action=xapp_dead_letter.ManualInterventionAction.SKIP,
             execution_performed=True,
         )
     except ValueError as exc:
