@@ -1,6 +1,4 @@
-import pytest
-
-from m365_mcp import xapp_dead_letter as dead_letter
+import m365_mcp.xapp_dead_letter as dead_letter
 
 
 _DIGEST = "a" * 64
@@ -57,29 +55,45 @@ def test_manual_intervention_fails_closed_for_non_waiting_record() -> None:
         state=dead_letter.DeadLetterState.CLOSED,
     )
 
-    with pytest.raises(ValueError, match="not waiting"):
+    try:
         dead_letter.prepare_manual_intervention(
             record,
             dead_letter.ManualInterventionAction.ABORT,
         )
+    except ValueError as exc:
+        assert "not waiting" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for non-waiting dead-letter record")
 
 
 def test_dead_letter_rejects_unbounded_or_locator_like_input() -> None:
-    with pytest.raises(ValueError, match="attempt_count"):
+    try:
         dead_letter.DeadLetterRecord("node-a", _DIGEST, "RETRY_EXHAUSTED", 101)
+    except ValueError as exc:
+        assert "attempt_count" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for unbounded attempt count")
 
-    with pytest.raises(ValueError, match="semantic token"):
+    try:
         dead_letter.DeadLetterRecord(
             "node-a",
             _DIGEST,
             "https://example.invalid",
             1,
         )
+    except ValueError as exc:
+        assert "semantic token" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for locator-like reason code")
 
-    with pytest.raises(ValueError, match="must not execute"):
+    try:
         dead_letter.ManualInterventionPlan(
             node_id="node-a",
             checkpoint_digest=_DIGEST,
             action=dead_letter.ManualInterventionAction.SKIP,
             execution_performed=True,
         )
+    except ValueError as exc:
+        assert "must not execute" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for executed intervention plan")
