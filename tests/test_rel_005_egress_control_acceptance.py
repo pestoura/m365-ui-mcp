@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from m365_browser_worker.egress import evaluate_browser_egress
 from scripts.check_egress_acceptance import check_egress_acceptance
 
+from m365_browser_worker.egress import evaluate_browser_egress
 
 ROOT = Path(__file__).resolve().parents[1]
 
