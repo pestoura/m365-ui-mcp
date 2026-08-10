@@ -2156,7 +2156,7 @@
       "releaseBand": "0.8.x-execution-plane",
       "phase": "15-composite-execution-token-reduction",
       "dependencies": ["XAPP-027"],
-      "state": "INTEGRATING",
+      "state": "ACCEPTED",
       "riskClass": "GOVERNANCE",
       "wave": "wave-y-xapp-028",
       "branch": "wave-y/xapp-028-daily-m365-context-runbook",
