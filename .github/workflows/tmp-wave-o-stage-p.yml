@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   apply:
-    if: ${{ !contains(github.event.head_commit.message, '[controller-applied]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +20,19 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Stop after controller commit
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git log -1 --pretty=%s | grep -Fq '[controller-applied]'; then
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Apply minimal controller transition
+        if: steps.guard.outputs.apply == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -172,6 +183,7 @@ jobs:
           git diff -- docs/m365-transition/execution-index.json
 
       - name: Commit controller only
+        if: steps.guard.outputs.apply == 'true'
         shell: bash
         run: |
           set -euo pipefail
