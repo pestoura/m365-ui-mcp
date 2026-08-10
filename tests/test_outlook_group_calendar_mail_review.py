@@ -5,11 +5,7 @@ from m365_mcp.application_registry import (
     ApplicationState,
     default_application_registry,
 )
-from m365_mcp.apps.outlook import (
-    group_calendar_mail_review,
-    m365_group_reads,
-    readiness,
-)
+from m365_mcp.apps.outlook import group_calendar_mail_review, readiness
 from m365_mcp.tool_registry import default_tool_registry
 
 
@@ -26,7 +22,11 @@ def _ready() -> readiness.OutlookReadinessReport:
 
 
 def test_group_review_is_read_only_and_has_no_generic_executor() -> None:
-    group = m365_group_reads.default_synthetic_groups()[0]
+    group = group_calendar_mail_review.GroupInteractionReviewInput(
+        "group-alpha",
+        calendar_available=True,
+        mailbox_available=True,
+    )
     review = group_calendar_mail_review.review_group_calendar_mail_interactions(
         group,
         readiness=_ready(),
@@ -36,7 +36,10 @@ def test_group_review_is_read_only_and_has_no_generic_executor() -> None:
         review.calendar_status
         is group_calendar_mail_review.GroupSurfaceStatus.READ_ONLY_SYNTHETIC
     )
-    assert review.mail_status is group_calendar_mail_review.GroupSurfaceStatus.READ_ONLY_SYNTHETIC
+    assert (
+        review.mail_status
+        is group_calendar_mail_review.GroupSurfaceStatus.READ_ONLY_SYNTHETIC
+    )
     assert projection["membership_mutation_available"] is False
     assert projection["generic_executor_available"] is False
     assert projection["live_support_state"] == "UNOBSERVED"
