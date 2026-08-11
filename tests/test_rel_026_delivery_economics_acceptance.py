@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 EVIDENCE = Path("docs/m365-transition/evidence/rel-026-before-after.json")
 
 
@@ -33,8 +32,14 @@ def test_rel_026_jds_selectivity_improves_without_removing_heavy_gate() -> None:
     integration = data["post_jds"]["hardening_b_integration"]
     post_merge = data["post_jds"]["hardening_b_post_merge"]
 
-    assert integration["jds_avoided_capability_percent"] > baseline["jds_avoided_capability_percent"]
-    assert post_merge["jds_avoided_capability_percent"] > integration["jds_avoided_capability_percent"]
+    assert (
+        integration["jds_avoided_capability_percent"]
+        > baseline["jds_avoided_capability_percent"]
+    )
+    assert (
+        post_merge["jds_avoided_capability_percent"]
+        > integration["jds_avoided_capability_percent"]
+    )
 
     for sample in (baseline, integration, post_merge):
         assert sample["image_builds"] == 2
