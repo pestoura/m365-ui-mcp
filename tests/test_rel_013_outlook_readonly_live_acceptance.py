@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -29,9 +29,9 @@ from m365_mcp.capability_promotion import (
     LiveSupportState,
     PromotionAction,
     PromotionPolicy,
-    default_capability_registry,
     evaluate_promotion,
 )
+from m365_mcp.capability_registry import default_capability_registry
 from m365_mcp.ui_drift import UILifecycleState
 
 CONTRACT_DIGEST = "sha256:" + "1" * 64
@@ -122,7 +122,6 @@ def _build(
 
 def test_live_read_proof_builds_inert_rel025_evidence() -> None:
     evidence = _build()
-
     assert evidence.capability == OUTLOOK_READONLY_CAPABILITY
     assert evidence.acceptance_ok is True
     assert evidence.readback_ok is True
@@ -131,7 +130,6 @@ def test_live_read_proof_builds_inert_rel025_evidence() -> None:
 
 def test_mock_evidence_cannot_cross_rel013_boundary() -> None:
     observation = _observation(source=ObservationSource.MOCK)
-
     with pytest.raises(ValueError, match="REL013_LIVE_UI_EVIDENCE_REQUIRED"):
         _build(observation)
 
@@ -142,7 +140,6 @@ def test_wrong_tenant_or_account_context_fails_closed() -> None:
         professional=True,
         expected_profile=False,
     )
-
     with pytest.raises(ValueError, match="REL013_ACCOUNT_CONTEXT_NOT_VERIFIED"):
         _build(account=account)
 
@@ -153,7 +150,6 @@ def test_ambiguous_mailbox_context_fails_closed() -> None:
         account_context_verified=True,
         primary_shell_verified=False,
     )
-
     with pytest.raises(ValueError, match="REL013_PRIMARY_MAILBOX_CONTEXT_NOT_VERIFIED"):
         _build(mailbox=mailbox)
 
@@ -164,24 +160,18 @@ def test_shared_mailbox_context_fails_closed() -> None:
         account_context_verified=True,
         primary_shell_verified=False,
     )
-
     with pytest.raises(ValueError, match="REL013_PRIMARY_MAILBOX_CONTEXT_NOT_VERIFIED"):
         _build(mailbox=mailbox)
 
 
 def test_mutation_attestation_is_rejected() -> None:
-    observation = _observation(
-        level=AttestationLevel.MUTATION,
-        mutation_applied=True,
-    )
-
+    observation = _observation(level=AttestationLevel.MUTATION, mutation_applied=True)
     with pytest.raises(ValueError, match="REL013_READ_ATTESTATION_REQUIRED"):
         _build(observation)
 
 
 def test_missing_required_gate_fails_closed() -> None:
     gates = tuple(gate for gate in REL013_REQUIRED_GATE_IDS if gate != "REL-011")
-
     with pytest.raises(ValueError, match="REL013_REQUIRED_GATES_MISSING:REL-011"):
         _build(gates=gates)
 
@@ -193,7 +183,6 @@ def test_contract_digest_mismatch_fails_closed() -> None:
         decision.evidence_record,
         contract_set_digest="sha256:" + "9" * 64,
     )
-
     with pytest.raises(ValueError, match="REL013_CONTRACT_SET_DIGEST_MISMATCH"):
         _build(observation, decision=replace(decision, evidence_record=bad_record))
 
@@ -205,7 +194,6 @@ def test_non_healthy_ui_lifecycle_fails_closed() -> None:
         decision.evidence_record,
         lifecycle_state=UILifecycleState.RE_ATTESTATION_REQUIRED,
     )
-
     with pytest.raises(ValueError, match="REL013_UI_LIFECYCLE_NOT_HEALTHY"):
         _build(observation, decision=replace(decision, evidence_record=stale_record))
 
@@ -216,10 +204,9 @@ def test_rel013_evidence_still_requires_rel025_promotion_decision() -> None:
         environment_id="professional-prod",
         current_contract_set_digest=CONTRACT_DIGEST,
         required_gate_ids=REL013_REQUIRED_GATE_IDS,
-        max_age=__import__("datetime").timedelta(hours=1),
+        max_age=timedelta(hours=1),
         dependencies_accepted=False,
     )
-
     result = evaluate_promotion(
         default_capability_registry(),
         evidence,
@@ -227,6 +214,5 @@ def test_rel013_evidence_still_requires_rel025_promotion_decision() -> None:
         previous_state=LiveSupportState.LIVE_UNOBSERVED,
         now=OBSERVED_AT,
     )
-
     assert result.action is PromotionAction.HOLD
     assert result.target_state is LiveSupportState.LIVE_UNOBSERVED
