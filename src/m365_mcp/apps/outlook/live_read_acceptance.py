@@ -75,13 +75,23 @@ def build_outlook_readonly_live_evidence(
     record = decision.evidence_record
     if UILifecycleState(record.lifecycle_state) is not UILifecycleState.HEALTHY:
         raise ValueError("REL013_UI_LIFECYCLE_NOT_HEALTHY")
+    if record.fragment_id != observation.fragment_id:
+        raise ValueError("REL013_FRAGMENT_ID_MISMATCH")
+    if record.fragment_version != observation.fragment_version:
+        raise ValueError("REL013_FRAGMENT_VERSION_MISMATCH")
+    if record.application != OUTLOOK_READONLY_APPLICATION:
+        raise ValueError("REL013_ATTESTATION_APPLICATION_MISMATCH")
     if record.contract_set_digest != observation.contract_set_digest:
         raise ValueError("REL013_CONTRACT_SET_DIGEST_MISMATCH")
+    if record.evidence_digest != observation.digest():
+        raise ValueError("REL013_EVIDENCE_DIGEST_MISMATCH")
     if record.recorded_at != observation.observed_at:
         raise ValueError("REL013_EVIDENCE_TIMESTAMP_MISMATCH")
 
     supplied_gates = set(passed_gate_ids)
-    missing_gates = tuple(gate for gate in REL013_REQUIRED_GATE_IDS if gate not in supplied_gates)
+    missing_gates = tuple(
+        gate for gate in REL013_REQUIRED_GATE_IDS if gate not in supplied_gates
+    )
     if missing_gates:
         raise ValueError(f"REL013_REQUIRED_GATES_MISSING:{','.join(missing_gates)}")
 
