@@ -21,7 +21,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-worker = ["playwright>=1.47.0"]
+# Must match docker/Dockerfile.browser-worker exactly: Playwright browser binaries
+# are version-coupled to the Python package used by the worker runtime.
+worker = ["playwright==1.55.0"]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.23",
