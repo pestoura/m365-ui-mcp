@@ -23,10 +23,12 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY contracts ./contracts
 # PEP 668: the base image marks the system Python as externally managed, so install
-# into a dedicated virtualenv instead of using --break-system-packages.
+# into a dedicated virtualenv instead of using --break-system-packages. The worker
+# extra is mandatory here because the Playwright image supplies browser binaries and
+# OS dependencies, not the Python Playwright package used by this virtualenv.
 RUN python3 -m venv "$VIRTUAL_ENV" \
  && "$VIRTUAL_ENV/bin/pip" install --no-cache-dir --upgrade pip setuptools wheel \
- && "$VIRTUAL_ENV/bin/pip" install --no-cache-dir . \
+ && "$VIRTUAL_ENV/bin/pip" install --no-cache-dir '.[worker]' \
  # Remove the installer toolchain from the runtime image: it is not needed at
  # runtime and its vendored dependencies would otherwise widen the CVE surface.
  && "$VIRTUAL_ENV/bin/pip" uninstall -y pip setuptools wheel \
