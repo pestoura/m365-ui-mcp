@@ -190,9 +190,10 @@ def evaluate_promotion(
     now: datetime | None = None,
 ) -> PromotionDecision:
     """Evaluate exact live evidence; every ambiguity fails closed."""
-    current_time = (now or datetime.now(UTC)).astimezone(UTC)
-    if current_time.tzinfo is None or current_time.utcoffset() is None:
+    evaluation_time = now or datetime.now(UTC)
+    if evaluation_time.tzinfo is None or evaluation_time.utcoffset() is None:
         raise ValueError("promotion evaluation time must be timezone-aware")
+    current_time = evaluation_time.astimezone(UTC)
 
     declared = {item.identity for item in registry.declared_definitions()}
     if evidence.identity not in declared:
