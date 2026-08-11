@@ -168,6 +168,36 @@ jobs:
           cache-from: type=gha,scope=m365-browser-worker
           cache-to: type=gha,mode=max,scope=m365-browser-worker
 
+      - name: Smoke browser worker Playwright runtime
+        run: |
+          docker run --rm -i --entrypoint python planner-browser-worker:ci - <<'PY'
+          import asyncio
+          import tomllib
+          from importlib.metadata import version
+          from pathlib import Path
+
+          from playwright.async_api import async_playwright
+
+          project = tomllib.loads(Path("/app/pyproject.toml").read_text(encoding="utf-8"))
+          worker_deps = project["project"]["optional-dependencies"]["worker"]
+          pins = [dep for dep in worker_deps if dep.startswith("playwright==")]
+          if len(pins) != 1:
+              raise SystemExit("worker extra must contain one exact Playwright pin")
+          expected = pins[0].split("==", 1)[1]
+          actual = version("playwright")
+          if actual != expected:
+              raise SystemExit(f"Playwright package mismatch: expected={expected} actual={actual}")
+
+          async def verify_browser_binary() -> None:
+              async with async_playwright() as playwright:
+                  executable = Path(playwright.chromium.executable_path)
+                  if not executable.is_file():
+                      raise SystemExit(f"Chromium executable missing: {executable}")
+                  print(f"PLAYWRIGHT_RUNTIME_OK version={actual} chromium={executable}")
+
+          asyncio.run(verify_browser_binary())
+          PY
+
       - name: Prepare artifact directory
         run: mkdir -p artifacts
 
