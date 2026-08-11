@@ -1,0 +1,99 @@
+{
+  "schema": "m365.delivery-economics-comparison/v1",
+  "status": "ACCEPTANCE_EVIDENCE",
+  "baseline": {
+    "phase_9_wave_f_integration": {
+      "ci_run_id": 31307838926,
+      "ci_total_seconds": 393,
+      "fast_quality_seconds": 43,
+      "tests_acceptance_seconds": 35,
+      "repo_security_seconds": 24,
+      "heavy_seconds": 308,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "jds_avoided_capability_percent": 42.9
+    },
+    "phase_10_wave_g_integration": {
+      "ci_run_id": 31312156758,
+      "ci_total_seconds": 291,
+      "fast_quality_seconds": 38,
+      "tests_acceptance_seconds": 34,
+      "repo_security_seconds": 34,
+      "heavy_seconds": 212,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "jds_avoided_capability_percent": 42.9
+    }
+  },
+  "post_jds": {
+    "hardening_b_integration": {
+      "ci_run_id": 31430248998,
+      "run_kind": "INTEGRATION_PR",
+      "ci_total_seconds": 330,
+      "pr_lead_time_seconds": 333,
+      "fast_quality_seconds": 35,
+      "tests_acceptance_seconds": 40,
+      "repo_security_seconds": 32,
+      "heavy_seconds": 236,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "failure_class": null,
+      "jds_avoided_capability_percent": 57.1,
+      "jds_selected_capability_count": 6,
+      "jds_skipped_capability_count": 8,
+      "jds_heavy_capabilities_skipped": 3,
+      "artifact_id": 9078974701,
+      "artifact_digest": "sha256:2c58cf290eb96493b3b7d261f8c10956c52c1e49d4aca4ad9422390768ba4a24"
+    },
+    "hardening_b_post_merge": {
+      "ci_run_id": 31431540353,
+      "run_kind": "MAIN_PUSH",
+      "ci_total_seconds": 339,
+      "fast_quality_seconds": 41,
+      "tests_acceptance_seconds": 44,
+      "repo_security_seconds": 37,
+      "heavy_seconds": 240,
+      "image_builds": 2,
+      "trivy_image_scans": 2,
+      "sboms": 2,
+      "failure_class": null,
+      "jds_avoided_capability_percent": 64.3,
+      "jds_selected_capability_count": 5,
+      "jds_skipped_capability_count": 9,
+      "jds_heavy_capabilities_skipped": 3,
+      "artifact_id": 9079469176,
+      "artifact_digest": "sha256:ff08d48439b1c5a2e4defecd83122c9b654ce33e3e32b3d6f59489b5ce01dbca"
+    }
+  },
+  "comparison": {
+    "jds_avoidance_change_vs_baseline_pp": {
+      "integration": 14.2,
+      "post_merge": 21.4
+    },
+    "integration_vs_phase_9_wave_f": {
+      "ci_total_seconds_delta": -63,
+      "ci_total_percent_delta": -16.0,
+      "heavy_seconds_delta": -72,
+      "heavy_percent_delta": -23.4
+    },
+    "integration_vs_phase_10_wave_g": {
+      "ci_total_seconds_delta": 39,
+      "ci_total_percent_delta": 13.4,
+      "heavy_seconds_delta": 24,
+      "heavy_percent_delta": 11.3
+    },
+    "interpretation": "JDS change-impact selection improved materially, while end-to-end CI wall-clock remains mixed across comparable waves. Mandatory heavy validation still executes at the integration boundary, so the evidence supports further placement analysis but does not justify removing or weakening any gate."
+  },
+  "acceptance": {
+    "completed_integration_wave_reconstructable": true,
+    "expensive_work_count_measurable": true,
+    "infra_failures_not_counted_as_code_regressions": true,
+    "content_or_identity_leakage_detected": false,
+    "before_after_comparison_present": true,
+    "controller_tuning_evidence_available": true,
+    "mandatory_gate_removed_or_weakened": false
+  }
+}
