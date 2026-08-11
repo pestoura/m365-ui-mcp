@@ -8,6 +8,7 @@ from m365_mcp.capability_promotion import (
     LiveCapabilityEvidence,
     LiveSupportState,
     PromotionAction,
+    PromotionDecision,
     PromotionEvidenceSource,
     PromotionPolicy,
     evaluate_promotion,
@@ -56,7 +57,7 @@ def _decision(
     policy: PromotionPolicy | None = None,
     *,
     previous_state: LiveSupportState = LiveSupportState.LIVE_UNOBSERVED,
-):
+) -> PromotionDecision:
     return evaluate_promotion(
         default_capability_registry(),
         evidence,
@@ -75,7 +76,10 @@ def test_valid_live_evidence_promotes_exact_reserved_outlook_capability() -> Non
     assert decision.reasons == ("ALL_PROMOTION_EVIDENCE_VALID",)
 
 
-@pytest.mark.parametrize("source", [PromotionEvidenceSource.MOCK, PromotionEvidenceSource.SYNTHETIC])
+@pytest.mark.parametrize(
+    "source",
+    [PromotionEvidenceSource.MOCK, PromotionEvidenceSource.SYNTHETIC],
+)
 def test_mock_or_synthetic_evidence_never_promotes(source: PromotionEvidenceSource) -> None:
     decision = _decision(_evidence(source=source))
 
@@ -162,3 +166,13 @@ def test_future_timestamp_requires_reattestation() -> None:
 
     assert decision.action is PromotionAction.RE_ATTESTATION_REQUIRED
     assert decision.reasons == ("EVIDENCE_TIMESTAMP_IN_FUTURE",)
+
+
+def test_naive_evaluation_time_is_rejected() -> None:
+    with pytest.raises(ValueError, match="timezone-aware"):
+        evaluate_promotion(
+            default_capability_registry(),
+            _evidence(),
+            _policy(),
+            now=datetime(2026, 8, 11, 19, 0),
+        )
