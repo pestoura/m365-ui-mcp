@@ -290,7 +290,90 @@ fresh discovery/attestation campaign
 
 For an unattested fragment, the same contradiction remains `RE_ATTESTATION_REQUIRED`; it does not create a false claim that previously supported live behavior drifted.
 
-## 10. CI policy
+## 10. Authentication bootstrap (pre-attestation, fail-closed)
+
+`CORE-019` previously blocked the LIVE UIContract authentication bootstrap
+deadlock: the full-contract `live_guard` required an attested UIContract before
+*any* live operation, which also blocked `/auth/status`, `/auth/start` and
+`/auth/resume`. Authentication could therefore never begin, so the live
+attestation campaign (which needs an authenticated professional session) could
+never be collected.
+
+The bootstrap deadlock is resolved by a **narrowly-scoped authentication
+bootstrap guard** that is the only sanctioned pre-attestation live path. It is
+not a generic browser primitive and never weakens the Planner/Outlook controls.
+
+### Guard scope
+
+- Applies ONLY to `auth_status`, `auth_start`, `auth_resume`.
+- May operate BEFORE `common.auth` is attested, but ONLY when ALL of:
+  - the worker process owns a started live browser;
+  - the browser is the **dedicated persistent professional profile**
+    (`M365_BROWSER_PROFILE_DIR`, resolved by `browser_runtime_settings()`);
+  - the live context is on an **approved Microsoft authentication origin**
+    (`login.microsoftonline.com`, `login.live.com`, `login.microsoft.com`,
+    `account.microsoft.com`, `entra.microsoft.com`) or no page is open yet so
+    bootstrap may begin navigation.
+- Fails closed on wrong origin / wrong profile / browser-not-started.
+- Once `common.auth` is legitimately attested (PR/evidence based), the normal
+  stricter full-contract behavior applies to the auth endpoints again.
+- Returns only `{state, mode}`. It never exposes raw DOM, page text, URLs,
+  cookies, tokens, UPN, tenant IDs, mailbox content, or arbitrary navigation.
+
+### Safe bootstrap procedure (operator, on host)
+
+1. Confirm the worker runs in `live` mode against the dedicated profile:
+   ```text
+   M365_MODE=live
+   M365_BROWSER_PROFILE_DIR=/var/lib/planner-worker/profile   # dedicated professional profile
+   M365_REQUIRE_UI_ATTESTATION=true
+   ```
+2. Start the worker. `/readyz` will report `UI_CONTRACT_UNATTESTED` and
+   `AUTH_NOT_AUTHENTICATED` — this is expected pre-bootstrap.
+3. Call the bootstrap endpoints only from the private worker network:
+   ```text
+   GET /auth/status      -> {state, mode:"live"}      (bootstrap guard allows)
+   GET /auth/start      -> {state}                   (operator completes MFA in Authenticator)
+   GET /auth/resume     -> {state}                   (after MFA approval)
+   ```
+   These succeed pre-attestation because the guard permits authentication
+   bootstrap on the dedicated profile at an approved auth origin. They do NOT
+   read or return any tenant content.
+4. Keep `account/context`, `account/license`, and every `/planner/*` read
+   blocked until the relevant UIContract fragment is legitimately attested. The
+   full-contract `live_guard` still enforces this; the bootstrap guard does not
+   widen it.
+5. Collect sanitized live observations with the OPERATOR-ONLY script (never a
+   public MCP tool, never an exposed HTTP endpoint):
+   ```text
+   python scripts/collect_live_attestation_observation.py \
+     --fragment common.auth \
+     --level DISCOVERY \
+     --out /secure/local/common.auth.observation.json
+   ```
+   The script outputs ONLY campaign/fragment metadata and normalized structural
+   SHA-256 digests / UNIQUE_MATCH results. It binds to the current
+   `contract_set_digest` and reuses the `attest_ui_contract.py` plan/evaluate
+   schema. It NEVER marks a contract ATTESTED and NEVER edits source contract
+   JSON. If Playwright or the dedicated live profile is unavailable, it refuses
+   rather than fabricating evidence.
+6. Review the observation, then evaluate it (repository-side, safe):
+   ```text
+   python scripts/attest_ui_contract.py evaluate /secure/local/common.auth.observation.json
+   ```
+7. Promote only through the normal PR + CI + review path. A passing observation
+   is not attestation by itself; the fragment JSON is updated in the reviewed
+   change, not by the runtime or the collection script.
+
+### Forbidden shortcuts
+
+- Do NOT expose the collection script as an MCP tool or HTTP endpoint.
+- Do NOT let CI authenticate to the tenant or run a live campaign.
+- Do NOT add any runtime endpoint that writes/edits source contract JSON or
+  self-promotes ATTESTED.
+- Do NOT let mock mode produce promotion-grade evidence.
+
+## 11. CI policy
 
 CI may:
 
@@ -308,7 +391,7 @@ CI must never:
 - perform a live mutation;
 - capture authenticated screenshots/DOM/content.
 
-## 11. Operational acceptance
+## 12. Operational acceptance
 
 `CORE-019` repository-side acceptance is satisfied when:
 
