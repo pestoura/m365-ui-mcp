@@ -88,6 +88,29 @@ def _is_allowlisted_host(hostname: str) -> bool:
     )
 
 
+# Neutral browser placeholders that carry no identity, tenant or web origin.
+# They must NOT disqualify auth bootstrap the way an arbitrary web page would.
+# This set is intentionally narrow: only ``about:blank`` and the harmless
+# ``chrome://newtab`` variants. It adds NO http/https origin to any allowlist
+# and preserves denial of arbitrary web origins.
+_NEUTRAL_BOOTSTRAP_URLS = frozenset({"about:blank", "chrome://newtab"})
+
+
+def _is_neutral_bootstrap_url(url: str) -> bool:
+    """Return True for a neutral bootstrap placeholder page.
+
+    Only ``about:blank`` and ``chrome://newtab`` (including harmless trailing
+    slash / query variants) are recognized. No http/https origin is ever
+    treated as neutral.
+    """
+    raw = (url or "").strip().lower()
+    if not raw:
+        return False
+    if raw == "about:blank":
+        return True
+    return raw == "chrome://newtab" or raw.startswith("chrome://newtab/")
+
+
 class AuthBootstrapGuard:
     """Fail-closed pre-attestation guard for authentication bootstrap only.
 
@@ -153,16 +176,30 @@ def auth_origin_status(page_urls: tuple[str, ...]) -> AuthOriginStatus:
 
     This is the only place raw page URLs are observed, and they are reduced to
     a host allowlist check. The URL value is never returned to a caller.
+
+    Neutral placeholder pages (``about:blank`` / ``chrome://newtab`` variants)
+    are ignored rather than rejected: they carry no identity or web origin, so
+    they must not trip the non-approved-origin denial. Any page that resolves to
+    a non-allowlisted or non-approved web host still fails closed.
     """
     if not page_urls:
         return AuthOriginStatus.NO_ACTIVE_PAGE
+    saw_approved_auth_origin = False
     for raw in page_urls:
+        if _is_neutral_bootstrap_url(raw):
+            # Neutral placeholder: carries no identity/origin; does not
+            # disqualify bootstrap and is not an approved auth origin.
+            continue
         host = _host_of(raw)
         if not _is_allowlisted_host(host):
             return AuthOriginStatus.NON_APPROVED_ORIGIN
         if not _is_approved_auth_origin(host):
             return AuthOriginStatus.NON_APPROVED_ORIGIN
-    return AuthOriginStatus.APPROVED_AUTH_ORIGIN
+        saw_approved_auth_origin = True
+    if saw_approved_auth_origin:
+        return AuthOriginStatus.APPROVED_AUTH_ORIGIN
+    # Every open page is a neutral placeholder; bootstrap may begin.
+    return AuthOriginStatus.NO_ACTIVE_PAGE
 
 
 __all__ = [
