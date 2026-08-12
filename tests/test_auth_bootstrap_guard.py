@@ -130,18 +130,84 @@ def _guard(
 def test_auth_origin_status_never_exposes_url() -> None:
     # URLs are reduced to a closed status; the value is not returned anywhere.
     assert auth_origin_status(()) is AuthOriginStatus.NO_ACTIVE_PAGE
+
+
+# --- Neutral bootstrap origin regression suite (PR #596 follow-up) ---
+# about:blank and chrome://newtab are harmless placeholders that carry no
+# identity, tenant or web origin. They must NOT be treated as
+# NON_APPROVED_ORIGIN (the false-positive that blocked bootstrap). No http/
+# https origin is ever neutralized.
+
+
+def test_auth_origin_status_about_blank_neutral() -> None:
+    # A blank start page alone must not disqualify bootstrap.
+    assert auth_origin_status(("about:blank",)) is AuthOriginStatus.NO_ACTIVE_PAGE
+    # about:blank alongside chrome://newtab is still neutral.
+    assert (
+        auth_origin_status(("about:blank", "chrome://newtab"))
+        is AuthOriginStatus.NO_ACTIVE_PAGE
+    )
+
+
+def test_auth_origin_status_chrome_newtab_neutral() -> None:
+    # Core newtab and harmless variants are neutral.
+    assert auth_origin_status(("chrome://newtab",)) is AuthOriginStatus.NO_ACTIVE_PAGE
+    assert (
+        auth_origin_status(("chrome://newtab/",)) is AuthOriginStatus.NO_ACTIVE_PAGE
+    )
+    assert (
+        auth_origin_status(("chrome://newtab/?something",))
+        is AuthOriginStatus.NO_ACTIVE_PAGE
+    )
+
+
+def test_auth_origin_status_neutral_with_approved_login_allowed() -> None:
+    # Neutral placeholders do not poison an otherwise approved context.
+    assert (
+        auth_origin_status(
+            ("about:blank", "chrome://newtab", "https://login.microsoftonline.com/kmsi")
+        )
+        is AuthOriginStatus.APPROVED_AUTH_ORIGIN
+    )
+    # Approved auth origin alone still allowed (unchanged behavior).
     assert (
         auth_origin_status(("https://login.microsoftonline.com/kmsi",))
         is AuthOriginStatus.APPROVED_AUTH_ORIGIN
     )
+
+
+def test_auth_origin_status_example_com_denied() -> None:
+    # Arbitrary web origins remain denied even next to a neutral page.
     assert (
-        auth_origin_status(("https://outlook.office.com/mail",))
+        auth_origin_status(("about:blank", "https://example.com/"))
         is AuthOriginStatus.NON_APPROVED_ORIGIN
     )
     assert (
-        auth_origin_status(("https://evil.example.com/",))
+        auth_origin_status(("chrome://newtab", "https://evil.example.com/"))
         is AuthOriginStatus.NON_APPROVED_ORIGIN
     )
+
+
+def test_guard_auth_start_allowed_with_neutral_origin_pages() -> None:
+    # End-to-end tie: when the live context is neutral placeholders plus an
+    # approved Microsoft login origin, the bootstrap guard permits auth_start
+    # (all other conditions hold). This exercises the neutral-origin fix in the
+    # real guard decision path, not just auth_origin_status.
+    def approved_provider() -> bool:
+        return auth_origin_status(
+            ("about:blank", "https://login.microsoftonline.com/kmsi")
+        ) is AuthOriginStatus.APPROVED_AUTH_ORIGIN
+
+    guard = AuthBootstrapGuard(
+        browser_started_provider=lambda: True,
+        dedicated_profile_provider=lambda: True,
+        approved_auth_origin_provider=approved_provider,
+        auth_attested_provider=lambda: False,
+        strict_live_guard=lambda _op: None,
+    )
+    guard.guard("auth_start")  # must not raise
+    guard.guard("auth_status")  # must not raise
+    guard.guard("auth_resume")  # must not raise
 
 
 def test_bootstrap_allowed_only_when_dedicated_profile_and_approved_origin() -> None:
