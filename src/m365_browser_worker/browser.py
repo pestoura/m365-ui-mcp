@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_status
 from m365_browser_worker.egress import enforce_route_egress
 from m365_mcp.config import browser_runtime_settings
 from planner_mcp.errors import BlockerConditionalAccess, UiContractUnattested, WorkerUnavailable
@@ -71,6 +72,39 @@ class PersistentBrowser:
     def started(self) -> bool:
         """Return whether this process currently owns a live Chromium context."""
         return self._context is not None and self._playwright is not None
+
+    def is_dedicated_persistent_profile(self) -> bool:
+        """Return whether this is the dedicated persistent professional profile.
+
+        A throwaway or wrong profile directory is rejected so authentication
+        bootstrap can only proceed against the sanctioned professional context.
+        Mock mode is never the dedicated live profile.
+        """
+        if self.config.is_mock:
+            return False
+        expected_profile_dir, _headless, _mode = browser_runtime_settings()
+        return self.started and self.config.profile_dir == expected_profile_dir
+
+    def auth_origin_approved(self) -> bool:
+        """Return whether the live context may begin/continue auth bootstrap.
+
+        True only when no page is open yet (bootstrap may begin navigation) or
+        every open page is on an approved Microsoft authentication origin. Raw
+        URLs are reduced to a closed host allowlist decision and never returned.
+        """
+        if not self.started:
+            return False
+        status = auth_origin_status(tuple(page.url for page in self._context.pages))
+        return status is not AuthOriginStatus.NON_APPROVED_ORIGIN
+
+    def common_auth_attested(self) -> bool:
+        """Return whether the ``common.auth`` UIContract fragment is attested.
+
+        Once attested, the stricter full-contract behavior applies to the auth
+        bootstrap endpoints as well.
+        """
+        status = load_status()
+        return status.attested
 
     def ensure_live_allowed(self, operation: str) -> None:
         """Fail closed for semantic live operations without an attested UIContract."""

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from m365_browser_worker.account_context import AccountContext, unverified_account_context
 from m365_browser_worker.apps.planner import PlannerWorkerAdapter
+from m365_browser_worker.auth_bootstrap import AuthBootstrapGuard
 from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
 from m365_browser_worker.protocol import (
@@ -78,6 +79,13 @@ def create_app(
     broker_viable = broker_viability_provider or (lambda: session_broker.viable)
     protocol_compatible = protocol_compatibility_provider or (lambda: worker_protocol.compatible)
     lock_viable = lock_viability_provider or (lambda: profile_executor.viable)
+    auth_bootstrap_guard = AuthBootstrapGuard(
+        browser_started_provider=lambda: worker_browser.started,
+        dedicated_profile_provider=worker_browser.is_dedicated_persistent_profile,
+        approved_auth_origin_provider=worker_browser.auth_origin_approved,
+        auth_attested_provider=worker_browser.common_auth_attested,
+        strict_live_guard=worker_browser.ensure_live_allowed,
+    )
     app = FastAPI(
         title="planner-browser-worker",
         version=__version__,
@@ -172,11 +180,21 @@ def create_app(
     ) -> ProtocolNegotiationResponse:
         return worker_protocol.negotiate(request.supported_versions)
 
+    def bootstrap_guard(operation: str) -> None:
+        if _is_mock():
+            return
+        try:
+            auth_bootstrap_guard.guard(operation)
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
     @app.get("/auth/status")
     async def auth_status() -> dict[str, Any]:
         if _is_mock():
             return {"state": AuthState.AUTHENTICATED.value, "mode": "mock"}
-        live_guard("auth_status")
+        # Narrowed pre-attestation guard: authentication bootstrap may proceed
+        # only on the dedicated professional profile at an approved auth origin.
+        bootstrap_guard("auth_status")
         return {"state": AuthState.UNKNOWN.value, "mode": "live"}
 
     @app.get("/auth/start")
@@ -194,14 +212,14 @@ def create_app(
                     "approval_channel": "microsoft_authenticator",
                 },
             }
-        live_guard("auth_start")
+        bootstrap_guard("auth_start")
         return {"state": AuthState.UNKNOWN.value}
 
     @app.get("/auth/resume")
     async def auth_resume() -> dict[str, Any]:
         if _is_mock():
             return {"state": AuthState.AUTHENTICATED.value, "mode": "mock"}
-        live_guard("auth_resume")
+        bootstrap_guard("auth_resume")
         return {"state": AuthState.UNKNOWN.value}
 
     @app.get("/auth/session")
