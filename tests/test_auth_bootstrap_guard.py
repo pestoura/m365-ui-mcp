@@ -14,14 +14,13 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import importlib.util
 import json
 import os
+from pathlib import Path
 
 import httpx
 import pytest
-from scripts.collect_live_attestation_observation import (  # type: ignore
-    collect_structural_observation,
-)
 
 from m365_browser_worker.auth_bootstrap import (
     AuthBootstrapGuard,
@@ -40,6 +39,35 @@ from m365_mcp.attestation import (
 from m365_mcp.ui_contract_store import load_ui_contract_set
 from planner_browser_worker.app import create_app
 from planner_mcp.errors import PolicyDenied, UiContractUnattested, WorkerUnavailable
+
+
+def _load_collect_live_attestation_observation():
+    """Robustly load the operator script by absolute path (CI-proof).
+
+    The repository-root ``scripts`` namespace is not importable in every
+    pytest environment (e.g. installed-package CI runs), so we load the module
+    file directly via importlib instead of ``import scripts...``. This keeps
+    production code, packaging semantics and runtime behavior unchanged.
+    """
+    script_path = (
+        Path(__file__).resolve().parent.parent
+        / "scripts"
+        / "collect_live_attestation_observation.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "collect_live_attestation_observation", str(script_path)
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(
+            f"could not load collect_live_attestation_observation from {script_path}"
+        )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_collect_module = _load_collect_live_attestation_observation()
+collect_structural_observation = _collect_module.collect_structural_observation
 
 
 class _FakeBrowser:
