@@ -858,7 +858,7 @@ def test_start_rollback_restores_worker_when_failure_after_worker_stop(
         "x_socket": lambda cfg, proc: None,
         "tcp": lambda cfg, name, host, port, proc: None,
     }
-    ho = _start_with_readiness(tmp_path, monkeypatch, noop_readiness)
+    ho = _start_with_readiness(tmp_path, monkeypatch, noop_readiness, popen=_Recorder().popen)
     ho.cfg.runner = _runner
     rc = ho.start()
     assert rc == 1
