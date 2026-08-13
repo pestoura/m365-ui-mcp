@@ -188,6 +188,18 @@ def create_app(
         except PlannerMcpError as exc:
             raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
 
+    def live_auth_state() -> AuthState:
+        # Derive the LIVE auth state from trusted runtime attestation evidence
+        # rather than a hardcoded constant. ``bootstrap_guard`` already ran
+        # first (fail-closed), so reaching here means the narrowly-scoped
+        # authentication bootstrap path is permitted. Once ``common.auth`` is
+        # legitimately attested (PR/evidence based, mirrored by the guard's own
+        # auth-attested provider) the professional session is AUTHENTICATED;
+        # before attestation the bootstrap state remains UNKNOWN.
+        if worker_browser.common_auth_attested():
+            return AuthState.AUTHENTICATED
+        return AuthState.UNKNOWN
+
     @app.get("/auth/status")
     async def auth_status() -> dict[str, Any]:
         if _is_mock():
@@ -195,7 +207,7 @@ def create_app(
         # Narrowed pre-attestation guard: authentication bootstrap may proceed
         # only on the dedicated professional profile at an approved auth origin.
         bootstrap_guard("auth_status")
-        return {"state": AuthState.UNKNOWN.value, "mode": "live"}
+        return {"state": live_auth_state().value, "mode": "live"}
 
     @app.get("/auth/start")
     async def auth_start() -> dict[str, Any]:
@@ -213,14 +225,14 @@ def create_app(
                 },
             }
         bootstrap_guard("auth_start")
-        return {"state": AuthState.UNKNOWN.value}
+        return {"state": live_auth_state().value}
 
     @app.get("/auth/resume")
     async def auth_resume() -> dict[str, Any]:
         if _is_mock():
             return {"state": AuthState.AUTHENTICATED.value, "mode": "mock"}
         bootstrap_guard("auth_resume")
-        return {"state": AuthState.UNKNOWN.value}
+        return {"state": live_auth_state().value}
 
     @app.get("/auth/session")
     async def auth_session() -> dict[str, Any]:
