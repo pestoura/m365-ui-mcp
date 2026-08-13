@@ -1,35 +1,47 @@
 # Operator-only GUI handoff for m365-ui-mcp
 
-Safe, loopback-only VNC view of the already-running `browser-worker` profile for
-an operator. Host-side only: it never touches the production containers' lifecycle
-(the exception is restarting `browser-worker` on stop), Cloudflare, credentials,
-cookies, browser data, or M365.
+Safe, loopback-only VNC view of the **worker profile** for an operator to complete
+an interactive Microsoft sign-in by hand. Host-side only: it never touches the
+control plane, Cloudflare, credentials, cookies, browser data, or M365 beyond the
+single in-process `begin-signin` worker path.
 
-Companion: [`browser-worker.md` (WORKER-120…127)](browser-worker.md),
+This is the **fail-closed headed-browser one-off** handoff (replaces the earlier
+host-Chromium model). It launches a SEPARATE headed one-off container from the
+exact currently deployed browser-worker image, never the worker itself, and never
+alongside the control plane.
+
+Companion: [`browser-worker.md` (WORKER-120…135)](browser-worker.md),
 implementation [`scripts/operator_gui_handoff.py`](../scripts/operator_gui_handoff.py).
 
 ## Scope (what this does NOT do)
 
-- It does **not** deploy, stop production containers, start GUI processes against
-  production, expose ports publicly, touch Cloudflare, read/write credentials,
-  cookies, browser data, or contact M365.
-- It launches a **separate** host Chromium pointed at the named Docker volume
-  profile, as the profile owner uid/gid `1001:1001`, with **no CDP**.
-- It launches **separate** host Xvfb + x11vnc + websockify/noVNC bound to
+- It does **not** deploy, stop production containers (except restarting
+  `browser-worker` on stop/rollback), start a host Chromium, expose ports publicly,
+  touch Cloudflare, read/write credentials, cookies, browser data, or contact M365
+  except through the single operator-only `begin-signin` endpoint.
+- It launches a **separate** host Xvfb + x11vnc + websockify/noVNC bound to
   `127.0.0.1` only.
+- It launches a **separate** headed one-off container (`m365-ui-mcp-gui-browser`)
+  from the deployed browser-worker image, on the `*m365-egress` network only, with
+  **no published ports**, the same named volume RW, the same non-root image user
+  (`1001:1001`), `cap-drop ALL`, `no-new-privileges`, memory/pids limits, and the
+  image default entrypoint. No CDP, no remote-debugging.
+- After the headed worker reports `/health` (probed via `docker exec` loopback), it
+  invokes `POST /auth/bootstrap/begin-signin` **exactly once** inside the container
+  (no URL args, no credentials, no retry). No other navigation/type/click happens.
 
 ## Preconditions (verified host capabilities)
 
-| Capability | Required | Found on host (verified) |
+| Capability | Required | Notes |
 | --- | --- | --- |
-| `Xvfb` | yes | `/usr/bin/Xvfb` |
-| `x11vnc` | yes | `/usr/bin/x11vnc` |
-| `websockify` | yes | `/usr/bin/websockify` |
-| `chromium` | yes | `/usr/bin/chromium` |
-| `setpriv` | yes (numeric uid launch) | `/usr/bin/setpriv` |
+| `Xvfb` | yes | dedicated `:99`, `-nolisten tcp` |
+| `x11vnc` | yes | bound `127.0.0.1:5999` |
+| `websockify` | yes | bound `127.0.0.1:6080`, serves noVNC |
+| `docker` compose v2 | yes | only for stop/start of `browser-worker` and the one-off container |
 | noVNC web | yes | `/usr/share/novnc` |
-| `docker` compose v2 | yes | `Docker Compose version 2.26.1` |
-| profile uid/gid `1001:1001` | yes | Docker volume owns profile `1001:1001`; host has no such account (numeric launch) |
+| host `chromium` / `setpriv` | **no** | not required by this design |
+| loopback ports `5999`/`6080` | free | checked at preflight |
+| profile uid/gid `1001:1001` | yes | verified INSIDE the healthy normal worker via `docker exec`/`stat` (never host mountpoint, never chown) |
 
 ## Commands
 
@@ -37,57 +49,84 @@ implementation [`scripts/operator_gui_handoff.py`](../scripts/operator_gui_hando
 # Start (fail-closed). Refuses unless every precondition holds.
 python scripts/operator_gui_handoff.py start
 
-# Status: sanitized booleans + loopback endpoint only.
+# Status: sanitized booleans + headed container name + loopback endpoint only.
 python scripts/operator_gui_handoff.py status
 
-# Stop: terminate GUI stack, then restart browser-worker and wait healthy.
+# Stop: remove headed container first (profile flush), terminate host stack,
+# then restart browser-worker and wait healthy.
 python scripts/operator_gui_handoff.py stop
 ```
 
-## Start contract (WORKER-121, WORKER-122)
+## Start contract (WORKER-121, WORKER-122, WORKER-130, WORKER-131)
 
 `start` runs preflight checks in order; any failure aborts with no side effects:
 
-1. required binaries present (`Xvfb`, `x11vnc`, `websockify`, `chromium`, `setpriv`, `docker`);
-2. loopback ports `5999` (VNC) and `6080` (websockify) are free;
-3. production checkout `~/services/m365-ui-mcp` is clean (no uncommitted changes);
-4. `m365-ui-mcp-browser-worker-1` exists and is `healthy`;
-5. profile ownership is exactly `1001:1001` (UID mismatch → reject);
-6. no other live Chromium holds the profile (competing process → reject).
+1. production checkout `~/services/m365-ui-mcp` is clean with ONLY the generated
+   `.jarvas/attest/` subtree allowed untracked (any tracked modification or other
+   untracked path is rejected);
+2. required host binaries present (`Xvfb`, `x11vnc`, `websockify`, `docker`);
+3. loopback ports `5999` (VNC) and `6080` (websockify) are free;
+4. no stale GUI one-off container (`m365-ui-mcp-gui-browser`) and no active handoff
+   state file exist;
+5. the expected `m365-ui-mcp-browser-worker-1` exists and is `healthy`;
+6. profile ownership inside that healthy worker is exactly `1001:1001` (verified via
+   `docker exec` + `stat` on `/var/lib/planner-worker/profile` and a representative
+   persistent content entry).
 
-On success it launches **Xvfb → x11vnc → websockify → Chromium**. On any launch
-failure it rolls the started processes back in reverse order and restarts
-`browser-worker` to healthy (WORKER-122).
+On success it launches the host stack **Xvfb → x11vnc → websockify**, then
+gracefully stops ONLY the normal `browser-worker` and verifies it is `exited`, then
+launches the headed one-off container. After the headed `/health` probe succeeds,
+`POST /auth/bootstrap/begin-signin` is invoked exactly once inside the container.
+On any launch failure it rolls the started steps back in reverse order and restarts
+`browser-worker` to healthy (WORKER-122, WORKER-133).
+
+## Headed one-off container (WORKER-124, WORKER-128, WORKER-129)
+
+The container is created with an exact, reviewed `docker run`:
+
+- `--name m365-ui-mcp-gui-browser`, `--network m365-ui-mcp_m365-egress` (egress only;
+  never `browser-internal`, never alias `browser-worker`);
+- **no `-p`** published ports; the control plane cannot route to it;
+- `--volume m365-ui-mcp_browser-profile:/var/lib/planner-worker/profile:rw` and
+  `--volume /tmp/.X11-unix:/tmp/.X11-unix:rw`;
+- `--user 1001:1001`, `--cap-drop ALL`, `--security-opt no-new-privileges:true`,
+  `--memory=2g`, `--pids-limit=512`;
+- explicit minimal env only: `M365_MODE=live` (+`PLANNER_MODE=live`),
+  `M365_BROWSER_HEADLESS=0` (+`PLANNER_BROWSER_HEADLESS=0`),
+  `M365_BROWSER_PROFILE_DIR=/var/lib/planner-worker/profile`
+  (+`PLANNER_BROWSER_PROFILE_DIR` mirrored), worker port, `DISPLAY=:99`. No
+  container env/secrets are copied;
+- image default entrypoint/CMD; no remote-debugging/CDP flags.
 
 ## Network exposure (WORKER-123)
 
 - Xvfb: `-nolisten tcp` (unix socket only).
 - x11vnc: `-listen 127.0.0.1 -rfbport 5999 -nopw`.
-- websockify: binds `127.0.0.1:6080`, proxies to `127.0.0.1:5999`, serves `/usr/share/novnc`.
-- noVNC is reachable only at `http://127.0.0.1:6080`. Nothing is exposed beyond loopback.
+- websockify: binds `127.0.0.1:6080`, proxies to `127.0.0.1:5999`, serves
+  `/usr/share/novnc`.
+- noVNC is reachable only at `http://127.0.0.1:6080`. Nothing is exposed beyond
+  loopback. The headed container publishes no ports and joins only egress.
 
-## Chromium launch (WORKER-124)
+## Begin-signin (WORKER-127, WORKER-132)
 
-```text
-setpriv --reuid 1001 --regid 1001 --clear-groups \
-  chromium --display :99 --user-data-dir=<profile> --no-first-run \
-  --no-default-browser-check --disable-background-networking \
-  --disable-features=Translate,OptimizationHints,MediaRouter --disable-extensions
-```
+After the headed worker reports `/health` (probed via `docker exec` loopback),
+`POST /auth/bootstrap/begin-signin` is invoked exactly once inside the container
+with no URL args, no credentials, and no retry beyond the health wait. The operator
+completes the real Microsoft sign-in by hand through noVNC. No other
+navigation/type/click occurs.
 
-No `--remote-debugging-port`, no `--remote-debugging-pipe`, no CDP surface.
-The profile is never `chown`ed; ownership is preserved.
+## Stop contract (WORKER-125, WORKER-134)
 
-## Stop contract (WORKER-125)
+`stop` removes the headed one-off container FIRST (profile flush), then terminates
+the host GUI stack in reverse launch order (websockify → x11vnc → Xvfb), then
+restarts **only** `browser-worker` and waits for healthy. The control plane is never
+stopped, started, or referenced.
 
-`stop` terminates the GUI stack in reverse launch order (Chromium → x11vnc →
-websockify → Xvfb), then restarts **only** `browser-worker` and waits for healthy.
-The control plane is never stopped, started, or referenced.
-
-## State and secrets (WORKER-126, WORKER-127)
+## State and secrets (WORKER-126, WORKER-135)
 
 - State file `~/.cache/m365-gui-handoff/state.json` holds only PIDs, health
-  booleans, and the loopback endpoint — never the profile path contents,
-  credentials, cookies, tokens, or URLs.
-- No passwords/tokens are written to files or logs. The handoff performs zero
-  authentication and never contacts M365.
+  booleans, the headed container name, `begin_signin_ok`, and the loopback endpoint
+  — never the profile path contents, Microsoft page content, credentials, cookies,
+  tokens, UPN, or URLs.
+- No passwords/tokens are written to files or logs. The handoff performs the single
+  operator-only `begin-signin` and never otherwise contacts M365.

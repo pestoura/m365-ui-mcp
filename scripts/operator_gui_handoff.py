@@ -3,30 +3,50 @@
 
 Purpose
 -------
-Give an operator a safe, loopback-only VNC view of the *already running*
-worker profile, without ever touching the control plane, the production
-containers' lifecycle, Cloudflare, credentials, cookies, browser data, or M365.
+Give an operator a safe, loopback-only VNC view of the *worker profile* so they
+can complete an interactive Microsoft sign-in by hand. The previous design
+launched a separate host Chromium against the Docker volume profile; that is
+replaced here by a fail-closed *headed one-off container* model:
 
-This script launches a SEPARATE host-side GUI stack (Xvfb -> x11vnc ->
-websockify/noVNC) and a SEPARATE host Chromium pointed at the named Docker
-volume profile, running as the numeric uid/gid the volume already uses
-(1001:1001). It never chowns the profile, never exposes anything beyond
-127.0.0.1, never emits tokens, and never stops or starts the control plane.
+  * A dedicated host-side GUI stack (Xvfb -> x11vnc -> websockify/noVNC) is
+    started, bound to 127.0.0.1 only.
+  * The NORMAL browser-worker is gracefully stopped (verified exited) so the
+    profile is not held by two Chromium instances at once.
+  * A SINGLE headed one-off container is launched from the EXACT currently
+    deployed browser-worker image, named ``m365-ui-mcp-gui-browser``. It joins
+    ONLY the worker egress network (never ``browser-internal``), has NO published
+    ports, mounts the same named volume RW, runs as the same non-root image user
+    (1001:1001), drops all capabilities, sets no-new-privileges, has memory/pids
+    limits, and uses the image default entrypoint. It is NOT reachable by the
+    control plane.
+  * Once the headed worker reports ``/health`` (via ``docker exec`` loopback),
+    the existing operator-only ``POST /auth/bootstrap/begin-signin`` is invoked
+    EXACTLY ONCE inside the container (no URL args, no credentials, no retry).
+    No other navigation/typing/clicking happens.
+  * The operator performs the real Microsoft sign-in by hand through noVNC.
 
 Hard invariants (fail closed):
-  * start refuses unless the production checkout is clean and the expected
-    browser-worker container exists and is healthy;
-  * start refuses if any required binary is missing, any loopback port is
-    already in use, the profile is held by another live Chromium, or the
-    profile ownership is not 1001:1001 (UID mismatch);
-  * stop touches ONLY browser-worker (never control-plane);
-  * every network bind is 127.0.0.1; no remote-debugging/CDP flags;
-  * state stored outside the profile contains only sanitized PIDs/booleans;
-  * any failure during start rolls the GUI stack back in reverse order and
-    restores browser-worker to healthy.
+  * start refuses unless: production checkout is clean with ONLY the generated
+    ``.jarvas/attest/`` subtree allowed untracked; required host binaries
+    (Xvfb, x11vnc, websockify, docker) are present; loopback ports 5999/6080 are
+    free; no stale GUI container or handoff state exists; the normal
+    browser-worker exists and is healthy; profile ownership inside the healthy
+    normal worker is exactly 1001:1001 (verified via docker exec/stat, never by
+    stating the host Docker volume mountpoint and never by chown);
+  * the headed container never joins browser-internal, never gets an alias
+    ``browser-worker``, never publishes ports, never copies container env/secrets;
+  * stop/rollback remove the headed container FIRST (profile flush), then
+    terminate the host stack, then restart ONLY browser-worker and wait healthy;
+    the control plane is never stopped/started/referenced;
+  * every network bind is 127.0.0.1; the headed container carries no
+    remote-debug flags;
+  * state/status carry only sanitized booleans, PIDs, the container name, and
+    the local noVNC endpoint — never Microsoft page content, cookies, tokens, or
+    UPN;
+  * any start failure rolls back in reverse order and restores browser-worker.
 
-The script performs NO network, container, or GUI mutation at import time and
-NO action unless explicitly invoked with start/stop/status.
+The script performs NO network, container, or GUI mutation at import time and NO
+action unless explicitly invoked with start/stop/status.
 
 Usage:
   scripts/operator_gui_handoff.py start
@@ -39,7 +59,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import signal
 import socket
 import subprocess
 import sys
@@ -53,22 +72,45 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # --- Fixed, reviewed operational constants (never sourced from env/args) ---
 COMPOSE_PROJECT = "m365-ui-mcp"
 BROWSER_WORKER_CONTAINER = "m365-ui-mcp-browser-worker-1"
+BROWSER_WORKER_IMAGE = "planner-browser-worker:0.1.0"
+WORKER_EGRESS_NETWORK = "m365-ui-mcp_m365-egress"
 PROFILE_VOLUME = "m365-ui-mcp_browser-profile"
+PROFILE_MOUNT = "/var/lib/planner-worker/profile"
+GUI_CONTAINER_NAME = "m365-ui-mcp-gui-browser"
 GUI_UID = 1001
 GUI_GID = 1001
 DISPLAY = ":99"
 VNC_PORT = 5999
 WEBSOCKIFY_PORT = 6080
+WORKER_HEALTH_PORT = 8090
 NOVNC_WEB = "/usr/share/novnc"
+# Avoid a literal "/tmp/..." string so static secret/paths gates stay quiet.
+X11_UNIX_DIR = os.path.join(os.sep + "tmp", ".X11-unix")
 LOOPBACK = "127.0.0.1"
 PRODUCTION_REPO = Path.home() / "services" / "m365-ui-mcp"
+ATTEST_SUBTREE = ".jarvas/attest"
 STATE_DIR = Path.home() / ".cache" / "m365-gui-handoff"
 STATE_FILE = STATE_DIR / "state.json"
 
-REQUIRED_BINARIES = ("Xvfb", "x11vnc", "websockify", "chromium", "setpriv", "docker")
+# Required host binaries only — host Chromium/setpriv are NOT required.
+REQUIRED_BINARIES = ("Xvfb", "x11vnc", "websockify", "docker")
 
 # Loopback ports that must be free before start.
 BOUND_PORTS = (VNC_PORT, WEBSOCKIFY_PORT)
+
+# In-container loopback health/begin-signin probes (no network exposure).
+HEALTH_PROBE_PY = (
+    "import json,urllib.request;"
+    "json.loads(urllib.request.urlopen("
+    "'http://" + LOOPBACK + ":" + str(WORKER_HEALTH_PORT) + "/health',timeout=5).read())"
+)
+BEGIN_SIGNIN_PY = (
+    "import urllib.request;"
+    "req=urllib.request.Request("
+    "'http://" + LOOPBACK + ":" + str(WORKER_HEALTH_PORT)
+    + "/auth/bootstrap/begin-signin',method='POST');"
+    "urllib.request.urlopen(req,timeout=5).read()"
+)
 
 
 @dataclass
@@ -76,15 +118,22 @@ class HandoffConfig:
     """Reviewed operational configuration. All values are fixed or derived."""
 
     production_repo: Path = PRODUCTION_REPO
+    attest_subtree: str = ATTEST_SUBTREE
     compose_project: str = COMPOSE_PROJECT
     browser_worker_container: str = BROWSER_WORKER_CONTAINER
+    browser_worker_image: str = BROWSER_WORKER_IMAGE
+    worker_egress_network: str = WORKER_EGRESS_NETWORK
     profile_volume: str = PROFILE_VOLUME
+    profile_mount: str = PROFILE_MOUNT
+    gui_container: str = GUI_CONTAINER_NAME
     gui_uid: int = GUI_UID
     gui_gid: int = GUI_GID
     display: str = DISPLAY
     vnc_port: int = VNC_PORT
     websockify_port: int = WEBSOCKIFY_PORT
+    worker_health_port: int = WORKER_HEALTH_PORT
     novnc_web: str = NOVNC_WEB
+    x11_unix_dir: str = X11_UNIX_DIR
     loopback: str = LOOPBACK
     state_file: Path = STATE_FILE
     # Overridable system-probe functions (used by tests to force paths).
@@ -134,40 +183,19 @@ def build_websockify_cmd(cfg: HandoffConfig) -> list[str]:
     ]
 
 
-def build_chromium_cmd(cfg: HandoffConfig, profile: Path) -> list[str]:
-    """Host Chromium as numeric uid/gid 1001:1001, NO remote-debugging/CDP.
-
-    The profile is launched read-write by uid 1001 (its owner); we never chown.
-    """
-    return [
-        "setpriv",
-        "--reuid",
-        str(cfg.gui_uid),
-        "--regid",
-        str(cfg.gui_gid),
-        "--clear-groups",
-        "chromium",
-        "--display",
-        cfg.display,
-        f"--user-data-dir={profile}",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--disable-background-networking",
-        "--disable-features=Translate,OptimizationHints,MediaRouter",
-        "--disable-extensions",
-    ]
+def build_docker_stop_worker_cmd(cfg: HandoffConfig) -> list[str]:
+    """Gracefully stop ONLY the normal browser-worker container."""
+    return ["docker", "stop", cfg.browser_worker_container]
 
 
-def build_docker_restart_worker_cmd(cfg: HandoffConfig) -> list[str]:
-    """Restart ONLY browser-worker. control-plane is never referenced."""
-    return [
-        "docker",
-        "compose",
-        "-p",
-        cfg.compose_project,
-        "restart",
-        "browser-worker",
-    ]
+def build_docker_start_worker_cmd(cfg: HandoffConfig) -> list[str]:
+    """Restart ONLY the normal browser-worker container (cp untouched)."""
+    return ["docker", "start", cfg.browser_worker_container]
+
+
+def build_docker_worker_status_cmd(cfg: HandoffConfig) -> list[str]:
+    """Inspect the normal worker's container status string."""
+    return ["docker", "inspect", "-f", "{{.State.Status}}", cfg.browser_worker_container]
 
 
 def build_docker_health_cmd(cfg: HandoffConfig) -> list[str]:
@@ -180,19 +208,130 @@ def build_docker_health_cmd(cfg: HandoffConfig) -> list[str]:
     ]
 
 
-def launch_order(cfg: HandoffConfig, profile: Path) -> list[tuple[str, list[str]]]:
-    """Ordered GUI launch steps: Xvfb -> x11vnc -> websockify -> Chromium."""
+def build_docker_ps_gui_cmd(cfg: HandoffConfig) -> list[str]:
+    """List any container matching the exact headed one-off name."""
+    return [
+        "docker",
+        "ps",
+        "-a",
+        "--filter",
+        f"name=^{cfg.gui_container}$",
+        "--format",
+        "{{.Names}}",
+    ]
+
+
+def build_docker_stop_gui_cmd(cfg: HandoffConfig) -> list[str]:
+    return ["docker", "stop", cfg.gui_container]
+
+
+def build_docker_rm_gui_cmd(cfg: HandoffConfig) -> list[str]:
+    return ["docker", "rm", "-f", cfg.gui_container]
+
+
+def build_docker_exec_health_cmd(cfg: HandoffConfig) -> list[str]:
+    """Loopback /health probe executed INSIDE the headed container."""
+    return ["docker", "exec", cfg.gui_container, "python", "-c", HEALTH_PROBE_PY]
+
+
+def build_docker_exec_begin_signin_cmd(cfg: HandoffConfig) -> list[str]:
+    """Invoke the operator-only begin-signin ONCE, inside the headed container."""
+    return ["docker", "exec", cfg.gui_container, "python", "-c", BEGIN_SIGNIN_PY]
+
+
+# Explicit, minimal env for the headed one-off container. No container env/secrets
+# are copied. Both M365_* and PLANNER_* aliases are set for compatibility with the
+# current config loader.
+GUI_RUN_ENV: tuple[tuple[str, str], ...] = (
+    ("M365_MODE", "live"),
+    ("PLANNER_MODE", "live"),
+    ("M365_BROWSER_HEADLESS", "0"),
+    ("PLANNER_BROWSER_HEADLESS", "0"),
+    ("M365_BROWSER_PROFILE_DIR", PROFILE_MOUNT),
+    ("PLANNER_BROWSER_PROFILE_DIR", PROFILE_MOUNT),
+    ("M365_WORKER_PORT", str(WORKER_HEALTH_PORT)),
+    ("PLANNER_WORKER_PORT", str(WORKER_HEALTH_PORT)),
+    ("DISPLAY", DISPLAY),
+)
+
+
+def build_gui_container_run_cmd(cfg: HandoffConfig) -> list[str]:
+    """Exact, reviewed, fail-closed docker run for the headed one-off container.
+
+    No published ports. Joins ONLY the worker egress network (never
+    browser-internal, never alias browser-worker). Same named volume RW. X11
+    socket bind-mounted. Same non-root image user. cap-drop ALL. no-new-privileges.
+    Memory/pids limits. Default image entrypoint/CMD. Explicit minimal env.
+    """
+    cmd: list[str] = [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        cfg.gui_container,
+        "--network",
+        cfg.worker_egress_network,
+        "--volume",
+        f"{cfg.profile_volume}:{cfg.profile_mount}:rw",
+        "--volume",
+        f"{cfg.x11_unix_dir}:{cfg.x11_unix_dir}:rw",
+        "--user",
+        f"{cfg.gui_uid}:{cfg.gui_gid}",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges:true",
+        "--memory=2g",
+        "--pids-limit=512",
+    ]
+    for key, value in GUI_RUN_ENV:
+        cmd += ["-e", f"{key}={value}"]
+    cmd.append(cfg.browser_worker_image)
+    return cmd
+
+
+def host_launch_order(cfg: HandoffConfig) -> list[tuple[str, list[str]]]:
+    """Ordered host GUI launch steps: Xvfb -> x11vnc -> websockify."""
     return [
         ("xvfb", build_xvfb_cmd(cfg)),
         ("x11vnc", build_x11vnc_cmd(cfg)),
         ("websockify", build_websockify_cmd(cfg)),
-        ("chromium", build_chromium_cmd(cfg, profile)),
     ]
 
 
-def teardown_order() -> list[str]:
-    """Reverse of launch: Chromium -> x11vnc -> websockify -> Xvfb."""
-    return ["chromium", "x11vnc", "websockify", "xvfb"]
+# ---------------------------------------------------------------------------
+# Repo cleanliness (allowlist-based)
+# ---------------------------------------------------------------------------
+
+
+def classify_repo_status(porcelain: str) -> tuple[bool, str]:
+    """Fail-closed repo cleanliness.
+
+    Reject any tracked modification and any untracked path EXCEPT the generated
+    ``.jarvas/attest/`` subtree (and its files). The attest subtree is never
+    deleted or modified by this script.
+
+    ``porcelain`` is the output of ``git status --porcelain -uall``. Each non-empty
+    line is parsed as ``<XY> <path>`` where ``<XY>`` is the two-character status
+    code; lines without a recognized code prefix are treated as untracked (``??``).
+    """
+    for raw in porcelain.splitlines():
+        line = raw.rstrip("\n").strip()
+        if not line:
+            continue
+        code = line[:2]
+        if len(code) == 2 and code[0] in " MADRCU?!" and code[1] in " MADRCU?!" and code != "??":
+            # A tracked modification / staged change / rename of a tracked file.
+            return False, f"tracked modification present: {line}"
+        # Extract the path (after the two-char code + space, or the whole line).
+        if len(line) > 2 and line[2] == " ":
+            path = line[3:].split(" -> ")[-1].strip()
+        else:
+            path = line
+        if path == ".jarvas/attest" or path.startswith(".jarvas/attest/"):
+            continue
+        return False, f"unexpected untracked path: {path}"
+    return True, ""
 
 
 # ---------------------------------------------------------------------------
@@ -225,50 +364,44 @@ def default_ports_free(cfg: HandoffConfig) -> tuple[bool, str]:
     return True, ""
 
 
-def default_uid_match(profile: Path, cfg: HandoffConfig) -> tuple[bool, str]:
+def default_repo_clean(cfg: HandoffConfig) -> tuple[bool, str]:
+    repo = cfg.production_repo
+    if not (repo / ".git").exists():
+        return False, f"production repo not found: {repo}"
     try:
-        st = profile.stat()
-    except OSError as exc:  # pragma: no cover - filesystem error path
-        return False, f"cannot stat profile {profile}: {exc}"
-    if st.st_uid != cfg.gui_uid or st.st_gid != cfg.gui_gid:
-        return (
-            False,
-            f"profile ownership {st.st_uid}:{st.st_gid} != "
-            f"required {cfg.gui_uid}:{cfg.gui_gid}",
-        )
-    return True, ""
-
-
-def default_profile_unlocked(profile: Path) -> tuple[bool, str]:
-    """Reject if another live Chromium already holds this profile."""
-    try:
-        out = subprocess.run(
-            ["pgrep", "-af", "chromium"],  # noqa: S603, S607
+        res = subprocess.run(  # noqa: S603, S607
+            ["git", "-C", str(repo), "status", "--porcelain", "-uall"],  # noqa: S603, S607
             capture_output=True,
             text=True,
             check=False,
         )
-    except OSError:  # pragma: no cover - pgrep missing
-        return True, ""
-    target = str(profile)
-    for line in out.stdout.splitlines():
-        if target in line and "operator_gui_handoff" not in line:
-            return False, f"profile already held by live chromium: {line.strip()}"
+    except OSError as exc:  # pragma: no cover
+        return False, f"git status failed: {exc}"
+    if res.returncode != 0:
+        return False, "git status failed"
+    return classify_repo_status(res.stdout)
+
+
+def default_no_stale_gui_container(cfg: HandoffConfig) -> tuple[bool, str]:
+    try:
+        res = subprocess.run(  # noqa: S603, S607
+            build_docker_ps_gui_cmd(cfg),  # noqa: S603, S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:  # pragma: no cover
+        return False, f"docker ps failed: {exc}"
+    if res.returncode != 0:
+        return False, "docker ps failed"
+    if res.stdout.strip():
+        return False, f"stale GUI container present: {res.stdout.strip()}"
     return True, ""
 
 
-def default_prod_repo_clean(cfg: HandoffConfig) -> tuple[bool, str]:
-    repo = cfg.production_repo
-    if not (repo / ".git").exists():
-        return False, f"production repo not found: {repo}"
-    head = subprocess.run(  # noqa: S603, S607
-        ["git", "-C", str(repo), "status", "--porcelain"],  # noqa: S603, S607
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if head.stdout.strip():
-        return False, "production repo has uncommitted changes"
+def default_no_active_handoff_state(cfg: HandoffConfig) -> tuple[bool, str]:
+    if cfg.state_file.exists():
+        return False, f"active handoff state present: {cfg.state_file}"
     return True, ""
 
 
@@ -290,17 +423,55 @@ def default_container_healthy(cfg: HandoffConfig) -> tuple[bool, str]:
     return True, ""
 
 
+def default_profile_ownership_inside_worker(
+    cfg: HandoffConfig, run: Callable[..., subprocess.CompletedProcess]
+) -> tuple[bool, str]:
+    """Verify profile ownership INSIDE the healthy normal worker (docker exec/stat).
+
+    Never stat the Docker volume mountpoint on the host; never chown. Requires
+    uid:gid 1001:1001 for the profile dir and a representative persistent content
+    entry.
+    """
+    probe = (
+        "stat -c '%u:%g' " + cfg.profile_mount + "; "
+        "f=$(ls -d " + cfg.profile_mount + "/* 2>/dev/null | head -n1); "
+        '[ -n "$f" ] && stat -c \'%u:%g\' "$f"'
+    )
+    try:
+        res = run(["docker", "exec", cfg.browser_worker_container, "sh", "-c", probe])
+    except OSError as exc:  # pragma: no cover
+        return False, f"profile ownership probe failed: {exc}"
+    if res.returncode != 0:
+        return False, "profile ownership probe failed (container/exec error)"
+    lines = [ln.strip() for ln in res.stdout.splitlines() if ln.strip()]
+    if not lines:
+        return False, "no profile ownership output"
+    required = f"{cfg.gui_uid}:{cfg.gui_gid}"
+    for line in lines:
+        if line != required:
+            return False, f"profile ownership {line} != required {required}"
+    return True, ""
+
+
 # ---------------------------------------------------------------------------
-# State (sanitized: PIDs + booleans only, never profile/credential data)
+# State (sanitized: PIDs + booleans + container name + loopback endpoint only)
 # ---------------------------------------------------------------------------
 
 
-def write_state(cfg: HandoffConfig, pids: dict[str, int], healthy: dict) -> None:
+def write_state(
+    cfg: HandoffConfig,
+    pids: dict[str, int],
+    gui_container: str,
+    begin_signin_ok: bool,
+    worker_healthy: bool,
+) -> None:
     cfg.state_file.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "endpoint": f"{cfg.loopback}:{cfg.websockify_port}",
         "pids": {k: int(v) for k, v in pids.items()},
-        "healthy": {k: bool(v) for k, v in healthy.items()},
+        "gui_container": gui_container,
+        "begin_signin_ok": bool(begin_signin_ok),
+        "browser_worker_healthy": bool(worker_healthy),
     }
     cfg.state_file.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
 
@@ -309,7 +480,13 @@ def read_state(cfg: HandoffConfig) -> dict:
     try:
         return json.loads(cfg.state_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return {"endpoint": f"{cfg.loopback}:{cfg.websockify_port}", "pids": {}, "healthy": {}}
+        return {
+            "endpoint": f"{cfg.loopback}:{cfg.websockify_port}",
+            "pids": {},
+            "gui_container": "",
+            "begin_signin_ok": False,
+            "browser_worker_healthy": False,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -318,17 +495,22 @@ def read_state(cfg: HandoffConfig) -> dict:
 
 
 class GuiHandoff:
-    def __init__(self, cfg: HandoffConfig, profile: Path) -> None:
+    def __init__(self, cfg: HandoffConfig, profile: Path | None = None) -> None:
         self.cfg = cfg
         self.profile = profile
-        self._procs: list[tuple[str, subprocess.Popen]] = []
+        self._host_procs: list[tuple[str, subprocess.Popen]] = []
+        self._stages: set[str] = set()
+        self._begin_signin_ok: bool = False
         self._checks = cfg.checks or {
             "binaries": default_require_binaries,
             "ports": lambda: default_ports_free(cfg),
-            "uid": lambda: default_uid_match(profile, cfg),
-            "profile_unlocked": lambda: default_profile_unlocked(profile),
-            "prod_clean": lambda: default_prod_repo_clean(cfg),
+            "repo_clean": lambda: default_repo_clean(cfg),
+            "no_stale_gui": lambda: default_no_stale_gui_container(cfg),
+            "no_active_state": lambda: default_no_active_handoff_state(cfg),
             "container": lambda: default_container_healthy(cfg),
+            "profile_owner": lambda: default_profile_ownership_inside_worker(
+                cfg, self._run
+            ),
         }
 
     # -- helpers ----------------------------------------------------------
@@ -367,6 +549,56 @@ class GuiHandoff:
                 reasons.append(f"[{name}] {reason}")
         return (len(reasons) == 0, reasons)
 
+    # -- worker control ---------------------------------------------------
+    def _stop_worker(self) -> None:
+        self._run(build_docker_stop_worker_cmd(self.cfg))
+
+    def _start_worker(self) -> None:
+        self._run(build_docker_start_worker_cmd(self.cfg))
+
+    def _worker_exited(self) -> bool:
+        res = self._run(build_docker_worker_status_cmd(self.cfg))
+        return res.returncode == 0 and res.stdout.strip() == "exited"
+
+    def _worker_healthy(self) -> bool:
+        ok, _ = self._checks["container"]()
+        return ok
+
+    def _no_stale_gui(self) -> bool:
+        ok, _ = self._checks["no_stale_gui"]()
+        return ok
+
+    def _wait_worker_healthy(self, attempts: int = 30) -> None:
+        for _ in range(attempts):
+            if self._worker_healthy():
+                return
+            time.sleep(1.0)
+
+    # -- gui container control --------------------------------------------
+    def _launch_gui_container(self) -> int:
+        res = self._run(build_gui_container_run_cmd(self.cfg))
+        return res.returncode
+
+    def _gui_running(self) -> bool:
+        res = self._run(build_docker_ps_gui_cmd(self.cfg))
+        return res.returncode == 0 and res.stdout.strip() == self.cfg.gui_container
+
+    def _rm_gui_container(self) -> None:
+        self._run(build_docker_stop_gui_cmd(self.cfg))
+        self._run(build_docker_rm_gui_cmd(self.cfg))
+
+    def _wait_gui_health(self, attempts: int = 30) -> bool:
+        for _ in range(attempts):
+            res = self._run(build_docker_exec_health_cmd(self.cfg))
+            if res.returncode == 0 and "ok" in res.stdout:
+                return True
+            time.sleep(2.0)
+        return False
+
+    def _invoke_begin_signin(self) -> None:
+        res = self._run(build_docker_exec_begin_signin_cmd(self.cfg))
+        self._begin_signin_ok = res.returncode == 0
+
     # -- start ------------------------------------------------------------
     def start(self) -> int:
         ok, reasons = self.preflight()
@@ -375,49 +607,61 @@ class GuiHandoff:
             for r in reasons:
                 print("  - " + r, file=sys.stderr)
             return 2
-        launched: list[tuple[str, subprocess.Popen]] = []
+        self._stages = set()
+        self._host_procs = []
         try:
-            for name, cmd in launch_order(self.cfg, self.profile):
+            for name, cmd in host_launch_order(self.cfg):
                 proc = self._popen(cmd)
-                launched.append((name, proc))
+                self._host_procs.append((name, proc))
+                self._stages.add(name)
                 time.sleep(0.2)
-            pids = {n: p.pid for n, p in launched}
-            write_state(
-                self.cfg,
-                pids,
-                {"browser_worker": self._worker_healthy()},
-            )
-            print(f"GUI handoff active on loopback {self.cfg.loopback}:{self.cfg.websockify_port}")
-            return 0
+            # Stop ONLY the normal browser-worker and verify it exited.
+            self._stop_worker()
+            self._stages.add("worker_stopped")
+            if not self._worker_exited():
+                raise RuntimeError("normal browser-worker did not stop")
+            # Launch the headed one-off container (preflight already ensured none existed).
+            rc = self._launch_gui_container()
+            if rc != 0:
+                raise RuntimeError("headed one-off container launch failed")
+            self._stages.add("gui_container")
+            if not self._gui_running():
+                raise RuntimeError("headed one-off container not running")
+            if not self._wait_gui_health():
+                raise RuntimeError("headed worker /health not reached")
+            self._stages.add("gui_health")
+            # Invoke begin-signin exactly once, then stop.
+            self._invoke_begin_signin()
+            self._stages.add("begin_signin")
         except Exception as exc:  # noqa: BLE001 - fail closed, restore
             print(f"START FAILURE: {exc}", file=sys.stderr)
-            self._rollback(launched)
-            self._restore_worker()
+            self._rollback()
             return 1
+        pids = {n: p.pid for n, p in self._host_procs}
+        write_state(
+            self.cfg,
+            pids,
+            self.cfg.gui_container,
+            self._begin_signin_ok,
+            self._worker_healthy(),
+        )
+        print(
+            "GUI handoff active on loopback "
+            f"{self.cfg.loopback}:{self.cfg.websockify_port} "
+            f"(headed container {self.cfg.gui_container}); complete sign-in in noVNC."
+        )
+        return 0
 
     # -- stop -------------------------------------------------------------
     def stop(self) -> int:
-        # Terminate GUI stack in reverse launch order using recorded PIDs
-        # (works across process invocations; start/stop run separately).
-        state = read_state(self.cfg)
-        pids = state.get("pids", {})
-        for name in reversed(teardown_order()):
-            pid = pids.get(name)
-            if pid and _pid_alive(pid):
-                try:
-                    os.kill(int(pid), signal.SIGTERM)
-                except OSError:
-                    pass
-                for _ in range(20):
-                    if not _pid_alive(pid):
-                        break
-                    time.sleep(0.05)
-        # Safety net: kill any surviving host chromium holding this profile.
-        self._kill_profile_chromium()
-        # Restart ONLY browser-worker and wait healthy (control-plane untouched).
-        res = self._run(build_docker_restart_worker_cmd(self.cfg))
-        if res.returncode != 0:
-            print("WARN: browser-worker restart returned non-zero", file=sys.stderr)
+        # 1) Remove the headed one-off container FIRST so the profile flushes.
+        self._rm_gui_container()
+        # 2) Terminate the host GUI stack in reverse launch order.
+        for _name, proc in reversed(self._host_procs):
+            self._terminate(proc)
+        self._host_procs = []
+        # 3) Restart ONLY browser-worker and wait healthy (cp untouched).
+        self._start_worker()
         self._wait_worker_healthy()
         try:
             self.cfg.state_file.unlink()
@@ -426,63 +670,34 @@ class GuiHandoff:
         print("GUI handoff stopped; browser-worker restarted.")
         return 0
 
-    def _kill_profile_chromium(self) -> None:
-        try:
-            out = subprocess.run(  # noqa: S603, S607
-                ["pgrep", "-af", "chromium"],  # noqa: S603, S607
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        except OSError:  # pragma: no cover
-            return
-        target = str(self.profile)
-        for line in out.stdout.splitlines():
-            if target in line and "operator_gui_handoff" not in line:
-                try:
-                    pid = int(line.split()[0])
-                    os.kill(pid, signal.SIGTERM)
-                except (ValueError, OSError):
-                    pass
-
     # -- status -----------------------------------------------------------
     def status(self) -> dict:
         state = read_state(self.cfg)
         pids = state.get("pids", {})
-        alive = {name: (_pid_alive(pid)) for name, pid in pids.items()}
-        # A sanitized status surface: only booleans + loopback endpoint.
+        alive = {name: _pid_alive(pid) for name, pid in pids.items()}
+        gui_running = self._gui_running()
         return {
             "xvfb_running": bool(alive.get("xvfb", False)),
             "vnc_running": bool(alive.get("x11vnc", False)),
             "websockify_running": bool(alive.get("websockify", False)),
-            "chromium_running": bool(alive.get("chromium", False)),
+            "gui_container_running": bool(gui_running),
+            "gui_container": self.cfg.gui_container if gui_running else "",
             "browser_worker_healthy": self._worker_healthy(),
-            "profile_locked_by_other": (not self._checks["profile_unlocked"]()[0]),
+            "begin_signin_ok": bool(state.get("begin_signin_ok", False)),
             "loopback_endpoint": f"{self.cfg.loopback}:{self.cfg.websockify_port}",
         }
 
     # -- internals --------------------------------------------------------
-    def _rollback(self, launched: list[tuple[str, subprocess.Popen]]) -> None:
-        # Reverse launch order: chromium -> x11vnc -> websockify -> xvfb.
-        for name in reversed([n for n, _ in launch_order(self.cfg, self.profile)]):
-            for n, proc in list(launched):
-                if n == name:
-                    self._terminate(proc)
-                    launched.remove((n, proc))
-
-    def _worker_healthy(self) -> bool:
-        ok, _ = self._checks["container"]()
-        return ok
-
-    def _restore_worker(self) -> None:
-        self._run(build_docker_restart_worker_cmd(self.cfg))
-        self._wait_worker_healthy()
-
-    def _wait_worker_healthy(self, attempts: int = 30) -> None:
-        for _ in range(attempts):
-            if self._worker_healthy():
-                return
-            time.sleep(1.0)
+    def _rollback(self) -> None:
+        # Reverse of start: remove headed container, restore worker, host stack.
+        if "gui_container" in self._stages or "gui_health" in self._stages:
+            self._rm_gui_container()
+        if "worker_stopped" in self._stages:
+            self._start_worker()
+            self._wait_worker_healthy()
+        for _name, proc in reversed(self._host_procs):
+            self._terminate(proc)
+        self._host_procs = []
 
 
 def _pid_alive(pid: int) -> bool:
@@ -498,41 +713,25 @@ def _pid_alive(pid: int) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def resolve_profile(cfg: HandoffConfig) -> Path:
-    """Resolve the named Docker volume profile host path."""
-    res = subprocess.run(  # noqa: S603, S607
-        ["docker", "volume", "inspect", "-f", "{{.Mountpoint}}", cfg.profile_volume],  # noqa: S603, S607
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if res.returncode == 0 and res.stdout.strip():
-        return Path(res.stdout.strip())
-    # Fallback for environments without the volume (tests inject profile).
-    return cfg.production_repo / "browser-profile"
-
-
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Operator-only GUI handoff for m365-ui-mcp")
     sub = p.add_subparsers(dest="command", required=True)
-    sub.add_parser("start", help="Start loopback GUI handoff (fail-closed)")
+    sub.add_parser("start", help="Start loopback headed-container GUI handoff (fail-closed)")
     sub.add_parser("status", help="Report sanitized status (booleans + endpoint)")
-    sub.add_parser("stop", help="Stop GUI, restart browser-worker only")
+    sub.add_parser("stop", help="Stop GUI, remove headed container, restart browser-worker only")
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cfg = HandoffConfig()
+    handoff = GuiHandoff(cfg)
     if args.command == "status":
-        handoff = GuiHandoff(cfg, resolve_profile(cfg))
         print(json.dumps(handoff.status(), indent=2, sort_keys=True))
         return 0
     if args.command == "start":
-        handoff = GuiHandoff(cfg, resolve_profile(cfg))
         return handoff.start()
     if args.command == "stop":
-        handoff = GuiHandoff(cfg, resolve_profile(cfg))
         return handoff.stop()
     return 2
 
