@@ -234,6 +234,51 @@ def test_x11vnc_binds_loopback_only(cfg: m.HandoffConfig):
     assert "-rfbport" in cmd
 
 
+def test_x11vnc_does_not_daemonize(cfg: m.HandoffConfig):
+    """x11vnc must stay supervised in the foreground.
+
+    ``-bg`` (and equivalents) fork the server, so the ``Popen`` handle exits at
+    once and ``wait_proc_alive`` would observe a dead process, invalidating the
+    fail-closed liveness gate.
+    """
+    cmd = m.build_x11vnc_cmd(cfg)
+    for flag in ("-bg", "-background", "-daemon", "-inetd"):
+        assert flag not in cmd, f"x11vnc must not daemonize via {flag}"
+    # Loopback / no-password / no-CDP posture unchanged.
+    assert "-nopw" in cmd
+    assert "-forever" in cmd
+    assert "-shared" in cmd
+
+
+def test_x11vnc_readiness_requires_live_process(cfg: m.HandoffConfig):
+    """The startup readiness path fails closed on a process that already exited."""
+
+    class _Dead:
+        def poll(self):
+            return 0
+
+    cfg.proc_grace = 0.05
+    cfg.poll_interval = 0.01
+    with pytest.raises(RuntimeError, match="died after launch"):
+        m._default_tcp_ready(  # noqa: SLF001
+            cfg, "x11vnc", cfg.loopback, cfg.vnc_port, _Dead()
+        )
+
+
+def test_x11vnc_readiness_accepts_live_process(cfg: m.HandoffConfig):
+    """A live (foreground) process passes the liveness gate before the TCP gate."""
+
+    class _Alive:
+        def poll(self):
+            return None
+
+    cfg.proc_grace = 0.05
+    cfg.poll_interval = 0.01
+    m.wait_proc_alive(
+        "x11vnc", _Alive(), timeout=cfg.proc_grace, interval=cfg.poll_interval
+    )
+
+
 def test_websockify_binds_loopback_only(cfg: m.HandoffConfig):
     cmd = m.build_websockify_cmd(cfg)
     assert "127.0.0.1:6080" in cmd

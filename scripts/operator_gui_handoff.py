@@ -176,7 +176,13 @@ def build_xvfb_cmd(cfg: HandoffConfig) -> list[str]:
 
 
 def build_x11vnc_cmd(cfg: HandoffConfig) -> list[str]:
-    """x11vnc bound to loopback only, no password file, shared, forever."""
+    """x11vnc bound to loopback only, no password file, shared, forever.
+
+    Runs SUPERVISED IN THE FOREGROUND on purpose: ``-bg`` makes x11vnc fork and
+    the launched ``Popen`` handle exits immediately, so ``wait_proc_alive`` would
+    observe a dead process and the fail-closed liveness/readiness semantics of the
+    host stack would be invalid. Never add ``-bg`` back.
+    """
     return [
         "x11vnc",
         "-display",
@@ -188,7 +194,6 @@ def build_x11vnc_cmd(cfg: HandoffConfig) -> list[str]:
         "-nopw",
         "-shared",
         "-forever",
-        "-bg",
         "-noipv6",
     ]
 
