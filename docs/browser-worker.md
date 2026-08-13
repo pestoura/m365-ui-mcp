@@ -285,7 +285,45 @@ assertion across the whole API).
 
 ---
 
-## 11. Traceability
+## 12. Operator-only GUI handoff (host-side, fail-closed)
+
+**WORKER-120 — Operator-only GUI handoff is host-side and lives outside the worker.** It provides a
+loopback-only VNC view of the running worker profile for an operator. It is never an MCP tool, never
+exposed over HTTP, and never containerised alongside the worker.
+
+**WORKER-121 — Start fails closed.** It refuses unless the production checkout is clean, the expected
+`browser-worker` container exists and is `healthy`, every required host binary is present, every
+loopback port is free, no other live Chromium holds the profile, and the profile ownership is exactly
+the numeric `1001:1001`. Any single failure aborts start with no side effects.
+
+**WORKER-122 — GUI stack order is fixed and reversible.** Launch order is Xvfb → x11vnc → websockify
+→ Chromium; teardown order is the reverse. On any launch failure the started processes are rolled back
+in reverse order and `browser-worker` is restarted to healthy.
+
+**WORKER-123 — Network exposure is loopback-only.** Xvfb disables TCP; x11vnc and websockify bind
+`127.0.0.1`; noVNC is served locally only. The handoff never exposes anything beyond `127.0.0.1` and
+never touches Cloudflare.
+
+**WORKER-124 — Chromium runs as the profile owner, with no CDP.** The host Chromium is launched as the
+numeric uid/gid `1001:1001` via `setpriv` against the named Docker volume profile and carries no
+`--remote-debugging-port`, `--remote-debugging-pipe`, or CDP surface. The profile is never chowned;
+ownership is preserved.
+
+**WORKER-125 — Stop touches only browser-worker.** `stop` terminates the GUI stack, then restarts
+`browser-worker` and waits for healthy. The control plane is never stopped, started, or referenced.
+
+**WORKER-126 — State is sanitized and external to the profile.** Only PIDs, health booleans, and the
+loopback endpoint are stored in a state file outside the profile. No credentials, cookies, tokens,
+URLs, or browser data are written. No passwords/tokens appear in logs.
+
+**WORKER-127 — No credential or tenant handling.** The handoff performs zero authentication, never
+reads or writes cookies/storage state, and never contacts M365. It is observation-only at the GUI layer.
+
+See `docs/operator-gui-handoff.md` and `scripts/operator_gui_handoff.py`.
+
+---
+
+## 13. Traceability
 
 | ID range | Area |
 | --- | --- |
@@ -299,5 +337,6 @@ assertion across the whole API).
 | WORKER-090…094 | Errors, timeouts, retries, breaker |
 | WORKER-100…105 | API boundary |
 | WORKER-110…118 | Tests |
+| WORKER-120…127 | Operator-only GUI handoff |
 
 

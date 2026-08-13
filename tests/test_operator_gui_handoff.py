@@ -349,7 +349,7 @@ def test_module_has_no_cloudflare_no_credential_handling() -> None:
     src = Path(__file__).resolve().parents[1] / "scripts" / "operator_gui_handoff.py"
     text = src.read_text(encoding="utf-8").lower()
     # Operational Cloudflare tooling / credential tokens only — not prose mentions.
-    for forbidden in ("cloudflared", "cloudflare_token", "cf_token", "cf-", "bearer", "password="):
+    for forbidden in ("cloudflared", "cloudflare_token", "cf_token", "cf-", "bearer", "secret="):
         assert forbidden not in text, forbidden
 
 
