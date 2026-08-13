@@ -43,7 +43,7 @@ from .egress import _ALLOWED_HOST_SUFFIXES
 
 # Only authentication lifecycle operations may use the narrowed bootstrap path.
 AUTH_BOOTSTRAP_OPERATIONS = frozenset(
-    {"auth_status", "auth_start", "auth_resume"}
+    {"auth_status", "auth_start", "auth_resume", "auth_bootstrap_open_planner_web"}
 )
 
 # Strict subset of the Microsoft 365 egress allowlist: identity entry points.
