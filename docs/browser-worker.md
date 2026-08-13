@@ -368,6 +368,23 @@ healthy. Control-plane is never referenced.
 **WORKER-135 — Status is sanitized.** The reported status carries only booleans, the headed container
 name, and the local noVNC endpoint — no Microsoft page content, cookies, tokens, or UPN.
 
+**WORKER-136 — Host GUI stack readiness is bounded and fail-closed.** After launching Xvfb `:99`,
+`start` WAITS for `/tmp/.X11-unix/X99` to exist as a Unix socket AND for the Xvfb process to remain
+alive, with a bounded timeout/poll. After x11vnc starts it WAITS bounded for `127.0.0.1:5999` to accept
+TCP while x11vnc stays alive; after websockify starts it WAITS bounded for `127.0.0.1:6080` likewise.
+All host-stack readiness gates run BEFORE the normal browser-worker is stopped, minimizing worker
+downtime and confining any readiness failure to host-stack rollback only.
+
+**WORKER-137 — Headed container starts only after host-stack readiness is GREEN.** The normal
+`browser-worker` is stopped and the headed one-off container launched ONLY after the X socket, VNC
+listener, and websockify listener are all confirmed ready. Readiness gates cannot abort after the
+worker is already down (no partial headed session against a not-yet-ready display).
+
+**WORKER-138 — Rollback is scope-aware around worker stop.** If a readiness gate fails BEFORE the
+normal `browser-worker` is stopped, rollback terminates only the already-launched host stack and does
+NOT restart the worker (it was never stopped). If a failure occurs AFTER the worker stop, rollback
+restores the worker to healthy exactly as before (WORKER-133), preserving the existing posture.
+
 See `docs/operator-gui-handoff.md` and `scripts/operator_gui_handoff.py`.
 
 ---

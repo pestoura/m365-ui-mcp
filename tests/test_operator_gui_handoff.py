@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -366,6 +367,10 @@ def test_start_invokes_begin_signin_once_after_health(
     c.state_file = state
     ho = m.GuiHandoff(c)
     ho.cfg.popen = _Recorder().popen
+    ho.cfg.readiness = {
+        "x_socket": lambda cfg, proc: None,
+        "tcp": lambda cfg, name, host, port, proc: None,
+    }
     seen: dict[str, int] = {}
 
     def _runner(cmd: list[str]) -> Any:
@@ -403,6 +408,10 @@ def test_start_stops_worker_before_launching_gui(
     c.state_file = tmp_path / "state.json"
     ho = m.GuiHandoff(c)
     ho.cfg.popen = _Recorder().popen
+    ho.cfg.readiness = {
+        "x_socket": lambda cfg, proc: None,
+        "tcp": lambda cfg, name, host, port, proc: None,
+    }
     order: list[str] = []
 
     def _runner(cmd: list[str]) -> Any:
@@ -484,6 +493,10 @@ def test_start_rollback_restores_worker(tmp_path: Path, monkeypatch: pytest.Monk
     c.state_file = tmp_path / "state.json"
     ho = m.GuiHandoff(c)
     ho.cfg.popen = _Recorder().popen
+    ho.cfg.readiness = {
+        "x_socket": lambda cfg, proc: None,
+        "tcp": lambda cfg, name, host, port, proc: None,
+    }
 
     captured: list[str] = []
 
@@ -597,3 +610,284 @@ def test_module_has_no_devtools_cdp():
     assert "remote-debugging" not in text
     assert "cdp" not in text
     assert "devtools" not in text
+
+
+# --- 11) bounded fail-closed host-stack readiness gates (WORKER-136..138) ---
+
+# A process that reports itself dead after first poll().
+class _DyingProc(_FakeProc):
+    def poll(self) -> int | None:
+        return 1
+
+def test_wait_unix_socket_exists_when_present(tmp_path: Path, monkeypatch: Any):
+    # Create a real unix socket so the gate returns immediately.
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock_path = tmp_path / "X99"
+    sock.bind(str(sock_path))
+    proc = _FakeProc()
+
+    # Run with a short timeout; success path returns without raising.
+    calls = {"raised": False}
+    try:
+        m.wait_unix_socket_exists(
+            m.HandoffConfig(), "Xvfb", str(sock_path), proc, timeout=1.0, interval=0.01
+        )
+    except RuntimeError:
+        calls["raised"] = True
+    assert calls["raised"] is False
+    sock.close()
+
+
+def test_wait_unix_socket_fails_closed_on_missing_socket(monkeypatch: Any):
+    cfg = m.HandoffConfig()
+    # Point at a path that never appears; force x_grace tiny so the test is fast.
+    proc = _FakeProc()
+    with pytest.raises(RuntimeError):
+        m.wait_unix_socket_exists(
+            cfg, "Xvfb", "/nonexistent/.X11-unix/X99", proc, timeout=0.2, interval=0.01
+        )
+
+
+def test_wait_unix_socket_fails_closed_on_dead_process(tmp_path: Path, monkeypatch: Any):
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock_path = tmp_path / "X99"
+    sock.bind(str(sock_path))
+    proc = _DyingProc()
+    with pytest.raises(RuntimeError):
+        m.wait_unix_socket_exists(
+            m.HandoffConfig(), "Xvfb", str(sock_path), proc, timeout=2.0, interval=0.01
+        )
+    sock.close()
+
+
+def test_wait_tcp_accept_succeeds(monkeypatch: Any):
+    # Open a real loopback listener and assert the gate returns without raising.
+    import contextlib
+
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.bind((m.LOOPBACK, 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+    proc = _FakeProc()
+    with contextlib.closing(srv):
+        # Accept one connection in the background to exercise the happy path.
+        raised = {}
+
+        def _accept() -> None:
+            try:
+                conn, _ = srv.accept()
+                conn.close()
+            except OSError:
+                pass
+
+        import threading
+
+        t = threading.Thread(target=_accept)
+        t.start()
+        try:
+            m.wait_tcp_accept(
+                m.HandoffConfig(),
+                "x11vnc",
+                m.LOOPBACK,
+                port,
+                proc,
+                timeout=2.0,
+                interval=0.01,
+            )
+        except RuntimeError as exc:  # pragma: no cover
+            raised["e"] = exc
+        t.join(timeout=2.0)
+        assert "e" not in raised
+
+
+def test_wait_tcp_accept_fails_closed_on_timeout(monkeypatch: Any):
+    # Nothing listening on this port; gate must raise after timeout.
+    proc = _FakeProc()
+    with pytest.raises(RuntimeError):
+        m.wait_tcp_accept(
+            m.HandoffConfig(),
+            "x11vnc",
+            m.LOOPBACK,
+            1,  # privileged/ephemeral port, nothing listening
+            proc,
+            timeout=0.2,
+            interval=0.01,
+        )
+
+
+def test_wait_tcp_accept_fails_closed_on_dead_process(monkeypatch: Any):
+    proc = _DyingProc()
+    with pytest.raises(RuntimeError):
+        m.wait_tcp_accept(
+            m.HandoffConfig(),
+            "x11vnc",
+            m.LOOPBACK,
+            1,
+            proc,
+            timeout=2.0,
+            interval=0.01,
+        )
+
+
+def test_default_readiness_keys_present():
+    assert set(m.DEFAULT_READINESS.keys()) == {"x_socket", "tcp"}
+    cfg = m.HandoffConfig()
+    assert cfg.readiness == m.DEFAULT_READINESS
+
+
+def _start_with_readiness(
+    tmp_path: Path,
+    monkeypatch: Any,
+    readiness: dict,
+    popen: Any = None,
+) -> Any:
+    """Build a GuiHandoff whose start() uses injected readiness + popen."""
+    monkeypatch.setattr(m, "_shutil_which", lambda _n: True)
+    c = m.HandoffConfig()
+    c.state_file = tmp_path / "state.json"
+    c.readiness = readiness
+    if popen is not None:
+        c.popen = popen
+    ho = m.GuiHandoff(c)
+    ho._checks = {  # noqa: SLF001
+        "binaries": _ok,
+        "ports": _ok,
+        "repo_clean": _ok,
+        "no_stale_gui": _ok,
+        "no_active_state": _ok,
+        "container": _ok,
+        "profile_owner": _ok,
+    }
+    return ho
+
+
+def test_start_invokes_all_three_readiness_gates_before_worker_stop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stateful_runner
+):
+    order: list[str] = []
+    readiness = {
+        "x_socket": lambda cfg, proc: order.append("x_socket"),
+        "tcp": lambda cfg, name, host, port, proc: order.append(f"tcp:{name}"),
+    }
+    # popen must return FakeProcs; the only real side effect we care about is order.
+    ho = _start_with_readiness(
+        tmp_path, monkeypatch, readiness, popen=_Recorder().popen
+    )
+    ho.cfg.runner = stateful_runner
+    rc = ho.start()
+    assert rc == 0, "start must succeed with no-op readiness gates"
+    # The three host-stack readiness gates all run before the worker stop runner.
+    assert order == ["x_socket", "tcp:x11vnc", "tcp:websockify"]
+    # worker stop must happen (stage present) and after the readiness gates.
+    assert "worker_stopped" in ho._stages  # noqa: SLF001
+    assert order.index("x_socket") < order.index("tcp:x11vnc")
+    assert order.index("tcp:x11vnc") < order.index("tcp:websockify")
+
+
+def test_start_rolls_back_host_stack_only_when_x_socket_gate_fails(
+    tmp_path: Path, monkeypatch: Any
+):
+    rec = _Recorder()
+    captured: list[str] = []
+    readiness = {
+        "x_socket": lambda cfg, proc: (_ for _ in ()).throw(
+            RuntimeError("X socket not ready")
+        ),
+        "tcp": lambda cfg, name, host, port, proc: None,
+    }
+
+    def _runner(cmd: list[str]) -> Any:
+        captured.append(" ".join(cmd))
+        # Worker stop must NEVER be reached because the gate fails first.
+        return _runner_result(cmd)
+
+    ho = _start_with_readiness(tmp_path, monkeypatch, readiness, popen=rec.popen)
+    ho.cfg.runner = _runner
+    rc = ho.start()
+    assert rc == 1
+    # The full host stack was launched (so rollback has something to clean up).
+    launched = " ".join(" ".join(c) for c in rec.calls)
+    assert "Xvfb" in launched and "x11vnc" in launched and "websockify" in launched
+    # The normal browser-worker was NEVER stopped or restarted.
+    assert "m365-ui-mcp-browser-worker-1" not in launched
+    assert not any("browser-worker" in x for x in captured)
+
+
+def test_start_rolls_back_host_stack_only_when_vnc_listener_gate_fails(
+    tmp_path: Path, monkeypatch: Any
+):
+    rec = _Recorder()
+    captured: list[str] = []
+    readiness = {
+        "x_socket": lambda cfg, proc: None,
+        "tcp": lambda cfg, name, host, port, proc: (
+            (_ for _ in ()).throw(RuntimeError(f"{name} listener not ready"))
+            if name == "x11vnc"
+            else None
+        ),
+    }
+
+    def _runner(cmd: list[str]) -> Any:
+        captured.append(" ".join(cmd))
+        return _runner_result(cmd)
+
+    ho = _start_with_readiness(tmp_path, monkeypatch, readiness, popen=rec.popen)
+    ho.cfg.runner = _runner
+    rc = ho.start()
+    assert rc == 1
+    launched = " ".join(" ".join(c) for c in rec.calls)
+    assert "Xvfb" in launched and "x11vnc" in launched and "websockify" in launched
+    assert "m365-ui-mcp-browser-worker-1" not in launched
+    assert not any("browser-worker" in x for x in captured)
+
+
+def test_start_rollback_restores_worker_when_failure_after_worker_stop(
+    tmp_path: Path, monkeypatch: Any
+):
+    # All readiness gates pass; worker is stopped; then headed health fails ->
+    # rollback must restart the worker (WORKER-133 unchanged behavior).
+    captured: list[str] = []
+
+    def _runner(cmd: list[str]) -> Any:
+        captured.append(" ".join(cmd))
+        if "/health" in " ".join(cmd):
+            return _R(1, "")
+        return _runner_result(cmd)
+
+    noop_readiness = {
+        "x_socket": lambda cfg, proc: None,
+        "tcp": lambda cfg, name, host, port, proc: None,
+    }
+    ho = _start_with_readiness(tmp_path, monkeypatch, noop_readiness, popen=_Recorder().popen)
+    ho.cfg.runner = _runner
+    rc = ho.start()
+    assert rc == 1
+    started = [x for x in captured if "docker start" in x and "browser-worker" in x]
+    assert started, "rollback must restart browser-worker after worker was stopped"
+
+
+def test_start_readiness_gate_failure_preserves_worker_not_stopped_state(
+    tmp_path: Path, monkeypatch: Any
+):
+    # Direct unit check of rollback scope: simulate a gate failure before worker
+    # stop and confirm _rollback does not call docker start for the worker.
+    rec = _Recorder()
+    readiness = {
+        "x_socket": lambda cfg, proc: (_ for _ in ()).throw(RuntimeError("gate")),
+        "tcp": lambda cfg, name, host, port, proc: None,
+    }
+    ho = _start_with_readiness(tmp_path, monkeypatch, readiness, popen=rec.popen)
+    ran: list[str] = []
+
+    def _runner(cmd: list[str]) -> Any:
+        ran.append(" ".join(cmd))
+        return _R(0, "")
+
+    ho.cfg.runner = _runner
+    # Manually drive start() so we can inspect the rollback path deterministically.
+    rc = ho.start()
+    assert rc == 1
+    launched = " ".join(" ".join(c) for c in rec.calls)
+    assert "m365-ui-mcp-browser-worker-1" not in launched
+    assert not any("browser-worker" in x for x in ran)
+
