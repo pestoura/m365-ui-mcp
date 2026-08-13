@@ -24,6 +24,9 @@ Hard invariants (no generic browser primitive is created here):
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
+from .auth_bootstrap import AuthOriginStatus, auth_origin_status
 from .egress import EgressDecision, evaluate_browser_egress
 
 # FIXED production bootstrap target. Never parameterized, never operator-supplied.
@@ -34,6 +37,22 @@ PLANNER_WEB_TARGET_CLASS = "planner_web"
 
 # Worker-local operation name for the narrow auth-bootstrap guard.
 AUTH_BOOTSTRAP_NAVIGATE_OPERATION = "auth_bootstrap_open_planner_web"
+
+# FIXED production Microsoft authentication bootstrap target. Never parameterized,
+# never operator-supplied. Step two of the two-step operator flow: after the
+# dedicated professional profile is positioned on Planner Web, navigate exactly
+# once to the Microsoft identity host so the operator can complete interactive
+# sign-in (including MFA) by hand.
+MICROSOFT_AUTH_BOOTSTRAP_URL = "https://login.microsoftonline.com/"
+
+# Closed sanitized classification returned to the operator instead of the URL.
+MICROSOFT_AUTH_TARGET_CLASS = "microsoft_auth"
+
+# Worker-local operation name for the dedicated begin-signin guard. The existing
+# AuthBootstrapGuard is NOT reused: begin-signin applies its own closed source
+# classifier and target evaluator so the Planner Web navigation path is never
+# widened.
+AUTH_BEGIN_SIGNIN_OPERATION = "auth_begin_signin"
 
 # Socket peer addresses accepted for the operator-only endpoint. IPv4-mapped
 # IPv6 loopback is included because dual-stack sockets may report that form.
@@ -70,15 +89,128 @@ def is_reusable_bootstrap_page(url: str) -> bool:
 
 
 def evaluate_bootstrap_target() -> EgressDecision:
-    """Evaluate the FIXED bootstrap target against the closed egress policy."""
+    """Evaluate the FIXED Planner Web bootstrap target against closed egress."""
     return evaluate_browser_egress(PLANNER_WEB_BOOTSTRAP_URL)
 
 
+def evaluate_microsoft_auth_target() -> EgressDecision:
+    """Evaluate the FIXED Microsoft auth target against the closed egress policy.
+
+    The destination is the production constant ``MICROSOFT_AUTH_BOOTSTRAP_URL``.
+    There is no URL input: the caller cannot pass a host/path/query, so the
+    browser can never be steered elsewhere. Graph/API hosts and non-HTTPS remain
+    denied by ``evaluate_browser_egress``.
+    """
+    return evaluate_browser_egress(MICROSOFT_AUTH_BOOTSTRAP_URL)
+
+
+def _host_of(url: str) -> str:
+    """Return the lowercased hostname of ``url`` without a trailing dot."""
+    try:
+        hostname = (urlsplit(url).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return ""
+    return hostname
+
+
+def _is_planner_web_host(hostname: str) -> bool:
+    """Return True only for the exact/suffix host of the Planner Web target."""
+    if not hostname:
+        return False
+    target_host = _host_of(PLANNER_WEB_BOOTSTRAP_URL)
+    return hostname == target_host or hostname.endswith(f".{target_host}")
+
+
+# Neutral placeholder pages that carry no identity, tenant or web origin and so
+# may be safely reused as the current page when beginning sign-in.
+_NEUTRAL_BOOTSTRAP_URLS = frozenset({"about:blank", "chrome://newtab"})
+_NEUTRAL_BOOTSTRAP_PREFIXES = ("chrome://newtab/",)
+
+
+def _is_neutral_bootstrap_url(url: str) -> bool:
+    """Return True for a neutral bootstrap placeholder page.
+
+    Only ``about:blank`` and the harmless ``chrome://newtab`` variants are
+    recognized. This mirrors ``auth_bootstrap._is_neutral_bootstrap_url`` but
+    does NOT consult the auth-origin allowlist: an arbitrary http/https page is
+    never classified as neutral here, so it is denied by the source classifier.
+    """
+    raw = (url or "").strip().lower()
+    if not raw:
+        return False
+    if raw in _NEUTRAL_BOOTSTRAP_URLS:
+        return True
+    return any(raw.startswith(prefix) for prefix in _NEUTRAL_BOOTSTRAP_PREFIXES)
+
+
+class SourceClassStatus:
+    """Closed classification of the live browser context for begin-signin."""
+
+    PLANNER_WEB = "planner_web"
+    NEUTRAL = "neutral"
+    APPROVED_AUTH = "approved_auth"
+    NON_APPROVED = "non_approved"
+
+
+def classify_begin_signin_source(page_urls: tuple[str, ...]) -> str:
+    """Classify the current page set as a permitted begin-signin source.
+
+    Permitted ONLY when every open page is one of:
+
+    * ``planner_web`` — host exactly/suffix matching the Planner Web target host;
+    * ``neutral`` — an ``about:blank`` / ``chrome://newtab`` placeholder;
+    * ``approved_auth`` — an existing approved Microsoft authentication origin
+      per the auth-origin policy (``auth_origin_status`` returns
+      ``APPROVED_AUTH_ORIGIN``).
+
+    Any page that resolves to a non-allowed or non-approved web host fails
+    closed. The raw URLs are reduced to this closed classification and the URL
+    value is never returned to a caller.
+    """
+    if not page_urls:
+        # No page opened yet: bootstrap may begin navigation from a fresh page.
+        return SourceClassStatus.PLANNER_WEB
+    saw_planner_web = False
+    saw_approved_auth = False
+    for raw in page_urls:
+        if _is_neutral_bootstrap_url(raw):
+            # Neutral placeholder: carries no identity/origin; does not
+            # disqualify begin-signin and is not an approved auth origin.
+            continue
+        host = _host_of(raw)
+        if _is_planner_web_host(host):
+            saw_planner_web = True
+            continue
+        status = auth_origin_status((raw,))
+        if status is AuthOriginStatus.APPROVED_AUTH_ORIGIN:
+            saw_approved_auth = True
+            continue
+        return SourceClassStatus.NON_APPROVED
+    if saw_planner_web:
+        return SourceClassStatus.PLANNER_WEB
+    if saw_approved_auth:
+        return SourceClassStatus.APPROVED_AUTH
+    # Every open page was a neutral placeholder; begin-signin may proceed.
+    return SourceClassStatus.NEUTRAL
+
+
+def is_permitted_begin_signin_source(page_urls: tuple[str, ...]) -> bool:
+    """Return True only when the source passes the closed classifier."""
+    return classify_begin_signin_source(page_urls) != SourceClassStatus.NON_APPROVED
+
+
 __all__ = [
+    "AUTH_BEGIN_SIGNIN_OPERATION",
     "AUTH_BOOTSTRAP_NAVIGATE_OPERATION",
+    "MICROSOFT_AUTH_BOOTSTRAP_URL",
+    "MICROSOFT_AUTH_TARGET_CLASS",
     "PLANNER_WEB_BOOTSTRAP_URL",
     "PLANNER_WEB_TARGET_CLASS",
+    "SourceClassStatus",
+    "classify_begin_signin_source",
     "evaluate_bootstrap_target",
+    "evaluate_microsoft_auth_target",
     "is_loopback_peer",
+    "is_permitted_begin_signin_source",
     "is_reusable_bootstrap_page",
 ]
