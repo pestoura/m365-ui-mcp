@@ -22,8 +22,10 @@ live path. It is deliberately narrow:
 * it never reads or returns raw DOM, page text, URLs, cookies, tokens, UPN,
   tenant IDs, mailbox content, or arbitrary navigation;
 * it fails closed on wrong profile/origin/browser state;
-* once ``common.auth`` is legitimately attested (PR/evidence based), the
-  normal stricter full-contract behavior applies again.
+* once the full relevant UIContract (common + application fragments) is
+  legitimately attested, the normal stricter full-contract behavior applies
+  again. The ``common.auth`` fragment alone drives only the LIVE auth-state
+  signal, NOT the strict read gate.
 
 No runtime endpoint here writes or promotes attestation. Source-of-truth
 attestation remains PR/evidence based.
@@ -125,13 +127,13 @@ class AuthBootstrapGuard:
         browser_started_provider: Callable[[], bool],
         dedicated_profile_provider: Callable[[], bool],
         approved_auth_origin_provider: Callable[[], bool],
-        auth_attested_provider: Callable[[], bool],
+        fully_attested_provider: Callable[[], bool],
         strict_live_guard: Callable[[str], None],
     ) -> None:
         self._browser_started = browser_started_provider
         self._dedicated_profile = dedicated_profile_provider
         self._approved_origin = approved_auth_origin_provider
-        self._auth_attested = auth_attested_provider
+        self._fully_attested = fully_attested_provider
         self._strict_live_guard = strict_live_guard
 
     def guard(self, operation: str) -> None:
@@ -142,9 +144,15 @@ class AuthBootstrapGuard:
                 operation=operation,
             )
 
-        # Once common.auth is legitimately attested, the normal stricter
-        # full-contract behavior applies again.
-        if self._auth_attested():
+        # Once the FULL relevant UIContract (common + application fragments) is
+        # legitimately attested, the normal stricter full-contract behavior
+        # applies again. The ``common.auth`` fragment alone does NOT widen the
+        # strict read gate (it only drives the LIVE auth-state signal), so the
+        # bootstrap auth endpoints remain 503 for reads until the whole set is
+        # attested. This preserves the deadlock fix: auth may bootstrap while
+        # common.auth is unattested, and the strict guard only re-engages once
+        # everything needed for reads is attested.
+        if self._fully_attested():
             self._strict_live_guard(operation)
             return
 
