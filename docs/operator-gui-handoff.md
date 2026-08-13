@@ -73,12 +73,25 @@ python scripts/operator_gui_handoff.py stop
    `docker exec` + `stat` on `/var/lib/planner-worker/profile` and a representative
    persistent content entry).
 
-On success it launches the host stack **Xvfb → x11vnc → websockify**, then
-gracefully stops ONLY the normal `browser-worker` and verifies it is `exited`, then
-launches the headed one-off container. After the headed `/health` probe succeeds,
-`POST /auth/bootstrap/begin-signin` is invoked exactly once inside the container.
-On any launch failure it rolls the started steps back in reverse order and restarts
-`browser-worker` to healthy (WORKER-122, WORKER-133).
+On success it launches the host stack **Xvfb → x11vnc → websockify**, then waits
+**fail-closed and bounded** for each host-stack readiness signal BEFORE touching the
+normal `browser-worker`:
+
+1. after Xvfb `:99` launches, wait for `/tmp/.X11-unix/X99` to exist as a Unix
+   socket while Xvfb stays alive (bounded timeout/poll);
+2. after x11vnc launches, wait bounded for `127.0.0.1:5999` to accept TCP while
+   x11vnc stays alive;
+3. after websockify launches, wait bounded for `127.0.0.1:6080` to accept TCP
+   while websockify stays alive.
+
+Only after all three readiness gates are GREEN does it gracefully stop ONLY the
+normal `browser-worker`, verify it is `exited`, and launch the headed one-off
+container. After the headed `/health` probe succeeds, `POST
+/auth/bootstrap/begin-signin` is invoked exactly once inside the container. Any
+readiness failure BEFORE the worker stop terminates only the already-launched host
+stack (the worker is never restarted, because it was never stopped). Any failure
+AFTER the worker stop rolls back in reverse order and restarts `browser-worker` to
+healthy (WORKER-122, WORKER-133, WORKER-136…138).
 
 ## Headed one-off container (WORKER-124, WORKER-128, WORKER-129)
 

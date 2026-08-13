@@ -40,6 +40,10 @@ Hard invariants (fail closed):
     the control plane is never stopped/started/referenced;
   * every network bind is 127.0.0.1; the headed container carries no
     remote-debug flags;
+  * the host GUI stack (Xvfb / x11vnc / websockify) is waited on fail-closed and
+    bounded BEFORE the normal browser-worker is stopped, so host-stack readiness
+    gates cannot abort after the worker is already down and worker downtime stays
+    minimal;
   * state/status carry only sanitized booleans, PIDs, the container name, and
     the local noVNC endpoint — never Microsoft page content, cookies, tokens, or
     UPN;
@@ -60,6 +64,7 @@ import argparse
 import json
 import os
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -97,6 +102,15 @@ REQUIRED_BINARIES = ("Xvfb", "x11vnc", "websockify", "docker")
 
 # Loopback ports that must be free before start.
 BOUND_PORTS = (VNC_PORT, WEBSOCKIFY_PORT)
+
+# Bounded readiness-gate timeouts (seconds) for the host GUI stack. Each gate
+# fails closed after its timeout, so a missing X socket / dead VNC / websockify
+# listener never lets the headed session start against a not-yet-ready display.
+X_SOCKET_GRACE = 30.0
+TCP_LISTEN_GRACE = 30.0
+PROC_ALIVE_GRACE = 10.0
+POLL_INTERVAL = 0.1
+X11_SOCKET_NAME = "X99"
 
 # In-container loopback health/begin-signin probes (no network exposure).
 HEALTH_PROBE_PY = (
@@ -142,6 +156,13 @@ class HandoffConfig:
     popen: Callable[..., subprocess.Popen] | None = None
     # Overridable docker/exec runner for one-shot commands.
     runner: Callable[..., subprocess.CompletedProcess] | None = None
+    # Bounded readiness-gate tuning (seconds). Overridable for tests.
+    x_grace: float = X_SOCKET_GRACE
+    tcp_grace: float = TCP_LISTEN_GRACE
+    proc_grace: float = PROC_ALIVE_GRACE
+    poll_interval: float = POLL_INTERVAL
+    # Overridable host-stack readiness gates. Default = fail-closed real waits.
+    readiness: dict = field(default_factory=lambda: dict(DEFAULT_READINESS))
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +318,116 @@ def host_launch_order(cfg: HandoffConfig) -> list[tuple[str, list[str]]]:
         ("x11vnc", build_x11vnc_cmd(cfg)),
         ("websockify", build_websockify_cmd(cfg)),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Host-stack readiness gates (fail-closed, bounded)
+#
+# These run AFTER the full host stack (Xvfb -> x11vnc -> websockify) is launched
+# and BEFORE the normal browser-worker is stopped, so worker downtime is
+# minimized and any readiness failure rolls back only the host stack. Each gate
+# waits on a real signal (unix socket / TCP accept / process liveness) with a
+# bounded timeout, then fails closed. They are overridable via
+# ``HandoffConfig.readiness`` so tests can exercise deterministic paths without
+# real GUI processes.
+# ---------------------------------------------------------------------------
+
+
+def wait_unix_socket_exists(
+    cfg: HandoffConfig,
+    name: str,
+    path: str,
+    proc: subprocess.Popen,
+    timeout: float,
+    interval: float,
+) -> None:
+    """Fail-closed: the unix socket must exist while the process stays alive."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(f"{name} process exited before socket {path} appeared")
+        try:
+            st = os.stat(path)
+        except OSError:
+            time.sleep(interval)
+            continue
+        if stat.S_ISSOCK(st.st_mode):
+            return
+        time.sleep(interval)
+    raise RuntimeError(f"timed out waiting for {name} socket {path}")
+
+
+def wait_tcp_accept(
+    cfg: HandoffConfig,
+    name: str,
+    host: str,
+    port: int,
+    proc: subprocess.Popen,
+    timeout: float,
+    interval: float,
+) -> None:
+    """Fail-closed: the listener must accept a TCP connection while alive."""
+    deadline = time.time() + timeout
+    last_err: OSError | None = None
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(
+                f"{name} process exited before {host}:{port} accepted connections"
+            )
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(interval)
+                sock.connect((host, port))
+            return
+        except OSError as exc:
+            last_err = exc
+            time.sleep(interval)
+    raise RuntimeError(
+        f"timed out waiting for {name} listener {host}:{port}: {last_err}"
+    )
+
+
+def wait_proc_alive(
+    name: str, proc: subprocess.Popen, timeout: float, interval: float
+) -> None:
+    """Fail-closed: the launched process must remain alive for ``timeout``."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if proc.poll() is None:
+            return
+        time.sleep(interval)
+    if proc.poll() is not None:
+        raise RuntimeError(f"{name} process died after launch")
+
+
+def _default_x_socket_ready(cfg: HandoffConfig, proc: subprocess.Popen) -> None:
+    wait_unix_socket_exists(
+        cfg,
+        "Xvfb",
+        os.path.join(cfg.x11_unix_dir, X11_SOCKET_NAME),
+        proc,
+        timeout=cfg.x_grace,
+        interval=cfg.poll_interval,
+    )
+
+
+def _default_tcp_ready(
+    cfg: HandoffConfig,
+    name: str,
+    host: str,
+    port: int,
+    proc: subprocess.Popen,
+) -> None:
+    wait_proc_alive(name, proc, timeout=cfg.proc_grace, interval=cfg.poll_interval)
+    wait_tcp_accept(
+        cfg, name, host, port, proc, timeout=cfg.tcp_grace, interval=cfg.poll_interval
+    )
+
+
+DEFAULT_READINESS: dict[str, Callable[..., None]] = {
+    "x_socket": _default_x_socket_ready,
+    "tcp": _default_tcp_ready,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -610,12 +741,33 @@ class GuiHandoff:
         self._stages = set()
         self._host_procs = []
         try:
+            # Launch the FULL host GUI stack first and wait fail-closed for every
+            # readiness gate BEFORE touching the normal browser-worker. This
+            # minimizes worker downtime and means any readiness failure rolls back
+            # only the host stack (the worker is never stopped beforehand).
             for name, cmd in host_launch_order(self.cfg):
                 proc = self._popen(cmd)
                 self._host_procs.append((name, proc))
                 self._stages.add(name)
                 time.sleep(0.2)
-            # Stop ONLY the normal browser-worker and verify it exited.
+            procs = dict(self._host_procs)
+            # Gate 1: Xvfb unix socket must exist while Xvfb stays alive.
+            self.cfg.readiness["x_socket"](self.cfg, procs["xvfb"])
+            # Gate 2: x11vnc must accept loopback TCP while alive.
+            self.cfg.readiness["tcp"](
+                self.cfg, "x11vnc", self.cfg.loopback, self.cfg.vnc_port, procs["x11vnc"]
+            )
+            # Gate 3: websockify must accept loopback TCP while alive.
+            self.cfg.readiness["tcp"](
+                self.cfg,
+                "websockify",
+                self.cfg.loopback,
+                self.cfg.websockify_port,
+                procs["websockify"],
+            )
+            self._stages.add("host_stack_ready")
+            # Only after X/VNC/websockify readiness is GREEN may we stop the
+            # normal browser-worker and launch the headed one-off.
             self._stop_worker()
             self._stages.add("worker_stopped")
             if not self._worker_exited():
