@@ -37,6 +37,27 @@ class UiContractStatus:
         }
 
 
+def common_auth_attested() -> bool:
+    """Return whether the ``common.auth`` fragment is effectively attested.
+
+    This is fragment-scoped: it inspects ONLY the ``common.auth`` UIContract
+    fragment and returns True iff that fragment exists and is effectively
+    attested (fragment + every selector explicitly ATTESTED, no drift). Any
+    other fragment's attestation state (e.g. Planner application fragments) is
+    irrelevant to the authentication bootstrap boundary.
+
+    Missing fragment => False (fail closed). This intentionally does NOT read
+    the aggregated ``load_status().attested`` signal, which combines common +
+    Planner fragments and would wrongly report UNKNOWN while ``common.auth`` is
+    already attested but the Planner fragments are still UNVERIFIED.
+    """
+    source = load_ui_contract_set()
+    for fragment in source.fragments:
+        if fragment.fragment_id == "common.auth":
+            return fragment.effectively_attested
+    return False
+
+
 def load_status() -> UiContractStatus:
     """Aggregate only common + Planner fragments into the compatibility view."""
     source = load_ui_contract_set()

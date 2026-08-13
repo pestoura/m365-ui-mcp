@@ -17,7 +17,7 @@ from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_sta
 from m365_browser_worker.egress import enforce_route_egress
 from m365_mcp.config import browser_runtime_settings
 from planner_mcp.errors import BlockerConditionalAccess, UiContractUnattested, WorkerUnavailable
-from planner_mcp.ui_contract import load_status
+from planner_mcp.ui_contract import common_auth_attested, load_status
 
 
 @dataclass(frozen=True)
@@ -100,11 +100,14 @@ class PersistentBrowser:
     def common_auth_attested(self) -> bool:
         """Return whether the ``common.auth`` UIContract fragment is attested.
 
-        Once attested, the stricter full-contract behavior applies to the auth
-        bootstrap endpoints as well.
+        Fragment-scoped: delegates to ``planner_mcp.ui_contract.common_auth_attested``
+        which inspects ONLY the ``common.auth`` fragment rather than the aggregated
+        common+Planner attestation status. This lets LIVE auth report AUTHENTICATED
+        once ``common.auth`` is legitimately attested even while Planner fragments
+        remain UNVERIFIED. The stricter full-contract ``ensure_live_allowed`` gate
+        is unchanged.
         """
-        status = load_status()
-        return status.attested
+        return common_auth_attested()
 
     def ensure_live_allowed(self, operation: str) -> None:
         """Fail closed for semantic live operations without an attested UIContract."""

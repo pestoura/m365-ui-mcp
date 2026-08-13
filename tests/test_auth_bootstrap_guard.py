@@ -102,6 +102,11 @@ class _FakeBrowser:
     def common_auth_attested(self) -> bool:
         return self._auth_attested
 
+    def full_attested(self) -> bool:
+        # Drives the bootstrap guard's strict deferral predicate. Independent of
+        # ``common_auth_attested`` so the two gates can be exercised separately.
+        return self._full_attested
+
     def ensure_live_allowed(self, operation: str) -> None:
         # In production this reads the full UIContract set; here ``full_attested``
         # models "all relevant fragments attested". The auth-state signal
@@ -129,7 +134,7 @@ def _guard(
         browser_started_provider=lambda: browser.started,
         dedicated_profile_provider=browser.is_dedicated_persistent_profile,
         approved_auth_origin_provider=browser.auth_origin_approved,
-        auth_attested_provider=browser.common_auth_attested,
+        fully_attested_provider=browser.full_attested,
         strict_live_guard=browser.ensure_live_allowed,
     )
 
@@ -209,7 +214,7 @@ def test_guard_auth_start_allowed_with_neutral_origin_pages() -> None:
         browser_started_provider=lambda: True,
         dedicated_profile_provider=lambda: True,
         approved_auth_origin_provider=approved_provider,
-        auth_attested_provider=lambda: False,
+        fully_attested_provider=lambda: False,
         strict_live_guard=lambda _op: None,
     )
     guard.guard("auth_start")  # must not raise
@@ -247,15 +252,21 @@ def test_bootstrap_fails_closed_on_wrong_origin() -> None:
         guard.guard("auth_status")
 
 
-def test_bootstrap_defers_to_strict_guard_once_auth_attested() -> None:
+async def test_bootstrap_defers_to_strict_guard_once_full_contract_attested() -> None:
+    # Once the FULL relevant UIContract (common + planner) is attested, the
+    # bootstrap guard defers to the strict full-contract live_guard. Here the
+    # deferral predicate reports attested (fully_attested True) while the strict
+    # live_guard still raises (ensure_live_allowed), proving the guard hands off
+    # to the strict gate rather than widening bootstrap. The ``common.auth``
+    # fragment alone does NOT trigger this deferral.
     browser = _FakeBrowser(
-        started=True, dedicated=True, approved_origin=True, auth_attested=True
+        started=True, dedicated=True, approved_origin=True, full_attested=False
     )
     guard = AuthBootstrapGuard(
         browser_started_provider=lambda: browser.started,
         dedicated_profile_provider=browser.is_dedicated_persistent_profile,
         approved_auth_origin_provider=browser.auth_origin_approved,
-        auth_attested_provider=browser.common_auth_attested,
+        fully_attested_provider=lambda: True,
         strict_live_guard=browser.ensure_live_allowed,
     )
     with pytest.raises(UiContractUnattested):  # strict full-contract guard now applies

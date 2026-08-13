@@ -83,7 +83,7 @@ def create_app(
         browser_started_provider=lambda: worker_browser.started,
         dedicated_profile_provider=worker_browser.is_dedicated_persistent_profile,
         approved_auth_origin_provider=worker_browser.auth_origin_approved,
-        auth_attested_provider=worker_browser.common_auth_attested,
+        fully_attested_provider=lambda: load_status().attested,
         strict_live_guard=worker_browser.ensure_live_allowed,
     )
     app = FastAPI(
