@@ -7,12 +7,38 @@ builders / preflight / state handling are inspected directly.
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
-import scripts.operator_gui_handoff as m  # type: ignore
+
+
+# The repository-root ``scripts`` namespace is not importable in every pytest
+# environment (e.g. installed-package CI runs), so we load the module file
+# directly via importlib instead of ``import scripts...``. This matches the
+# CI-proof pattern used by tests/test_auth_bootstrap_guard.py and keeps
+# production code, packaging semantics and runtime behavior unchanged.
+def _load_operator_gui_handoff():
+    script_path = (
+        Path(__file__).resolve().parent.parent / "scripts" / "operator_gui_handoff.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "operator_gui_handoff", str(script_path)
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"could not load operator_gui_handoff from {script_path}")
+    module = importlib.util.module_from_spec(spec)
+    # Register before exec so module-level @dataclass resolution can find the
+    # module in sys.modules (otherwise dataclasses raises AttributeError).
+    sys.modules["operator_gui_handoff"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+m = _load_operator_gui_handoff()
 
 # ---------------------------------------------------------------------------
 # Fixtures
