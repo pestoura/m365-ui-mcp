@@ -14,6 +14,11 @@ from fastapi.responses import JSONResponse
 from m365_browser_worker.account_context import AccountContext, unverified_account_context
 from m365_browser_worker.apps.planner import PlannerWorkerAdapter
 from m365_browser_worker.auth_bootstrap import AuthBootstrapGuard
+from m365_browser_worker.bootstrap_navigation import (
+    AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+    PLANNER_WEB_TARGET_CLASS,
+    is_loopback_peer,
+)
 from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
 from m365_browser_worker.protocol import (
@@ -233,6 +238,63 @@ def create_app(
             return {"state": AuthState.AUTHENTICATED.value, "mode": "mock"}
         bootstrap_guard("auth_resume")
         return {"state": live_auth_state().value}
+
+    @app.post("/auth/bootstrap/navigate")
+    async def auth_bootstrap_navigate(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback navigation to the FIXED Planner Web target.
+
+        Security shape (see docs/authentication-and-mfa.md AUTH-094):
+
+        * NOT an MCP tool, absent from every tool/capability/agent-card catalog,
+          absent from the typed ``/operations`` dispatcher and never proxied by
+          the control plane;
+        * admission is a SOCKET-level loopback check on ``request.client.host``.
+          ``X-Forwarded-For``/``X-Real-IP``/``Forwarded`` are never consulted, so
+          a container on the Docker network cannot spoof loopback;
+        * takes NO parameters: any query string and any non-empty body are
+          rejected. The destination is a fixed production constant;
+        * reuses the narrow ``AuthBootstrapGuard`` (browser started + dedicated
+          persistent professional profile + neutral/approved origin) and the
+          closed egress policy; both fail closed;
+        * returns only a sanitized closed state. No URL, DOM, page text, cookie,
+          token, UPN, tenant id, Planner/mailbox data or browser handle.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+        if await request.body():
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No request body is accepted"},
+            )
+
+        bootstrap_guard(AUTH_BOOTSTRAP_NAVIGATE_OPERATION)
+
+        if _is_mock():
+            return {
+                "ok": True,
+                "target_class": PLANNER_WEB_TARGET_CLASS,
+                "auth_state": AuthState.UNKNOWN.value,
+            }
+
+        try:
+            await worker_browser.navigate_auth_bootstrap()
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        return {
+            "ok": True,
+            "target_class": PLANNER_WEB_TARGET_CLASS,
+            "auth_state": live_auth_state().value,
+        }
 
     @app.get("/auth/session")
     async def auth_session() -> dict[str, Any]:

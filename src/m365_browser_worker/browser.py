@@ -14,9 +14,20 @@ from pathlib import Path
 from typing import Any
 
 from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_status
+from m365_browser_worker.bootstrap_navigation import (
+    AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+    PLANNER_WEB_BOOTSTRAP_URL,
+    evaluate_bootstrap_target,
+    is_reusable_bootstrap_page,
+)
 from m365_browser_worker.egress import enforce_route_egress
 from m365_mcp.config import browser_runtime_settings
-from planner_mcp.errors import BlockerConditionalAccess, UiContractUnattested, WorkerUnavailable
+from planner_mcp.errors import (
+    BlockerConditionalAccess,
+    PolicyDenied,
+    UiContractUnattested,
+    WorkerUnavailable,
+)
 from planner_mcp.ui_contract import common_auth_attested, load_status
 
 
@@ -117,6 +128,48 @@ class PersistentBrowser:
                 f"live browser operation '{operation}' blocked",
                 ui_contract_version=status.version,
             )
+
+    async def navigate_auth_bootstrap(self) -> None:
+        """Navigate ONCE to the FIXED Planner Web bootstrap target.
+
+        This is the only navigation primitive in the worker and it takes no
+        arguments: the destination is the production constant
+        ``PLANNER_WEB_BOOTSTRAP_URL``. The constant is re-evaluated through the
+        closed egress policy on every call and navigation is refused unless that
+        policy allows it, so the browser can never be steered elsewhere. The
+        Playwright route interceptor stays installed, so redirects and
+        sub-resources continue to be evaluated.
+
+        An already-open page is reused only when it is a neutral placeholder;
+        otherwise exactly ONE new page is opened in the same persistent context.
+        There is no retry, no credential entry and no MFA automation, and no
+        URL/DOM/page text/cookie/token is returned.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "authentication bootstrap navigation requires a started live browser",
+                operation=AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+            )
+
+        decision = evaluate_bootstrap_target()
+        if not decision.allowed:
+            raise PolicyDenied(
+                "authentication bootstrap navigation denied by closed egress policy",
+                operation=AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+                reason=decision.reason,
+            )
+
+        context = self._context
+        page = None
+        for candidate in context.pages:
+            if is_reusable_bootstrap_page(str(candidate.url)):
+                page = candidate
+                break
+        if page is None:
+            page = await context.new_page()
+
+        # Exactly one navigation per operator call; no retry loop.
+        await page.goto(PLANNER_WEB_BOOTSTRAP_URL)
 
     @asynccontextmanager
     async def operation_page(self, operation: str) -> AsyncIterator[Any]:

@@ -295,6 +295,43 @@ or storage state is a governance violation, not a shortcut.
 
 ---
 
+## 9a. Operator-only live sign-in bootstrap navigation
+
+**AUTH-094 — Fixed-target operator navigation.** A live interactive sign-in needs the dedicated
+persistent professional profile to be positioned on the Microsoft sign-in flow. The worker exposes
+exactly one narrowly-scoped mechanism for that, and it is operator-only:
+
+* Target: the reviewed production constant
+  `m365_browser_worker.bootstrap_navigation.PLANNER_WEB_BOOTSTRAP_URL`
+  (`https://planner.cloud.microsoft/`). There is no URL, host, path or query parameter anywhere in
+  the call path, so no agent, MCP client, control plane or Docker-network peer can steer the browser.
+  `target_class` is the only classification returned (`planner_web`).
+* Transport: worker-local `POST /auth/bootstrap/navigate`. It is NOT an MCP tool, is absent from the
+  tool registry, capability projection, agent card and the typed `/operations` dispatcher, and the
+  control plane has no proxy path to it (`WorkerClient` exposes no such method).
+* Admission: SOCKET-level loopback only (`127.0.0.1`, `::1`). `X-Forwarded-For`, `X-Real-IP` and
+  `Forwarded` are never consulted, so a container on the Docker network cannot spoof loopback; a
+  non-loopback peer receives `404`. Port 8090 remains unpublished.
+* Parameters: none. Any query string or non-empty body is rejected with `400 INVALID_REQUEST`.
+* Guards: the narrow `AuthBootstrapGuard` (browser started + dedicated persistent professional
+  profile + neutral/approved origin) plus a runtime `evaluate_browser_egress` ALLOW decision on the
+  fixed target. Both fail closed as `503`. Graph/API hosts and non-HTTPS stay denied and the
+  Playwright route interceptor keeps evaluating redirects and sub-resources.
+* Behaviour: one idempotent operator action — one navigation per call, reusing a neutral placeholder
+  page or opening exactly one page in the persistent context. No retry, no credential entry, no MFA
+  automation.
+* Response/logs: `{ "ok": true, "target_class": "planner_web", "auth_state": "UNKNOWN|AUTHENTICATED" }`
+  only. No URL, DOM, page text, cookie, token, UPN, tenant id, Planner/mailbox data or browser handle.
+* Invocation: the operator wrapper `scripts/operator_auth_bootstrap_navigate.sh`, which accepts no
+  arguments and reaches the endpoint through
+  `docker exec m365-ui-mcp-browser-worker-1 curl -X POST http://127.0.0.1:8090/auth/bootstrap/navigate`.
+
+**AUTH-095 — Separation preserved.** This mechanism belongs to the `common.auth` attestation lane
+only. It does not alter Planner/account/Outlook read gates or any mutation, and it introduces no
+Graph dependency; full Planner UIContract readiness remains independent of auth state.
+
+---
+
 ## 10. Traceability
 
 | ID range | Area |
@@ -308,6 +345,7 @@ or storage state is a governance violation, not a shortcut.
 | AUTH-070…073 | Conditional Access |
 | AUTH-080 | Error classes |
 | AUTH-090…093 | Evidence and tests |
+| AUTH-094…095 | Operator-only fixed-target bootstrap navigation |
 
 
 
