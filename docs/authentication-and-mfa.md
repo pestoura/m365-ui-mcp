@@ -326,9 +326,43 @@ exactly one narrowly-scoped mechanism for that, and it is operator-only:
   arguments and reaches the endpoint through
   `docker exec m365-ui-mcp-browser-worker-1 curl -X POST http://127.0.0.1:8090/auth/bootstrap/navigate`.
 
-**AUTH-095 — Separation preserved.** This mechanism belongs to the `common.auth` attestation lane
-only. It does not alter Planner/account/Outlook read gates or any mutation, and it introduces no
-Graph dependency; full Planner UIContract readiness remains independent of auth state.
+**AUTH-096 — Fixed-target begin-signin (two-step operator flow).** The dedicated
+persistent professional profile begins an interactive Microsoft sign-in in exactly
+two operator-only steps:
+
+1. Navigate to Planner Web (AUTH-094): position the profile on the fixed Planner
+   Web target so the operator lands in the Microsoft 365 surface.
+2. Begin sign-in (this requirement): a second operator-only action navigates
+   exactly once to the fixed Microsoft authentication host
+   `m365_browser_worker.bootstrap_navigation.MICROSOFT_AUTH_BOOTSTRAP_URL`
+   (`https://login.microsoftonline.com/`). There is no URL, host, path or query
+   parameter anywhere in the call path. `target_class` is the only classification
+   returned (`microsoft_auth`).
+
+Step 2 reuses the same transport, admission, parameter and catalog invariants as
+AUTH-094 (loopback-only, 404 for non-loopback, no query/body, absent from MCP
+tool/capability/agent-card/dispatcher/control-plane, `docker exec` wrapper with no
+arguments). It does NOT relax `AuthBootstrapGuard` or the `auth_status`/`
+auth_start`/`auth_resume` guards. Step 2's dedicated guard requires the existing
+browser egress ALLOW on the fixed Microsoft auth target AND an existing
+approved-auth-origin source class (`planner_web` host, neutral placeholder, or an
+already approved Microsoft authentication origin). Arbitrary/non-approved origins,
+Graph, non-HTTPS and any non-login.microsoftonline.com target are impossible and
+fail closed as `503`. Exactly one navigation, no retry, no credential entry, no
+MFA automation, no DOM/content exposure. Reproduction is operator-initiated only.
+
+**AUTH-097 — No credentials/MFA automation, no public MCP exposure.** Neither step
+performs, accepts, or relays credential entry or MFA approval; both steps are
+worker-local operator endpoints, never MCP tools, and never published to any public
+surface or MCP client.
+
+**AUTH-098 — Two-step runbook.** Operator runs
+`scripts/operator_auth_bootstrap_navigate.sh` then
+`scripts/operator_auth_bootstrap_begin_signin.sh` (each no-argument, loopback
+`docker exec`). No credentials/MFA automation; no public MCP exposure. The second
+step hits the worker-local `POST http://127.0.0.1:8090/auth/bootstrap/begin-signin`
+endpoint, which is operator-only and never exposed as an MCP tool or over the
+public network.
 
 ---
 
@@ -346,6 +380,7 @@ Graph dependency; full Planner UIContract readiness remains independent of auth 
 | AUTH-080 | Error classes |
 | AUTH-090…093 | Evidence and tests |
 | AUTH-094…095 | Operator-only fixed-target bootstrap navigation |
+| AUTH-096…098 | Two-step operator begin-signin flow |
 
 
 

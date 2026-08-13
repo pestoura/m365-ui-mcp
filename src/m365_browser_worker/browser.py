@@ -15,9 +15,14 @@ from typing import Any
 
 from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_status
 from m365_browser_worker.bootstrap_navigation import (
+    AUTH_BEGIN_SIGNIN_OPERATION,
     AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+    MICROSOFT_AUTH_BOOTSTRAP_URL,
     PLANNER_WEB_BOOTSTRAP_URL,
+    classify_begin_signin_source,
     evaluate_bootstrap_target,
+    evaluate_microsoft_auth_target,
+    is_permitted_begin_signin_source,
     is_reusable_bootstrap_page,
 )
 from m365_browser_worker.egress import enforce_route_egress
@@ -108,6 +113,20 @@ class PersistentBrowser:
         status = auth_origin_status(tuple(page.url for page in self._context.pages))
         return status is not AuthOriginStatus.NON_APPROVED_ORIGIN
 
+    def begin_signin_source_permitted(self) -> bool:
+        """Return whether the live context is a permitted begin-signin source.
+
+        Delegates to the closed ``begin_signin`` source classifier. True only
+        when every open page is Planner Web (exact/suffix host), a neutral
+        placeholder, or an approved Microsoft authentication origin. Raw URLs
+        are reduced to the closed classification and never returned.
+        """
+        if not self.started:
+            return False
+        return is_permitted_begin_signin_source(
+            tuple(str(page.url) for page in self._context.pages)
+        )
+
     def common_auth_attested(self) -> bool:
         """Return whether the ``common.auth`` UIContract fragment is attested.
 
@@ -170,6 +189,69 @@ class PersistentBrowser:
 
         # Exactly one navigation per operator call; no retry loop.
         await page.goto(PLANNER_WEB_BOOTSTRAP_URL)
+
+    async def begin_auth_signin(self) -> None:
+        """Navigate ONCE to the FIXED Microsoft auth bootstrap target.
+
+        Step two of the two-step operator flow. The dedicated persistent
+        professional profile must already be started (guaranteed by the app
+        guard wiring through the app guard/provider). The current page is
+        selected/reused only when its source class is permitted for
+        begin-signin — ``planner_web`` (host exactly/suffix matching the Planner
+        Web target), ``neutral`` (``about:blank`` / ``chrome://newtab``) or an
+        already approved Microsoft authentication origin. Any other source
+        (arbitrary web origin, or a non-approved page) fails closed without
+        opening or hijacking a page.
+
+        The destination is the production constant ``MICROSOFT_AUTH_BOOTSTRAP_URL``
+        and the call takes no arguments. The constant is re-evaluated through the
+        closed egress policy on every call and navigation is refused unless that
+        policy ALLOWS the fixed Microsoft auth target — there is no URL input, so
+        the browser can never be steered to Graph/API/non-HTTPS. The Playwright
+        route interceptor stays installed, so redirects and sub-resources continue
+        to be evaluated. Exactly one navigation, no retry, no credential entry,
+        no MFA automation, and no URL/DOM/page text/cookie/token is returned.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "begin sign-in requires a started live browser",
+                operation=AUTH_BEGIN_SIGNIN_OPERATION,
+            )
+
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "begin sign-in requires the dedicated persistent professional browser profile",
+                operation=AUTH_BEGIN_SIGNIN_OPERATION,
+            )
+
+        source = classify_begin_signin_source(tuple(str(page.url) for page in self._context.pages))
+        if source == "non_approved":
+            raise PolicyDenied(
+                "begin sign-in requires the dedicated professional profile to be "
+                "positioned on Planner Web, a neutral placeholder, or an approved "
+                "Microsoft authentication origin",
+                operation=AUTH_BEGIN_SIGNIN_OPERATION,
+            )
+
+        target_decision = evaluate_microsoft_auth_target()
+        if not target_decision.allowed:
+            raise PolicyDenied(
+                "begin sign-in Microsoft auth target denied by closed egress policy",
+                operation=AUTH_BEGIN_SIGNIN_OPERATION,
+                reason=target_decision.reason,
+            )
+
+        context = self._context
+        page = None
+        for candidate in context.pages:
+            if is_reusable_bootstrap_page(str(candidate.url)):
+                page = candidate
+                break
+        if page is None:
+            page = await context.new_page()
+
+        # Exactly one navigation per operator call; no retry loop.
+        await page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)
 
     @asynccontextmanager
     async def operation_page(self, operation: str) -> AsyncIterator[Any]:

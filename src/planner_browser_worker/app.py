@@ -15,8 +15,11 @@ from m365_browser_worker.account_context import AccountContext, unverified_accou
 from m365_browser_worker.apps.planner import PlannerWorkerAdapter
 from m365_browser_worker.auth_bootstrap import AuthBootstrapGuard
 from m365_browser_worker.bootstrap_navigation import (
+    AUTH_BEGIN_SIGNIN_OPERATION,
     AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+    MICROSOFT_AUTH_TARGET_CLASS,
     PLANNER_WEB_TARGET_CLASS,
+    evaluate_microsoft_auth_target,
     is_loopback_peer,
 )
 from m365_browser_worker.executor import ProfileSerializedExecutor
@@ -36,7 +39,12 @@ from m365_browser_worker.session_broker import SessionCapabilityBroker
 from m365_browser_worker.worker_errors import project_worker_error
 from m365_mcp.capability_registry import default_capability_registry
 from planner_mcp.auth import AuthState
-from planner_mcp.errors import PlannerMcpError, ProtocolIncompatible
+from planner_mcp.errors import (
+    PlannerMcpError,
+    PolicyDenied,
+    ProtocolIncompatible,
+    WorkerUnavailable,
+)
 from planner_mcp.logging_setup import configure_logging
 from planner_mcp.ui_contract import load_status
 
@@ -193,6 +201,62 @@ def create_app(
         except PlannerMcpError as exc:
             raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
 
+    def begin_signin_guard(operation: str) -> None:
+        """Dedicated fail-closed guard for the begin-signin endpoint ONLY.
+
+        This is intentionally separate from ``AuthBootstrapGuard`` and the
+        ``/auth/bootstrap/navigate`` path. It requires:
+
+        * a started live browser (mock short-circuits via ``_is_mock``);
+        * the dedicated persistent professional profile;
+        * the present page set to be a permitted begin-signin source
+          (Planner Web host, neutral placeholder, or an approved Microsoft
+          authentication origin) via ``PersistentBrowser.begin_signin_source_permitted``;
+        * the fixed Microsoft auth target to pass the closed egress policy.
+
+        It does NOT relax ``AuthBootstrapGuard`` or the ``/auth/status`` /
+        ``/auth/start`` / ``/auth/resume`` behavior. Any failure fails closed
+        with ``503``.
+        """
+        if _is_mock():
+            return
+        if not worker_browser.started:
+            raise HTTPException(
+                status_code=503,
+                detail=WorkerUnavailable(
+                    "begin sign-in requires a started live browser",
+                    operation=operation,
+                ).to_dict(),
+            )
+        if not worker_browser.is_dedicated_persistent_profile():
+            raise HTTPException(
+                status_code=503,
+                detail=PolicyDenied(
+                    "begin sign-in requires the dedicated persistent professional browser profile",
+                    operation=operation,
+                ).to_dict(),
+            )
+        if not worker_browser.begin_signin_source_permitted():
+            raise HTTPException(
+                status_code=503,
+                detail=PolicyDenied(
+                    "begin sign-in requires the dedicated professional profile to "
+                    "be positioned on Planner Web, a neutral placeholder, or an "
+                    "approved Microsoft authentication origin",
+                    operation=operation,
+                ).to_dict(),
+            )
+        target_decision = evaluate_microsoft_auth_target()
+        if not target_decision.allowed:
+            raise HTTPException(
+                status_code=503,
+                detail=PolicyDenied(
+                    "begin sign-in Microsoft auth target denied by closed egress policy",
+                    operation=operation,
+                    reason=target_decision.reason,
+                ).to_dict(),
+            )
+
     def live_auth_state() -> AuthState:
         # Derive the LIVE auth state from trusted runtime attestation evidence
         # rather than a hardcoded constant. ``bootstrap_guard`` already ran
@@ -293,6 +357,71 @@ def create_app(
         return {
             "ok": True,
             "target_class": PLANNER_WEB_TARGET_CLASS,
+            "auth_state": live_auth_state().value,
+        }
+
+    @app.post("/auth/bootstrap/begin-signin")
+    async def auth_bootstrap_begin_signin(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback begin-signin to the FIXED Microsoft auth target.
+
+        Second step of the two-step operator flow. Security shape (see
+        docs/authentication-and-mfa.md AUTH-096):
+
+        * NOT an MCP tool, absent from every tool/capability/agent-card catalog,
+          absent from the typed ``/operations`` dispatcher and never proxied by
+          the control plane;
+        * admission is a SOCKET-level loopback check on ``request.client.host``.
+          ``X-Forwarded-For``/``X-Real-IP``/``Forwarded`` are never consulted, so
+          a container on the Docker network cannot spoof loopback;
+        * takes NO parameters: any query string and any non-empty body are
+          rejected. The destination is a fixed production constant;
+        * uses a DEDICATED begin-signin guard (browser started + dedicated
+          persistent professional profile + permitted source class), NOT the
+          generic ``AuthBootstrapGuard`` and NOT the ``/auth/bootstrap/navigate``
+          path. The existing ``auth_status``/``auth_start``/``auth_resume`` and
+          navigate behavior is unchanged;
+        * requires BOTH existing browser egress ALLOW on the fixed Microsoft auth
+          target and existing auth-origin approval for that target. There is no
+          URL input, so Graph/API/non-HTTPS targets are impossible;
+        * navigates exactly once, no retry. No DOM/content exposure;
+        * returns only ``{ok:true, target_class:"microsoft_auth", auth_state}``.
+          No URL, DOM, page text, cookie, token, UPN, tenant id, Planner/mailbox
+          data or browser handle.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+        if await request.body():
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No request body is accepted"},
+            )
+
+        begin_signin_guard(AUTH_BEGIN_SIGNIN_OPERATION)
+
+        if _is_mock():
+            return {
+                "ok": True,
+                "target_class": MICROSOFT_AUTH_TARGET_CLASS,
+                "auth_state": AuthState.UNKNOWN.value,
+            }
+
+        try:
+            await worker_browser.begin_auth_signin()
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        return {
+            "ok": True,
+            "target_class": MICROSOFT_AUTH_TARGET_CLASS,
             "auth_state": live_auth_state().value,
         }
 
