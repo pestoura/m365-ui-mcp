@@ -19,7 +19,11 @@ credential-flow or MFA-automation primitive.
 
 1. The "human types the password" rule (AUTH-001) is **superseded for the operator
    path** by local encrypted-store automation (AUTH-101). The interactive GUI
-   handoff remains a supported **fallback only**.
+   handoff was **removed** (PR #614, archived in
+   [`../archive/ADR-ARCHIVED-gui-vnc-handoff.md`](../archive/ADR-ARCHIVED-gui-vnc-handoff.md));
+   there is no headed/graphical fallback. The pre-attestation email stage
+   (AUTH-106) provides the headless-only path to the password surface for
+   attestation.
 2. A single operator-local script (`scripts/operator_auth_login.py`) decrypts the
    two provisioned systemd-creds secrets via `systemd-creds decrypt --user`, keeps
    them **memory-only**, and forwards them over a loopback `stdin`/IPC path to the
@@ -46,8 +50,8 @@ credential-flow or MFA-automation primitive.
   the password still never enters Planner MCP state, logs or tool payloads.
 - The authentication trust boundary is preserved: credential values live only in the
   operator's process memory for one loopback call, and MFA remains human-approved.
-- The GUI handoff path is retained as an explicit fallback for environments where the
-  encrypted store is unavailable.
+- The GUI handoff path was **removed** (PR #614); the headless-only email stage
+  (AUTH-106) is the supported pre-attestation path. There is no graphical fallback.
 - `AUTHENTICATED` still requires positive browser evidence, not merely absence of the
   login form.
 

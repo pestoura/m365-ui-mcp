@@ -43,6 +43,13 @@ PASSWORD_SELECTOR_NAME = "auth.login_password_input"  # noqa: S105 - selector na
 NEXT_SELECTOR_NAME = "auth.login_next_button"
 SIGNIN_SELECTOR_NAME = "auth.login_signin_button"
 
+# Worker-local operation name for the operator-only pre-attestation email stage
+# (AUTH-106). It fills ONLY the email field and clicks ONLY the Next control to
+# advance the live Microsoft authentication page to the password step so the four
+# ``common.auth`` selectors become observable for attestation. It NEVER types the
+# password or clicks Sign in, and it does NOT require attestation to run.
+AUTH_BEGIN_EMAIL_STAGE_OPERATION = "auth_begin_email_stage"
+
 # Exactly the four progression selector keys, in flow order.
 PROGRESSION_SELECTOR_KEYS = (
     EMAIL_SELECTOR_NAME,
@@ -141,3 +148,48 @@ def validate_signin_input(payload: dict[str, object]) -> OperatorSignInInput:
     if not isinstance(email, str) or not isinstance(password, str):
         raise ValueError("operator sign-in email and password must be strings")
     return OperatorSignInInput(email=email, password=password)
+
+
+# The ONLY field the pre-attestation email stage accepts. It is the operator's
+# professional address used to advance the Microsoft sign-in page to the password
+# step; it is NOT a credential secret and is never combined with the password.
+ALLOWED_EMAIL_STAGE_FIELDS = ("email",)
+
+
+@dataclass(frozen=True)
+class OperatorEmailStageInput:
+    """Memory-only operator email-stage value. Never persisted or logged.
+
+    ``email`` exists only for the duration of one email-stage call; it is not
+    written to disk, environment, argv, logs or worker state, and it is not the
+    sign-in password.
+    """
+
+    email: str
+
+    def field_names(self) -> tuple[str, ...]:
+        return ALLOWED_EMAIL_STAGE_FIELDS
+
+
+def validate_email_stage_input(payload: dict[str, object]) -> OperatorEmailStageInput:
+    """Validate an untrusted mapping into the closed email-stage input contract.
+
+    Rejects unknown keys, missing keys, and non-string values so the worker can
+    never receive a password or any other credential field on the
+    pre-attestation email stage (AUTH-106). The password is deliberately NOT an
+    accepted key here.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("operator email-stage payload must be an object")
+    provided = set(payload.keys())
+    if provided != set(ALLOWED_EMAIL_STAGE_FIELDS):
+        unexpected = provided - set(ALLOWED_EMAIL_STAGE_FIELDS)
+        missing = set(ALLOWED_EMAIL_STAGE_FIELDS) - provided
+        raise ValueError(
+            f"operator email-stage fields must be exactly {ALLOWED_EMAIL_STAGE_FIELDS}; "
+            f"unexpected={sorted(unexpected)} missing={sorted(missing)}"
+        )
+    email = payload["email"]
+    if not isinstance(email, str):
+        raise ValueError("operator email-stage email must be a string")
+    return OperatorEmailStageInput(email=email)

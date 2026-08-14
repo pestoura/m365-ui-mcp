@@ -15,6 +15,7 @@ from typing import Any, cast
 
 from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_status
 from m365_browser_worker.bootstrap_navigation import (
+    AUTH_BEGIN_EMAIL_STAGE_OPERATION,
     AUTH_BEGIN_SIGNIN_OPERATION,
     AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
     AUTH_OBSERVE_OPERATION,
@@ -315,6 +316,107 @@ class PersistentBrowser:
 
         # Exactly one navigation per operator call; no retry loop.
         await page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)
+
+    async def begin_email_stage(self, email: str) -> None:
+        """Pre-attestation operator email stage: fill email, click Next only.
+
+        This is the headless-safe replacement for the removed GUI/noVNC handoff
+        (PR #614). It breaks the attestation bootstrap deadlock without
+        weakening the fail-closed model:
+
+        * It runs BEFORE ``common.auth`` is attested (unlike
+          ``submit_operator_signin``, which requires full attestation). This is
+          the minimal fix: the password/signin selectors needed for attestation
+          only appear AFTER email -> Next, and with the GUI handoff gone there
+          was no headless path to reach them.
+        * It applies ONLY the email field and clicks ONLY the Next control.
+          It NEVER types the password and NEVER clicks Sign in, so no
+          credential secret is ever placed in the browser, argv, env or state.
+        * The email value is the operator's professional address supplied by the
+          caller (memory-only); it is consumed for exactly one ``fill`` and
+          dropped. It is NOT read from or written to the encrypted store by this
+          method, and it is NOT the sign-in password.
+        * Locators are resolved through the fail-closed ``locator_runtime`` from
+          the shipped ``common.auth`` plans (value-independent, works for
+          ``UNVERIFIED_LIVE``). A missing/ambiguous control fails closed as
+          ``PolicyDenied`` with only ``selector_key``/``reason`` — never a
+          candidate value or DOM text.
+        * After Next, the auth origin is re-asserted: if the navigation escaped
+          the approved Microsoft authentication origin the call stops before any
+          further action.
+        * It performs no MFA automation and exposes no URL/DOM/cookie/token.
+
+        Guard chain (fail closed on any failure): started live browser, dedicated
+        persistent professional profile, approved Microsoft authentication
+        origin, single open auth page, email plan resolvable, Next plan
+        resolvable.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "email stage requires a started live browser",
+                operation=AUTH_BEGIN_EMAIL_STAGE_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "email stage requires the dedicated persistent professional "
+                "browser profile",
+                operation=AUTH_BEGIN_EMAIL_STAGE_OPERATION,
+            )
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "email stage requires the page to be on an approved "
+                "Microsoft authentication origin",
+                operation=AUTH_BEGIN_EMAIL_STAGE_OPERATION,
+            )
+
+        email_plan = common_auth_locator_plan(EMAIL_SELECTOR_NAME)
+        next_plan = common_auth_locator_plan(NEXT_SELECTOR_NAME)
+        if email_plan is None or next_plan is None:
+            raise PolicyDenied(
+                "email stage progression selectors are incomplete; refusing to "
+                "guess locators",
+                operation=AUTH_BEGIN_EMAIL_STAGE_OPERATION,
+            )
+
+        page = self._require_single_auth_page()
+        timeout_ms = OPERATOR_SIGNIN_STAGE_TIMEOUT_MS
+
+        try:
+            email_locator = await resolve_visible_locator(
+                cast("Any", page), email_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "email stage could not resolve the email field",
+                operation=AUTH_BEGIN_EMAIL_STAGE_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
+        # Memory-only: the email is consumed for exactly one fill and then
+        # dropped; it is never written to state, logs, argv, env or responses.
+        await cast("Any", email_locator.locator).fill(email)
+
+        try:
+            next_locator = await resolve_visible_locator(
+                cast("Any", page), next_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "email stage could not resolve the next control",
+                operation=AUTH_BEGIN_EMAIL_STAGE_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
+        await cast("Any", next_locator.locator).click()
+
+        # Re-assert the auth origin after the Next navigation. The click must
+        # not have escaped the approved Microsoft authentication surface.
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "email stage navigation escaped the approved Microsoft "
+                "authentication origin",
+                operation=AUTH_BEGIN_EMAIL_STAGE_OPERATION,
+            )
 
     async def submit_operator_signin(self, signin: OperatorSignInInput) -> None:
         """Apply the operator-sign-in fields to the Microsoft sign-in page in sequence.
