@@ -16,9 +16,9 @@ Requirement IDs (`WORKER-xxx`) are stable, never reused, never renumbered.
 only client is the control plane's `worker_client` (`ARCH-015`, `ARCH-090`). It has no public
 identity, no user-facing surface and no MCP surface of its own.
 
-**WORKER-002 — FastAPI-compatible HTTP/JSON interface** on `:8090`, never published to the host or
-the internet, reachable only on the `internal: true` Docker network (`ARCH-032`, `ARCH-035`,
-`ARCH-036`).
+**WORKER-002 — FastAPI-compatible HTTP/JSON interface** on `:8090`, host-published **only** at
+`127.0.0.1:8090` (loopback, never `0.0.0.0`/public), also reachable on the `internal: true` Docker
+network for the control plane (`ARCH-032`, `ARCH-035`, `ARCH-036`).
 
 **WORKER-003 — Playwright/Chromium only, internally.** Browser primitives (navigate, click, type,
 evaluate, screenshot, selector resolution) exist exclusively inside this service. They are never
@@ -257,8 +257,8 @@ or screenshot endpoint. Proposing one requires an ADR and is rejected by default
 **WORKER-103 — Internal commands are capability-keyed**, not selector-keyed. The control plane
 sends a capability key and typed arguments; the worker resolves locators locally from the contract.
 
-**WORKER-104 — No published port, no host route, no direct client.** Enforced by compose
-configuration and asserted in tests (`ARCH-035`).
+**WORKER-104 — Host-published loopback only, no public route, no direct client.** Enforced by the
+loopback-only compose `ports:` mapping (`127.0.0.1:8090:8090`) and asserted in tests (`ARCH-035`).
 
 **WORKER-105 — Authentication of the internal hop** relies on network isolation today; if the two
 services are ever split across hosts, mutual authentication becomes mandatory first (`ARCH-038`,
@@ -268,8 +268,8 @@ services are ever split across hosts, mutual authentication becomes mandatory fi
 
 ## 10. Tests
 
-**WORKER-110** Compose assertion: worker service has no published ports and sits on an internal
-network.
+**WORKER-110** Compose assertion: worker service publishes only the loopback host mapping
+`127.0.0.1:8090:8090` (never `0.0.0.0`/public) and sits on an internal network.
 **WORKER-111** Container assertions: non-root user, `no-new-privileges`, `cap_drop: [ALL]`, no
 docker socket, no home mount, profile mode `0700`.
 **WORKER-112** Startup refuses an invalid or schema-failing UIContract.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -80,7 +81,9 @@ def test_compose_keeps_worker_private_while_adding_dedicated_egress() -> None:
     worker_block, control_plane_block = compose.split("  control-plane:", maxsplit=1)
 
     assert "networks: [browser-internal, m365-egress]" in worker_block
-    assert "\n    ports:" not in worker_block
+    # The worker publishes ONLY the loopback host mapping (never 0.0.0.0/public).
+    worker_ports = re.findall(r'^\s*-\s*"([^"]+)"', worker_block, flags=re.MULTILINE)
+    assert worker_ports == ["127.0.0.1:8090:8090"], worker_ports  # noqa: S104 - asserting loopback-only bind
     assert "browser-internal:\n    internal: true" in compose
     assert "m365-egress: {}" in compose
     assert "networks: [browser-internal, edge]" in control_plane_block

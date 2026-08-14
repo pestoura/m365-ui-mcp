@@ -58,7 +58,7 @@ holds Planner session material, and is never a required dependency for a read op
  ┌───────────────▼────────────────────────────────────────────────────────────┐
  │ Zone W — Browser worker (high-value, holds the session)                    │
  │                                                                            │
- │   planner-browser-worker (FastAPI, :8090, never published)                  │
+ │   planner-browser-worker (FastAPI, :8090, host-published loopback 127.0.0.1:8090 only) │
  │     ├── UI action executor   click/type/navigate — INTERNAL ONLY            │
  │     ├── read-back verifier   post-condition confirmation                    │
  │     ├── auth/MFA detector    sanitized metadata only                        │
@@ -126,12 +126,13 @@ the versioned UIContract registry.
 | --- | --- | --- | --- | --- |
 | **ARCH-030** | Client → Portal | HTTPS / MCP Streamable HTTP | Cloudflare-managed hostname | Public |
 | **ARCH-031** | Portal → Control plane | HTTP(S) MCP Streamable HTTP | control plane `:8080`, bound `127.0.0.1` in compose, reached via the Cloudflare connector | Not directly public |
-| **ARCH-032** | Control plane → Worker | HTTP/JSON (FastAPI) | `http://browser-worker:8090` | Internal Docker network only (`internal: true`), **no published port** |
+| **ARCH-032** | Control plane → Worker | HTTP/JSON (FastAPI) | `http://browser-worker:8090` | Internal Docker network only (`internal: true`); host publishes worker loopback `127.0.0.1:8090` only |
 | **ARCH-033** | Worker → Microsoft | HTTPS (Chromium) | Microsoft endpoints | Egress only |
 | **ARCH-034** | Control plane → Hermes | HTTP webhook / message | Hermes endpoint | Egress only, sanitized payloads |
 
-**ARCH-035** The browser worker MUST NOT be published to the host or the internet. Verified by
-the absence of a `ports:` mapping on the worker service and by test enforcement.
+**ARCH-035** The browser worker MUST NOT be published on `0.0.0.0` or any public interface. It is
+host-published exclusively at `127.0.0.1:8090`; verified by the loopback-only `ports:` mapping on
+the worker service and by test enforcement.
 
 **ARCH-036** The worker network is declared `internal: true`; the worker has no route to the
 public internet other than what Chromium requires for Zone M. Egress restriction beyond this is a
