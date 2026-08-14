@@ -24,6 +24,7 @@ from m365_browser_worker.bootstrap_discovery import (
     discover_key,
 )
 from m365_browser_worker.bootstrap_navigation import (
+    AUTH_BEGIN_EMAIL_STAGE_OPERATION,
     AUTH_BEGIN_SIGNIN_OPERATION,
     AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
     MICROSOFT_AUTH_TARGET_CLASS,
@@ -38,6 +39,7 @@ from m365_browser_worker.collect_observation import (
 from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
 from m365_browser_worker.operator_signin import (
+    validate_email_stage_input,
     validate_signin_input,
 )
 from m365_browser_worker.protocol import (
@@ -445,6 +447,128 @@ def create_app(
             "target_class": MICROSOFT_AUTH_TARGET_CLASS,
             "auth_state": live_auth_state().value,
         }
+
+    def begin_email_stage_guard(operation: str) -> None:
+        """Dedicated fail-closed guard for the pre-attestation email stage (AUTH-106).
+
+        This is intentionally separate from ``AuthBootstrapGuard``, the
+        ``/auth/bootstrap/navigate`` path, the ``begin_signin_guard``, and the
+        full-attestation ``submit_operator_signin`` gate. It is the minimal
+        headless-safe primitive that breaks the attestation bootstrap deadlock
+        left after the GUI/noVNC/X11 handoff was removed (PR #614): it must run
+        BEFORE ``common.auth`` is attested, so it does NOT require attestation.
+        It requires ONLY:
+
+        * a started live browser (mock short-circuits via ``_is_mock``);
+        * the dedicated persistent professional profile;
+        * the live context positioned on an approved Microsoft authentication
+          origin (or no page yet) via ``PersistentBrowser.auth_origin_approved``;
+        * the email field only — no password, no sign-in submit.
+
+        It NEVER relaxes ``AuthBootstrapGuard`` or the
+        ``/auth/status`` / ``/auth/start`` / ``/auth/resume`` behavior, and it
+        does NOT widen the path to ``submit_operator_signin`` (which still
+        requires full attestation). Any failure fails closed with ``503``.
+        """
+        if _is_mock():
+            return
+        if not worker_browser.started:
+            raise HTTPException(
+                status_code=503,
+                detail=WorkerUnavailable(
+                    "email stage requires a started live browser",
+                    operation=operation,
+                ).to_dict(),
+            )
+        if not worker_browser.is_dedicated_persistent_profile():
+            raise HTTPException(
+                status_code=503,
+                detail=PolicyDenied(
+                    "email stage requires the dedicated persistent professional "
+                    "browser profile",
+                    operation=operation,
+                ).to_dict(),
+            )
+        if not worker_browser.auth_origin_approved():
+            raise HTTPException(
+                status_code=503,
+                detail=PolicyDenied(
+                    "email stage requires the page to be on an approved "
+                    "Microsoft authentication origin",
+                    operation=operation,
+                ).to_dict(),
+            )
+
+    @app.post("/auth/bootstrap/begin-email")
+    async def auth_bootstrap_begin_email(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback pre-attestation email stage (AUTH-106).
+
+        Minimal headless-safe replacement for the removed GUI/noVNC/X11 handoff.
+        It fills ONLY the operator's professional email field and clicks ONLY the
+        Microsoft "Next" control to advance the live Microsoft authentication page
+        to the password step, so the four ``common.auth`` progression selectors
+        become observable for attestation. Security shape:
+
+        * NOT an MCP tool; absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client;
+        * SOCKET-level loopback admission only (``127.0.0.1``/``::1``); proxy
+          headers are never consulted; a Docker-network peer gets ``404``;
+        * accepts EXACTLY the closed ``{email}`` contract
+          (``validate_email_stage_input``). Any extra/unknown key (including
+          ``password``), or a missing key, is rejected with ``400`` and never
+          reaches the browser;
+        * does NOT require ``common.auth`` to be attested — this is intentional,
+          so attestation can actually be collected. It does NOT widen the
+          attested ``submit_operator_signin`` path (which still requires full
+          attestation before any password is typed);
+        * the browser applies ONLY the email field and clicks ONLY Next via
+          fail-closed ``common_auth_locator_plan`` resolution; it never types the
+          password and never clicks Sign in. No URL/selector/Graph surface is
+          reachable;
+        * no MFA automation; the human still completes MFA in Microsoft
+          Authenticator. Returns only ``{ok, auth_state}``. No email value, URL,
+          DOM, cookie, token, UPN, tenant id or browser handle is ever returned.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+
+        try:
+            raw = await request.json()
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "Body must be a JSON object"},
+            ) from None
+        try:
+            stage = validate_email_stage_input(raw)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": str(exc)},
+            ) from exc
+
+        begin_email_stage_guard(AUTH_BEGIN_EMAIL_STAGE_OPERATION)
+
+        if _is_mock():
+            return {"ok": True, "auth_state": AuthState.UNKNOWN.value}
+
+        try:
+            await worker_browser.begin_email_stage(stage.email)
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        # The email stage only advances to the password step; it is not
+        # authentication. The human still completes MFA in Microsoft Authenticator.
+        return {"ok": True, "auth_state": AuthState.UNKNOWN.value}
 
     @app.post("/auth/bootstrap/operator-submit")
     async def auth_bootstrap_operator_submit(request: Request) -> dict[str, Any]:

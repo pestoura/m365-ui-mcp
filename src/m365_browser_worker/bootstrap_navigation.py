@@ -60,6 +60,13 @@ AUTH_BEGIN_SIGNIN_OPERATION = "auth_begin_signin"
 # no Graph surface, no locator guessing.
 AUTH_OPERATOR_SUBMIT_OPERATION = "auth_operator_submit"
 
+# Worker-local operation name for the operator-only pre-attestation email stage
+# (AUTH-106). It fills ONLY the email field and clicks ONLY the Next control to
+# advance the live Microsoft authentication page to the password step so the four
+# ``common.auth`` selectors become observable for attestation. It NEVER types the
+# password or clicks Sign in, and it does NOT require attestation to run.
+AUTH_BEGIN_EMAIL_STAGE_OPERATION = "auth_begin_email_stage"
+
 # Worker-local operation name for the operator-only live sign-in observation
 # endpoint. It reads only a bounded slice of visible body text from the single
 # approved Microsoft authentication page and returns a sanitized closed state;

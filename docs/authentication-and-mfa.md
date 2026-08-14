@@ -447,6 +447,21 @@ deterministically counted. It does NOT replace the per-stage `discover-email`/`d
 (AUTH bootstrapping); it is the consolidated evidence primitive that lets a 4-key UNIQUE_MATCH observation be
 collected and evaluated in one step.
 
+**AUTH-106 — Operator-only pre-attestation email stage (headless-safe deadlock break).** With the
+GUI/noVNC/X11 headed handoff removed (PR #614) there was no headless way to reach the password surface for
+`common.auth` attestation: the password/signin selectors only appear AFTER email -> Next, and
+`submit_operator_signin` requires full attestation. The `POST /auth/bootstrap/begin-email` route (operator-only,
+socket-loopback admitted, no query/extra body keys — the password is NOT an accepted key) fills ONLY the
+operator's professional email and clicks ONLY the Microsoft "Next" control to advance the live Microsoft
+authentication page to the password step, so the four `common.auth` selectors become observable for
+attestation (see AUTH-105). It does NOT require `common.auth` to be attested (intentional), it NEVER types the
+password and NEVER clicks Sign in, and it does NOT widen the attested `submit_operator_signin` path (which still
+requires full attestation before any password is applied). All fail-closed invariants from AUTH-094/096/101 are
+preserved: dedicated persistent professional profile, approved Microsoft authentication origin, memory-only
+email value, no URL/DOM/cookie/token/UPN/tenant exposure. Canonical auth path remains private Chromium headless +
+Playwright + persistent professional profile + operator-only fixed-target bootstrap + encrypted credential
+store + out-of-band MFA approval.
+
 ---
 
 ## 10. Traceability
@@ -466,6 +481,7 @@ collected and evaluated in one step.
 | AUTH-096…098 | Two-step operator begin-signin flow |
 | AUTH-099…101 | Encrypted-store operator sign-in + sanitized MFA notification |
 | AUTH-105 | Operator-only read-only live attestation observation (4-key) |
+| AUTH-106 | Operator-only pre-attestation email stage (headless deadlock break) |
 
 
 
