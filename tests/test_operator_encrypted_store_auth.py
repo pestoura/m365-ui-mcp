@@ -396,7 +396,8 @@ def test_mfa_required_resolves_only_on_unique_number() -> None:
 
 def test_ambiguous_mfa_number_fails_closed() -> None:
     state, challenge, ambiguous = classify_live(
-        "Codes 12 and 34 both appear; enter the matching number in Microsoft Authenticator."
+        "Enter the number 12 to approve. Or enter the number 34 if prompted "
+        "in Microsoft Authenticator."
     )
     assert state is AuthState.UNKNOWN
     assert challenge is None

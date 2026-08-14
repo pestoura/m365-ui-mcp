@@ -8,40 +8,58 @@ from typing import Any
 
 from planner_mcp.auth import AuthState, MfaChallenge
 
-_NUMBER_MATCH = re.compile(
-    r"(?:enter the number|number matching|open your authenticator[^0-9]{0,80})"
-    r"[^0-9]{0,40}(\d{2})\b",
+# Explicit Authenticator number-matching phrase, immediately preceding a 2-digit
+# code (proximity bound, no newline crossing, so a stray year / request id /
+# countdown / timestamp on the page can NEVER be mis-extracted). The phrase is
+# the fixed semantic context that binds the extracted value: no number is
+# emitted unless it is clearly presented as the "number to enter / approve" in
+# the Microsoft Authenticator number-matching prompt. This is the determinism
+# guarantee required for the post-password MFA surface: extraction is anchored
+# to meaning, not to the mere presence of a 2-digit token near the word
+# "authenticator".
+_NUMBER_MATCH_PHRASE = re.compile(
+    r"(?:enter the number|number matching|type the number|the number shown|"
+    r"number shown on your|open your authenticator[^0-9]{0,80}?)"
+    r"[^0-9\n]{0,40}?(\d{2})\b",
     re.IGNORECASE | re.DOTALL,
 )
-_BARE_TWO_DIGIT = re.compile(r"\b(\d{2})\b")
+
+
+def _number_match_candidates(page_text: str) -> list[str]:
+    """Return every 2-digit code bound to an explicit number-matching phrase.
+
+    Only values presented as the Authenticator number-match are eligible; a
+    date, countdown, request id or other generic numeric text on the page is
+    never a candidate. The candidate set is empty unless the page carries the
+    fixed number-matching semantic context.
+    """
+    return [m.group(1) for m in _NUMBER_MATCH_PHRASE.finditer(page_text)]
 
 
 def detect_mfa_number(page_text: str) -> str | None:
-    """Extract the 2-digit Authenticator number-match value from page text."""
-    match = _NUMBER_MATCH.search(page_text)
-    if match:
-        return match.group(1)
-    if "authenticator" in page_text.lower():
-        bare = _BARE_TWO_DIGIT.search(page_text)
-        if bare:
-            return bare.group(1)
+    """Extract the phrase-bound Authenticator number-match value, fail closed.
+
+    Returns the value ONLY when exactly one phrase-bound candidate exists. Zero
+    candidates (no number-matching prompt) or more than one (ambiguous surface)
+    resolves to ``None`` so callers never guess or synthesize a challenge value.
+    """
+    candidates = _number_match_candidates(page_text)
+    if len(candidates) == 1:
+        return candidates[0]
     return None
 
 
 def resolve_mfa_number_unique(page_text: str) -> str | None:
     """Fail-closed MFA number resolver for the LIVE state machine.
 
-    Returns the number ONLY when exactly one 2-digit candidate is present in a
-    number-matching context. If the page contains zero candidates, or more than
-    one distinct candidate (ambiguous), it returns ``None`` so the caller fails
-    closed instead of guessing a challenge value. This is stricter than
-    :func:`detect_mfa_number`, which keeps a best-effort fallback for
-    non-live/observational use.
+    Returns the number ONLY when exactly one phrase-bound number-match candidate
+    is present (see :func:`_number_match_candidates`). If the page contains zero
+    candidates, or more than one distinct candidate (ambiguous), it returns
+    ``None`` so the caller fails closed instead of guessing a challenge value.
+    Extraction is anchored to the fixed number-matching semantic context, so a
+    generic 2-digit value elsewhere on the page can never create ambiguity.
     """
-    lowered = page_text.lower()
-    if "authenticator" not in lowered and "number matching" not in lowered:
-        return None
-    candidates = {m.group(1) for m in _BARE_TWO_DIGIT.finditer(page_text)}
+    candidates = {m for m in _number_match_candidates(page_text)}
     if len(candidates) == 1:
         return next(iter(candidates))
     return None
@@ -63,11 +81,17 @@ def build_challenge(
 
 
 def classify_page(page_text: str) -> tuple[AuthState, dict[str, Any]]:
-    """Classify an auth page into a state plus sanitized metadata."""
+    """Classify an auth page into a state plus sanitized metadata.
+
+    The number-match surface is recognized ONLY when exactly one phrase-bound
+    Authenticator code is present (see :func:`_number_match_candidates`). Zero
+    candidates ⇒ no number-match prompt; more than one ⇒ ambiguous (handled as
+    a fail-closed UNKNOWN by :func:`classify_live`, never guessed here).
+    """
     lowered = page_text.lower()
-    number = detect_mfa_number(page_text)
-    if number:
-        challenge = build_challenge(number, operation_id="auth-live")
+    candidates = _number_match_candidates(page_text)
+    if len(candidates) == 1:
+        challenge = build_challenge(candidates[0], operation_id="auth-live")
         return AuthState.MFA_REQUIRED, challenge.to_dict()
     if "approve sign in request" in lowered or "waiting for approval" in lowered:
         return AuthState.WAITING_FOR_MFA, {}
