@@ -492,6 +492,22 @@ legacy-projection contract and the frozen parity baseline require it (`planner_r
 `planner_ui_contract_status`). This is explicitly NOT a relaxation: `_validate_observation_binding` still
 requires an exact digest match, and observations still bind the full set.
 
+**AUTH-109 — Operator-only deterministic pre-email sign-in surface resolver.** When Microsoft presents a
+deterministic intermediate surface **before** the email-entry field (account chooser / "use another account"
+prompt), the `begin-email` (AUTH-106) and `discover-email` paths cannot proceed because the email input does
+not yet exist on the page. This resolver is the headless-safe answer: an OPERATOR-ONLY, loopback-admitted,
+pre-attestation `POST /auth/bootstrap/resolve-signin-surface` that forces the email-entry surface by clicking
+ONLY the fixed "use another account" control (matched from a CLOSED set of exact Microsoft labels), never
+selecting a cached identity (account tile), never typing, never navigating by URL/locator. It is bounded and
+value-free: it classifies the live surface into a CLOSED kind from a bounded body-text reading and fails closed
+(`PolicyDenied`) on any non-deterministic surface (pick-an-account, stay-signed-in, consent, method selection,
+error, ambiguous, unknown) — it never guesses a surface or an identity. It does NOT require `common.auth` to be
+attested (intentional, so the email surface can be reached for attestation) and does NOT widen the attested
+`submit_operator_signin` path. All fail-closed invariants from AUTH-094/096/101/106 apply; the response carries
+only `{ok, auth_state, surface}` (closed `EMAIL_ENTRY` / `ACCOUNT_CHOOSER` / `USE_ANOTHER_ACCOUNT_PROMPT`
+classification) — no URL, DOM, cookie, token, UPN, tenant id or account identifier. AUTH-109 never weakens the
+attestation/evaluator/fail-closed semantics and is not a generic browser primitive.
+
 ---
 
 ## 10. Traceability
@@ -514,6 +530,7 @@ requires an exact digest match, and observations still bind the full set.
 | AUTH-106 | Operator-only pre-attestation email stage (headless deadlock break) |
 | AUTH-107 | Atomic `common.auth` fragment split (email / password surfaces) |
 | AUTH-108 | `/health` reports the full-set contract digest bound by observations |
+| AUTH-109 | Operator-only deterministic pre-email sign-in surface resolver |
 
 
 

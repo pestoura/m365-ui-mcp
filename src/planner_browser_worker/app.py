@@ -56,6 +56,10 @@ from m365_browser_worker.protocol_negotiation import (
 )
 from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
 from m365_browser_worker.session_broker import SessionCapabilityBroker
+from m365_browser_worker.signin_surface import (
+    AUTH_RESOLVE_OPERATION,
+    SigninSurfaceKind,
+)
 from m365_browser_worker.worker_errors import project_worker_error
 from m365_mcp.capability_registry import default_capability_registry
 from planner_mcp.auth import AuthContext, AuthState
@@ -575,6 +579,127 @@ def create_app(
         # The email stage only advances to the password step; it is not
         # authentication. The human still completes MFA in Microsoft Authenticator.
         return {"ok": True, "auth_state": AuthState.UNKNOWN.value}
+
+    def resolve_surface_guard(operation: str) -> None:
+        """Dedicated fail-closed guard for the operator sign-in surface resolver (AUTH-109).
+
+        Mirrors ``begin_email_stage_guard``: it is intentionally separate from
+        ``AuthBootstrapGuard``, the ``/auth/bootstrap/navigate`` path, the
+        ``begin_signin_guard``, and the full-attestation ``submit_operator_signin``
+        gate. It runs BEFORE ``common.auth`` is attested (so the email surface can
+        be reached for attestation) and requires ONLY:
+
+        * a started live browser (mock short-circuits via ``_is_mock``);
+        * the dedicated persistent professional profile;
+        * the live context positioned on an approved Microsoft authentication
+          origin (or no page yet) via ``PersistentBrowser.auth_origin_approved``;
+        * exactly one open auth page (enforced by the browser primitive).
+
+        It NEVER relaxes the other guards and does NOT widen the path to
+        ``submit_operator_signin``. Any failure fails closed with ``503``.
+        """
+        if _is_mock():
+            return
+        if not worker_browser.started:
+            raise HTTPException(
+                status_code=503,
+                detail=WorkerUnavailable(
+                    "sign-in surface resolution requires a started live browser",
+                    operation=operation,
+                ).to_dict(),
+            )
+        if not worker_browser.is_dedicated_persistent_profile():
+            raise HTTPException(
+                status_code=503,
+                detail=PolicyDenied(
+                    "sign-in surface resolution requires the dedicated persistent "
+                    "professional browser profile",
+                    operation=operation,
+                ).to_dict(),
+            )
+        if not worker_browser.auth_origin_approved():
+            raise HTTPException(
+                status_code=503,
+                detail=PolicyDenied(
+                    "sign-in surface resolution requires the page to be on an "
+                    "approved Microsoft authentication origin",
+                    operation=operation,
+                ).to_dict(),
+            )
+
+    @app.post("/auth/bootstrap/resolve-signin-surface")
+    async def auth_bootstrap_resolve_signin_surface(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback deterministic pre-email surface resolver (AUTH-109).
+
+        Minimal headless-safe resolver for the intermediate Microsoft Entra ID
+        sign-in surface (account chooser / "use another account" prompt) that can
+        appear BEFORE the email-entry field, blocking the ``begin-email`` and
+        ``discover-email`` paths. It forces the email-entry surface by clicking
+        ONLY the fixed "use another account" control, never selecting a cached
+        identity. Security shape:
+
+        * NOT an MCP tool; absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client;
+        * SOCKET-level loopback admission only (``127.0.0.1``/``::1``); proxy
+          headers are never consulted; a Docker-network peer gets ``404``;
+        * POST only with NO body and NO parameters; any body or query string is
+          rejected with ``400`` and never reaches the browser;
+        * does NOT require ``common.auth`` to be attested — this is intentional,
+          so the email surface can be reached for attestation. It does NOT widen
+          the attested ``submit_operator_signin`` path (which still requires full
+          attestation before any credential is typed);
+        * the browser applies ONLY the fixed "use another account" action and
+          never types, never selects a cached account, never clicks Sign in, and
+          never navigates by URL/selector. No URL/selector/Graph surface is
+          reachable;
+        * fails closed on any non-deterministic surface (pick-an-account,
+          stay-signed-in, consent, method selection, error, ambiguous, unknown):
+          it never guesses a surface or selects an identity;
+        * returns only ``{ok, auth_state, surface}`` where ``surface`` is one of
+          the closed ``EMAIL_ENTRY`` / ``ACCOUNT_CHOOSER`` /
+          ``USE_ANOTHER_ACCOUNT_PROMPT`` terminal classifications. No URL, DOM,
+          page text, cookie, token, UPN, tenant id, account identifier or browser
+          handle is ever returned.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+        if await request.body():
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No request body is accepted"},
+            )
+
+        resolve_surface_guard(AUTH_RESOLVE_OPERATION)
+
+        if _is_mock():
+            return {
+                "ok": True,
+                "auth_state": AuthState.UNKNOWN.value,
+                "surface": SigninSurfaceKind.UNKNOWN.value,
+            }
+
+        try:
+            await worker_browser.resolve_signin_surface()
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        # A successful resolution leaves the page on (or advanceable to) the
+        # email-entry surface. The human still completes sign-in + MFA in
+        # Microsoft Authenticator. Report the closed post-resolution classification.
+        return {
+            "ok": True,
+            "auth_state": AuthState.UNKNOWN.value,
+            "surface": SigninSurfaceKind.EMAIL_ENTRY.value,
+        }
 
     @app.post("/auth/bootstrap/operator-submit")
     async def auth_bootstrap_operator_submit(request: Request) -> dict[str, Any]:
