@@ -46,7 +46,8 @@ async def test_no_unapproved_mutating_routes() -> None:
     # POST is allowed only for the typed operation boundary, protocol
     # negotiation, and the OPERATOR-ONLY loopback auth-bootstrap navigation
     # (AUTH-094), the OPERATOR-ONLY begin-signin transition (AUTH-096), the
-    # OPERATOR-ONLY pre-attestation email stage (AUTH-106), and the
+    # OPERATOR-ONLY pre-attestation email stage (AUTH-106), the OPERATOR-ONLY
+    # deterministic pre-email surface resolver (AUTH-109), and the
     # OPERATOR-ONLY encrypted-store sign-in submit (AUTH-101): all are
     # zero-parameter / closed-body, fixed-target, no-state-mutation-in-M365 routes.
     allowed_posts = {
@@ -55,6 +56,7 @@ async def test_no_unapproved_mutating_routes() -> None:
         "/auth/bootstrap/navigate",
         "/auth/bootstrap/begin-signin",
         "/auth/bootstrap/begin-email",
+        "/auth/bootstrap/resolve-signin-surface",
         "/auth/bootstrap/operator-submit",
     }
     for route in app.routes:

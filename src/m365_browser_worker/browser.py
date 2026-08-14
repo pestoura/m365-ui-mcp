@@ -42,6 +42,11 @@ from m365_browser_worker.operator_signin import (
     OperatorSignInInput,
     common_auth_locator_plan,
 )
+from m365_browser_worker.signin_surface import (
+    AUTH_RESOLVE_OPERATION,
+    SigninSurfaceKind,
+    resolve_signin_surface_to_email_entry,
+)
 from m365_mcp.config import browser_runtime_settings
 from planner_mcp.errors import (
     BlockerConditionalAccess,
@@ -417,6 +422,71 @@ class PersistentBrowser:
                 "email stage navigation escaped the approved Microsoft "
                 "authentication origin",
                 operation=AUTH_BEGIN_EMAIL_STAGE_OPERATION,
+            )
+
+    async def resolve_signin_surface(self) -> None:
+        """Operator-only deterministic pre-email surface resolution (AUTH-109).
+
+        Forces the email-entry surface when Microsoft presents a deterministic
+        pre-email intermediate (account chooser / "use another account" prompt)
+        instead of the email field. It is the headless-safe counterpart to
+        ``begin_email_stage`` (AUTH-106): it ONLY changes which sign-in SURFACE
+        is displayed, never credentials, never MFA, never account selection.
+
+        Fail-closed contract:
+
+        * runs BEFORE ``common.auth`` attestation (like ``begin_email_stage``),
+          so the email surface can be reached for attestation headlessly;
+        * guard chain: started live browser, dedicated persistent professional
+          profile, approved Microsoft authentication origin, exactly one open
+          auth page. Any failure fails closed with ``PolicyDenied`` and never
+          clicks anything;
+        * the ONLY action taken is the fixed "use another account" control,
+          matched from a CLOSED set of exact Microsoft labels
+          (``USE_ANOTHER_ACCOUNT_LABELS``). It NEVER selects a cached identity
+          (account tile), never types, never navigates by URL/locator;
+        * if the surface is not a deterministic forwardable stage
+          (pick-an-account, stay-signed-in, consent, method selection, error,
+          ambiguous, unknown) it fails closed — it never guesses a surface;
+        * reads bounded visible body text internally (via
+          ``read_visible_body_bounded``, already guard-gated) and never logs or
+          returns it.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "sign-in surface resolution requires a started live browser",
+                operation=AUTH_RESOLVE_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "sign-in surface resolution requires the dedicated persistent "
+                "professional browser profile",
+                operation=AUTH_RESOLVE_OPERATION,
+            )
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "sign-in surface resolution requires the page to be on an "
+                "approved Microsoft authentication origin",
+                operation=AUTH_RESOLVE_OPERATION,
+            )
+
+        page = self._require_single_auth_page()
+
+        async def _read() -> str:
+            return await self.read_visible_body_bounded(max_chars=2000)
+
+        resolution = await resolve_signin_surface_to_email_entry(page, _read)
+        if resolution.kind not in (
+            SigninSurfaceKind.EMAIL_ENTRY,
+            SigninSurfaceKind.ACCOUNT_CHOOSER,
+            SigninSurfaceKind.USE_ANOTHER_ACCOUNT_PROMPT,
+        ):
+            # Not a deterministic forwardable surface; fail closed without
+            # selecting any cached identity or guessing a control.
+            raise PolicyDenied(
+                "sign-in surface is not a deterministic pre-email stage; "
+                "manual operator intervention required",
+                operation=AUTH_RESOLVE_OPERATION,
             )
 
     async def submit_operator_signin(self, signin: OperatorSignInInput) -> None:
