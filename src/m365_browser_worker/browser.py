@@ -223,6 +223,18 @@ class PersistentBrowser:
         (arbitrary web origin, or a non-approved page) fails closed without
         opening or hijacking a page.
 
+        Topology fix (no weakening of fail-closed controls): when the live
+        context already holds a ``planner_web`` page, that SAME page is reused
+        for the fixed-signin navigation instead of opening a second page. A
+        neutral placeholder page is likewise reused. This collapses the old
+        dual-page topology into one page on the approved Microsoft auth origin
+        after sign-in begins, so no duplicate companion Planner page lingers and
+        the operator continues the interactive sign-in (including MFA) on the
+        single reused page. Exactly one navigation happens. If more than one
+        distinct permitted page is open (ambiguous topology) the call fails
+        closed rather than guessing which page to hijack, and arbitrary or
+        non-approved sources fail closed as before.
+
         The destination is the production constant ``MICROSOFT_AUTH_BOOTSTRAP_URL``
         and the call takes no arguments. The constant is re-evaluated through the
         closed egress policy on every call and navigation is refused unless that
@@ -262,12 +274,43 @@ class PersistentBrowser:
             )
 
         context = self._context
-        page = None
+
+        # Topology fix: reuse the SAME existing planner_web page when present,
+        # so begin-signin does not open a second page and leave a duplicate
+        # companion Planner page behind. A neutral placeholder page is also
+        # reused. Both are closed, approved sources.
+        existing_planner_web: Any = None
+        existing_neutral: Any = None
         for candidate in context.pages:
-            if is_reusable_bootstrap_page(str(candidate.url)):
-                page = candidate
-                break
-        if page is None:
+            raw = str(candidate.url)
+            if is_planner_web_surface_url(raw):
+                # More than one planner_web page means an ambiguous topology;
+                # fail closed rather than guessing which page to hijack.
+                if existing_planner_web is not None:
+                    raise PolicyDenied(
+                        "begin sign-in refuses an ambiguous topology with "
+                        "multiple Planner Web pages open",
+                        operation=AUTH_BEGIN_SIGNIN_OPERATION,
+                    )
+                existing_planner_web = candidate
+            elif is_reusable_bootstrap_page(raw):
+                if existing_neutral is not None:
+                    # Multiple neutral placeholders: ambiguous, fail closed.
+                    raise PolicyDenied(
+                        "begin sign-in refuses an ambiguous topology with "
+                        "multiple neutral pages open",
+                        operation=AUTH_BEGIN_SIGNIN_OPERATION,
+                    )
+                existing_neutral = candidate
+
+        if existing_planner_web is not None:
+            page = existing_planner_web
+        elif existing_neutral is not None:
+            page = existing_neutral
+        else:
+            # No reusable page on an approved source. The source classifier
+            # already accepted this context (e.g. an existing approved Microsoft
+            # auth origin, or no pages yet), so open exactly one new page.
             page = await context.new_page()
 
         # Exactly one navigation per operator call; no retry loop.

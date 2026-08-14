@@ -23,6 +23,7 @@ begin-signin to the fixed Microsoft auth target). Covers, explicitly:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 from collections.abc import Iterator
@@ -39,9 +40,11 @@ from m365_browser_worker.bootstrap_navigation import (
     classify_begin_signin_source,
     evaluate_microsoft_auth_target,
     is_loopback_peer,
+    is_planner_web_surface_url,
 )
 from m365_browser_worker.browser import BrowserConfig, PersistentBrowser
 from m365_browser_worker.egress import evaluate_browser_egress
+from m365_mcp.config import browser_runtime_settings
 from m365_mcp.tool_registry import default_tool_registry
 from planner_browser_worker.app import create_app
 from planner_mcp.errors import PolicyDenied, UiContractUnattested, WorkerUnavailable
@@ -595,3 +598,96 @@ def test_runbook_documents_begin_signin_invocation() -> None:
     assert "scripts/operator_auth_bootstrap_begin_signin.sh" in text
     assert "docker exec m365-ui-mcp-browser-worker-1" in text
     assert "127.0.0.1:8090/auth/bootstrap/begin-signin" in text
+
+
+# --------------------------------------------------------------------------
+# Topology fix: reuse the existing planner_web page (no second page, no duplicate)
+# --------------------------------------------------------------------------
+
+
+def _started_production_browser() -> PersistentBrowser:
+    """Build a production PersistentBrowser with an injected fake context.
+
+    Uses the dedicated runtime profile directory so that
+    ``is_dedicated_persistent_profile()`` returns True as it would in the live
+    operator flow.
+    """
+    profile_dir, _headless, _mode = browser_runtime_settings()
+    browser = PersistentBrowser(BrowserConfig(profile_dir=profile_dir, mode="live"))
+    browser._playwright = object()  # noqa: SLF001 - duck-typed context only
+    return browser
+
+
+def test_existing_planner_web_page_is_reused_for_begin_signin() -> None:
+    # Single planner_web page open: begin-signin must reuse THAT page and must
+    # not open a second page (no duplicate companion Planner page).
+    context = _FakeContext([_FakePage("https://planner.cloud.microsoft/")])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    asyncio.run(browser.begin_auth_signin())
+    # Exactly one navigation, and it landed on the SAME existing page.
+    assert context.pages[0].goto_calls == [MICROSOFT_AUTH_BOOTSTRAP_URL]
+    assert context.new_page_calls == 0
+    assert len(context.pages) == 1
+
+
+def test_after_begin_signin_exactly_one_page_on_approved_auth_origin() -> None:
+    context = _FakeContext([_FakePage("https://planner.cloud.microsoft/")])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    asyncio.run(browser.begin_auth_signin())
+    # After begin-signin: exactly one page, and it is on the approved Microsoft
+    # auth origin (not a duplicate Planner page remaining alongside it).
+    assert len(context.pages) == 1
+    assert context.pages[0].url == MICROSOFT_AUTH_BOOTSTRAP_URL
+    assert is_planner_web_surface_url(context.pages[0].url) is False
+
+
+def test_no_duplicate_companion_planner_page_remains() -> None:
+    context = _FakeContext([_FakePage("https://planner.cloud.microsoft/board")])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    asyncio.run(browser.begin_auth_signin())
+    planner_pages = [p for p in context.pages if is_planner_web_surface_url(p.url)]
+    assert planner_pages == []  # the only page moved to auth origin, none left
+    assert len(context.pages) == 1
+
+
+def test_multiple_planner_web_pages_fail_closed() -> None:
+    context = _FakeContext(
+        [
+            _FakePage("https://planner.cloud.microsoft/"),
+            _FakePage("https://sub.planner.cloud.microsoft/board"),
+        ]
+    )
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+    # No navigation happened and no new page was opened on an ambiguous topology.
+    assert context.new_page_calls == 0
+    assert all(p.goto_calls == [] for p in context.pages)
+    assert len(context.pages) == 2
+
+
+def test_arbitrary_origin_source_fails_closed_without_hijacking() -> None:
+    # Source classifier denies an arbitrary origin before any page selection.
+    context = _FakeContext([_FakePage("https://example.com/")])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+    assert context.new_page_calls == 0
+    assert all(p.goto_calls == [] for p in context.pages)
+
+
+def test_begin_signin_introduces_no_credential_fill_click_type() -> None:
+    # Inspect the production method source: it must navigate only. No fill,
+    # click, type, press, locator() or to_submit primitives may appear.
+    import inspect
+
+    source = inspect.getsource(PersistentBrowser.begin_auth_signin)
+    for forbidden in ("fill", "click", "type", "press", "locator", "to_submit"):
+        assert forbidden not in source
+    # The only browser action permitted is a single closed-target navigation.
+    assert "page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)" in source
