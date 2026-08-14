@@ -936,3 +936,136 @@ def test_start_readiness_gate_failure_preserves_worker_not_stopped_state(
     assert "m365-ui-mcp-browser-worker-1" not in launched
     assert not any("browser-worker" in x for x in ran)
 
+
+# --- 12) GUI health probe parse is fail-closed (no substring match) --------
+
+
+def test_parse_gui_health_accepts_valid_ok_true():
+    assert m.parse_gui_health_ok('{"ok":true}') is True
+    assert m.parse_gui_health_ok('{"ok": true, "mode":"live"}') is True
+
+
+def test_parse_gui_health_rejects_false_positives():
+    # The original bug: substring "ok" in non-JSON text would match.
+    assert m.parse_gui_health_ok('{"error":"status not ok"}') is False
+    assert m.parse_gui_health_ok("not ok") is False
+    # Explicit degraded payload.
+    assert m.parse_gui_health_ok('{"ok":false}') is False
+    # Non-boolean truthy must NOT be coerced.
+    assert m.parse_gui_health_ok('{"ok":1}') is False
+    assert m.parse_gui_health_ok('{"ok":"true"}') is False
+    # Empty / malformed.
+    assert m.parse_gui_health_ok("") is False
+    assert m.parse_gui_health_ok("   ") is False
+    assert m.parse_gui_health_ok("<html>ok</html>") is False
+    # JSON list, not an object.
+    assert m.parse_gui_health_ok("[1,2,3]") is False
+    # Missing ok key entirely.
+    assert m.parse_gui_health_ok('{"status":"up"}') is False
+
+
+def test_gui_health_budget_is_bounded():
+    # Cold-start poll must be fail-closed with a finite ceiling (not a hang).
+    assert m.GUI_HEALTH_ATTEMPTS > 0
+    assert m.GUI_HEALTH_INTERVAL >= 0
+    assert m.GUI_HEALTH_BUDGET_S < 300.0
+
+
+def test_wait_gui_health_accepts_valid_ok_true(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(m, "_shutil_which", lambda _n: True)
+    c = m.HandoffConfig()
+    c.state_file = tmp_path / "state.json"
+    ho = m.GuiHandoff(c)
+
+    def _runner(cmd: list[str]) -> Any:
+        if "/health" in " ".join(cmd):
+            return _R(0, '{"ok":true}')
+        return _R(0, "")
+
+    ho.cfg.runner = _runner
+    # Tiny budget so the test is fast; the valid payload is accepted on attempt 1.
+    assert ho._wait_gui_health(attempts=3, interval=0.0) is True  # noqa: SLF001
+
+
+def test_wait_gui_health_rejects_substring_false_positive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(m, "_shutil_which", lambda _n: True)
+    c = m.HandoffConfig()
+    c.state_file = tmp_path / "state.json"
+    ho = m.GuiHandoff(c)
+
+    calls = {"n": 0}
+
+    def _runner(cmd: list[str]) -> Any:
+        if "/health" in " ".join(cmd):
+            calls["n"] += 1
+            # Classic false-positive payload: "ok" appears but not ok:true.
+            return _R(0, '{"error":"worker not ok"}')
+        return _R(0, "")
+
+    ho.cfg.runner = _runner
+    # Bounded: must exhaust the (small) budget and return False, never accept.
+    assert ho._wait_gui_health(attempts=4, interval=0.0) is False  # noqa: SLF001
+    assert calls["n"] == 4
+
+
+def test_wait_gui_health_rejects_nonzero_exec_even_with_ok_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(m, "_shutil_which", lambda _n: True)
+    c = m.HandoffConfig()
+    c.state_file = tmp_path / "state.json"
+    ho = m.GuiHandoff(c)
+
+    def _runner(cmd: list[str]) -> Any:
+        if "/health" in " ".join(cmd):
+            # docker exec failed (e.g. container not ready) but stdout mentions ok.
+            return _R(1, '{"ok":true}')
+        return _R(0, "")
+
+    ho.cfg.runner = _runner
+    assert ho._wait_gui_health(attempts=3, interval=0.0) is False  # noqa: SLF001
+
+
+def test_start_fails_closed_when_health_payload_is_false_positive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stateful_runner
+):
+    # End-to-end: a runner whose /health returns a substring false-positive must
+    # NOT let start() reach begin-signin; it must fail closed (rollback).
+    monkeypatch.setattr(m, "_shutil_which", lambda _n: True)
+    c = m.HandoffConfig()
+    c.state_file = tmp_path / "state.json"
+    ho = m.GuiHandoff(c)
+    ho.cfg.popen = _Recorder().popen
+    ho.cfg.readiness = {
+        "x_socket": lambda cfg, proc: None,
+        "tcp": lambda cfg, name, host, port, proc: None,
+    }
+    captured: list[str] = []
+
+    def _runner(cmd: list[str]) -> Any:
+        s = " ".join(cmd)
+        captured.append(s)
+        if "/health" in s:
+            # Substring false positive: old code would accept, new code rejects.
+            return _R(0, '{"error":"not ok"}')
+        return stateful_runner(cmd)
+
+    ho.cfg.runner = _runner
+    ho._checks = {  # noqa: SLF001
+        "binaries": _ok,
+        "ports": _ok,
+        "repo_clean": _ok,
+        "no_stale_gui": _ok,
+        "no_active_state": _ok,
+        "container": _ok,
+        "profile_owner": _ok,
+    }
+    rc = ho.start()
+    assert rc == 1, "false-positive health payload must fail closed"
+    begin = [x for x in captured if "begin-signin" in x]
+    assert not begin, "begin-signin must NOT run on false-positive health"
+
