@@ -17,6 +17,7 @@ from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_sta
 from m365_browser_worker.bootstrap_navigation import (
     AUTH_BEGIN_SIGNIN_OPERATION,
     AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+    AUTH_OBSERVE_OPERATION,
     AUTH_OPERATOR_SUBMIT_OPERATION,
     MICROSOFT_AUTH_BOOTSTRAP_URL,
     PLANNER_WEB_BOOTSTRAP_URL,
@@ -24,6 +25,7 @@ from m365_browser_worker.bootstrap_navigation import (
     evaluate_bootstrap_target,
     evaluate_microsoft_auth_target,
     is_permitted_begin_signin_source,
+    is_planner_web_surface_url,
     is_reusable_bootstrap_page,
 )
 from m365_browser_worker.egress import enforce_route_egress
@@ -402,6 +404,72 @@ class PersistentBrowser:
         finally:
             if playwright is not None:
                 await playwright.stop()
+
+    async def read_visible_body_bounded(self, max_chars: int = 2000) -> str:
+        """Read only visible body text internally, bounded and never returned.
+
+        Narrow operator observation primitive. It is callable ONLY when:
+
+        * the browser is started;
+        * the process owns the dedicated persistent professional profile;
+        * the live context is positioned on an approved Microsoft
+          authentication origin; and
+        * exactly ONE page is open (the single auth page).
+
+        Any other condition fails closed: the method raises and returns nothing,
+        so no URL/DOM/page text/cookie/token can leak through this surface. The
+        caller (the observation endpoint) consumes the string internally for
+        classification and must never log it or return it. The returned text is
+        truncated to ``max_chars`` (the visible body subset) so even accidental
+        capture of a credential-shaped value is bounded.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "operator observation requires a started live browser",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "operator observation requires the dedicated persistent "
+                "professional browser profile",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        if self._context is None:
+            raise WorkerUnavailable(
+                "no browser context available for operator observation",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        pages = [p for p in self._context.pages if str(p.url)]
+        if len(pages) != 1:
+            raise PolicyDenied(
+                "operator observation requires exactly one open authentication page",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        page = pages[0]
+        # The read is permitted on an approved Microsoft authentication origin
+        # (the in-progress sign-in page) or on the fixed Planner Web surface
+        # (the post-sign-in transition the observation must detect). A Planner
+        # Web page is a *allowed* host but NOT an approved auth origin, so the
+        # closed surface check is evaluated together with the auth-origin
+        # approval. Any other origin fails closed.
+        if not (
+            self.auth_origin_approved() or is_planner_web_surface_url(str(page.url))
+        ):
+            raise PolicyDenied(
+                "operator observation only permits the approved Microsoft "
+                "authentication origin or the fixed Planner Web surface",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        try:
+            body_text = await page.locator("body").inner_text()
+        except Exception:  # noqa: BLE001 - observation must fail closed, never echo
+            raise PolicyDenied(
+                "operator observation could not read the visible page surface",
+                operation=AUTH_OBSERVE_OPERATION,
+            ) from None
+        if not isinstance(body_text, str):
+            return ""
+        return body_text[:max_chars]
 
     def guard_conditional_access(self, page_text: str) -> None:
         """Raise the fail-closed blocker when Conditional Access demands enrolment."""

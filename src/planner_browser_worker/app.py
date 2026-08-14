@@ -41,7 +41,7 @@ from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readi
 from m365_browser_worker.session_broker import SessionCapabilityBroker
 from m365_browser_worker.worker_errors import project_worker_error
 from m365_mcp.capability_registry import default_capability_registry
-from planner_mcp.auth import AuthState
+from planner_mcp.auth import AuthContext, AuthState
 from planner_mcp.errors import (
     PlannerMcpError,
     PolicyDenied,
@@ -53,6 +53,7 @@ from planner_mcp.ui_contract import load_status
 
 from . import __version__, mock_data
 from .browser import BrowserConfig, PersistentBrowser
+from .observation import observe_signin_state
 
 
 def _mode() -> str:
@@ -110,6 +111,10 @@ def create_app(
     # Internal ownership only; no generic executor/browser endpoint is exposed.
     app.state.profile_executor = profile_executor
     app.state.protocol_negotiator = worker_protocol
+    # In-memory observation context. Maintained separately from the worker's
+    # contract-attested auth signal; ambiguous UNKNOWN readings never corrupt a
+    # previously established (e.g. AUTHENTICATED) context.
+    app.state.observation_context = AuthContext()
 
     @app.exception_handler(RequestValidationError)
     async def sanitized_validation_error(
@@ -508,6 +513,69 @@ def create_app(
         # Submission is not authentication: the human still completes MFA in
         # Microsoft Authenticator, so the closed state remains UNKNOWN.
         return {"ok": True, "auth_state": AuthState.UNKNOWN.value}
+
+    @app.get("/auth/bootstrap/observe")
+    async def auth_bootstrap_observe(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback live sign-in observation (AUTH-103).
+
+        Reuses the existing safe state machine to read the live sign-in surface
+        and expose ONLY a sanitized state. Security shape:
+
+        * NOT an MCP tool, absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client;
+        * admission is a SOCKET-level loopback check on ``request.client.host``.
+          ``X-Forwarded-For``/``X-Real-IP``/``Forwarded`` are never consulted, so
+          a Docker-network peer gets ``404``;
+        * GET only: takes NO parameters. Any query string is rejected and no
+          request body is processed (GET carries none). There is no
+          URL/search/selector input;
+        * the visible body text is read internally through the narrow
+          ``PersistentBrowser.read_visible_body_bounded`` primitive, which only
+          fires when the browser is started + dedicated persistent professional
+          profile + approved Microsoft authentication origin + exactly one auth
+          page. The text is consumed internally for classification and is never
+          logged or returned;
+        * the existing ``classify_live`` / ``advance_live_auth_state`` logic is
+          reused. An ambiguous number match returns ``mfa_number: null`` and the
+          state machine never guesses a value; an ambiguous ``UNKNOWN`` reading
+          never corrupts the in-memory observation ``AuthContext``;
+        * if the live surface has transitioned back to the fixed Planner Web
+          surface after sign-in, the endpoint reports ``AUTHENTICATED`` from that
+          live surface transition rather than contract attestation;
+        * returns only ``{state, mfa_number, mfa_ambiguous}``. No URL, page text,
+          DOM, selector, cookie, token, UPN, tenant id or account identifier.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+        if _is_mock():
+            # Mock mode has no live page to observe; report the closed admission
+            # only without a real surface reading.
+            return {
+                "state": AuthState.UNKNOWN.value,
+                "mfa_number": None,
+                "mfa_ambiguous": False,
+            }
+
+        context = app.state.observation_context
+        try:
+            result = await observe_signin_state(worker_browser, context)
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        return {
+            "state": result.state.value,
+            "mfa_number": result.mfa_number,
+            "mfa_ambiguous": result.mfa_ambiguous,
+        }
 
     @app.get("/auth/session")
     async def auth_session() -> dict[str, Any]:
