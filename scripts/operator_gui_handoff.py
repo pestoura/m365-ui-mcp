@@ -9,7 +9,13 @@ launched a separate host Chromium against the Docker volume profile; that is
 replaced here by a fail-closed *headed one-off container* model:
 
   * A dedicated host-side GUI stack (Xvfb -> x11vnc -> websockify/noVNC) is
-    started, bound to 127.0.0.1 only.
+    started, bound to 127.0.0.1 only. Xvfb uses a dedicated ephemeral
+    Xauthority under the handoff cache dir (owner host uid 1000, 0600 base
+    perms, named POSIX ACL granting read-only to numeric container uid 1001
+    only). The cookie is generated offline and never logged or persisted
+    beyond that file; it is bind-mounted read-only into the headed container
+    at a fixed internal path with XAUTHORITY set. No world-readable cookie, no
+    sudo, no host ~/.Xauthority, no Xvfb -ac.
   * The NORMAL browser-worker is gracefully stopped (verified exited) so the
     profile is not held by two Chromium instances at once.
   * A SINGLE headed one-off container is launched from the EXACT currently
@@ -27,12 +33,14 @@ replaced here by a fail-closed *headed one-off container* model:
 
 Hard invariants (fail closed):
   * start refuses unless: production checkout is clean with ONLY the generated
-    ``.jarvas/attest/`` subtree allowed untracked; required host binaries
-    (Xvfb, x11vnc, websockify, docker) are present; loopback ports 5999/6080 are
-    free; no stale GUI container or handoff state exists; the normal
-    browser-worker exists and is healthy; profile ownership inside the healthy
-    normal worker is exactly 1001:1001 (verified via docker exec/stat, never by
-    stating the host Docker volume mountpoint and never by chown);
+  ``.jarvas/attest/`` subtree allowed untracked; required host binaries
+  (Xvfb, x11vnc, websockify, docker) are present; loopback ports 5999/6080 are
+  free; no stale GUI container or handoff state exists; any leftover dedicated
+  Xauthority is safely cleaned only when no active handoff state exists (else
+  fail closed); the normal browser-worker exists and is healthy; profile ownership
+  inside the healthy normal worker is exactly 1001:1001 (verified via docker
+  exec/stat, never by stating the host Docker volume mountpoint and never by
+  chown);
   * the headed container never joins browser-internal, never gets an alias
     ``browser-worker``, never publishes ports, never copies container env/secrets;
   * stop/rollback remove the headed container FIRST (profile flush), then
@@ -91,14 +99,33 @@ WORKER_HEALTH_PORT = 8090
 NOVNC_WEB = "/usr/share/novnc"
 # Avoid a literal "/tmp/..." string so static secret/paths gates stay quiet.
 X11_UNIX_DIR = os.path.join(os.sep + "tmp", ".X11-unix")
+# Avoid a literal "/tmp/..." string so static secret/paths gates stay quiet.
+HANDOFF_CACHE_DIR = Path.home() / ".cache" / "m365-gui-handoff"
+# Dedicated ephemeral Xauthority lives UNDER the existing handoff cache dir
+# (never ~/.Xauthority, never a host-global cookie). It is owned by the host
+# operator uid/gid (1000:1000), created 0600, then a named POSIX ACL grants
+# read-only to the numeric container uid (1001, image user pwuser) only. The
+# cookie content is generated offline via xauth and is never logged, echoed,
+# persisted beyond this file, or bind-mounted writable. The file is always
+# removed on stop and on every rollback/failure path.
+XAUTH_DIR = HANDOFF_CACHE_DIR / "xauth"
+XAUTH_FILE = XAUTH_DIR / "Xauthority.guibrowser"
+# Fixed internal path inside the one-off container where the SAME file is
+# bind-mounted read-only.
+GUI_XAUTHORITY_INTERNAL = "/run/m365-gui-handoff/Xauthority"
+# Host uid/gid that owns the auth file and the container uid granted read-only.
+HOST_AUTH_UID = 1000
+HOST_AUTH_GID = 1000
+GUI_READONLY_UID = 1001
 LOOPBACK = "127.0.0.1"
 PRODUCTION_REPO = Path.home() / "services" / "m365-ui-mcp"
 ATTEST_SUBTREE = ".jarvas/attest"
-STATE_DIR = Path.home() / ".cache" / "m365-gui-handoff"
+STATE_DIR = HANDOFF_CACHE_DIR
 STATE_FILE = STATE_DIR / "state.json"
 
 # Required host binaries only — host Chromium/setpriv are NOT required.
-REQUIRED_BINARIES = ("Xvfb", "x11vnc", "websockify", "docker")
+# xauth + setfacl are needed for the dedicated ephemeral Xauthority model.
+REQUIRED_BINARIES = ("Xvfb", "x11vnc", "websockify", "docker", "xauth", "setfacl")
 
 # Loopback ports that must be free before start.
 BOUND_PORTS = (VNC_PORT, WEBSOCKIFY_PORT)
@@ -161,6 +188,12 @@ class HandoffConfig:
     x11_unix_dir: str = X11_UNIX_DIR
     loopback: str = LOOPBACK
     state_file: Path = STATE_FILE
+    xauth_dir: Path = XAUTH_DIR
+    xauth_file: Path = XAUTH_FILE
+    xauthority_internal: str = GUI_XAUTHORITY_INTERNAL
+    host_auth_uid: int = HOST_AUTH_UID
+    host_auth_gid: int = HOST_AUTH_GID
+    gui_readonly_uid: int = GUI_READONLY_UID
     # Overridable system-probe functions (used by tests to force paths).
     checks: dict = field(default_factory=dict)
     # Overridable process launcher (Popen factory). Tests inject a recorder.
@@ -182,8 +215,24 @@ class HandoffConfig:
 
 
 def build_xvfb_cmd(cfg: HandoffConfig) -> list[str]:
-    """Xvfb on the operator display, TCP disabled (unix socket only)."""
-    return ["Xvfb", cfg.display, "-screen", "0", "1280x1024x24", "-nolisten", "tcp"]
+    """Xvfb on the operator display, TCP disabled (unix socket only).
+
+    Uses a dedicated ephemeral ``-auth`` file (never a host-global
+    ``~/.Xauthority``). The cookie in that file is generated offline and is
+    read-only to the container uid via a named POSIX ACL (see
+    ``build_xauth_*``). ``Xvfb -ac`` is never used.
+    """
+    return [
+        "Xvfb",
+        cfg.display,
+        "-auth",
+        str(cfg.xauth_file),
+        "-screen",
+        "0",
+        "1280x1024x24",
+        "-nolisten",
+        "tcp",
+    ]
 
 
 def build_x11vnc_cmd(cfg: HandoffConfig) -> list[str]:
@@ -320,7 +369,10 @@ def build_gui_container_run_cmd(cfg: HandoffConfig) -> list[str]:
     No published ports. Joins ONLY the worker egress network (never
     browser-internal, never alias browser-worker). Same named volume RW. X11
     socket bind-mounted. Same non-root image user. cap-drop ALL. no-new-privileges.
-    Memory/pids limits. Default image entrypoint/CMD. Explicit minimal env.
+    Memory/pids limits. Explicit minimal env. The dedicated ephemeral Xauthority
+    file is bind-mounted READ-ONLY at a fixed internal path and XAUTHORITY is
+    exported (never a host-global ~/.Xauthority). A /dev/shm tmpfs matching the
+    healthy compose worker is added. Default image entrypoint/CMD.
     """
     cmd: list[str] = [
         "docker",
@@ -334,6 +386,11 @@ def build_gui_container_run_cmd(cfg: HandoffConfig) -> list[str]:
         f"{cfg.profile_volume}:{cfg.profile_mount}:rw",
         "--volume",
         f"{cfg.x11_unix_dir}:{cfg.x11_unix_dir}:rw",
+        # Dedicated ephemeral Xauthority, read-only, fixed internal path.
+        "--volume",
+        f"{cfg.xauth_file}:{cfg.xauthority_internal}:ro",
+        "--tmpfs",
+        tmpfs_parity_with_compose_worker(),
         "--user",
         f"{cfg.gui_uid}:{cfg.gui_gid}",
         "--cap-drop",
@@ -345,6 +402,8 @@ def build_gui_container_run_cmd(cfg: HandoffConfig) -> list[str]:
     ]
     for key, value in GUI_RUN_ENV:
         cmd += ["-e", f"{key}={value}"]
+    # Export XAUTHORITY so the headed Chromium uses the dedicated auth file.
+    cmd += ["-e", f"XAUTHORITY={cfg.xauthority_internal}"]
     cmd.append(cfg.browser_worker_image)
     return cmd
 
@@ -356,6 +415,99 @@ def host_launch_order(cfg: HandoffConfig) -> list[tuple[str, list[str]]]:
         ("x11vnc", build_x11vnc_cmd(cfg)),
         ("websockify", build_websockify_cmd(cfg)),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Dedicated ephemeral Xauthority (cookie never persisted beyond this file)
+#
+# The headed one-off container connects to the host Xvfb over the bind-mounted
+# /tmp/.X11-unix unix socket. To avoid a world-readable host ~/.Xauthority or
+# ``Xvfb -ac``, we generate an OFFLINE random MIT-MAGIC-COOKIE for the operator
+# display and store it in a dedicated file owned by the host operator
+# (1000:1000, 0600). A named POSIX ACL then grants read-only access to the
+# numeric container uid (1001, image user pwuser) and nothing else (no group,
+# no other). Xvfb is started with -auth pointing at this file; the SAME file is
+# bind-mounted read-only into the container at a fixed internal path and
+# XAUTHORITY is exported. The cookie value is never logged, echoed, or written
+# anywhere else. The file is always removed on stop and on every rollback
+# path. All commands below are pure builders (no side effects) so they can be
+# unit-tested; the side-effecting orchestration lives in XauthManager.
+# ---------------------------------------------------------------------------
+
+
+def build_xauth_add_cmd(cfg: HandoffConfig) -> list[str]:
+    """Generate an OFFLINE random cookie for the operator display.
+
+    ``xauth add <display> . <hex>`` with a freshly generated 32-hex-char
+    (16-byte) cookie. The cookie is produced in-process (os.urandom) so it is
+    never read from a file, never logged, and never written except into the
+    dedicated -auth file via xauth itself.
+    """
+    cookie = _generate_xauth_cookie()
+    return [
+        "xauth",
+        "-f",
+        str(cfg.xauth_file),
+        "add",
+        cfg.display,
+        ".",
+        cookie,
+    ]
+
+
+def build_xauth_remove_cmd(cfg: HandoffConfig) -> list[str]:
+    """Remove the dedicated display entry from the auth file (if present)."""
+    return ["xauth", "-f", str(cfg.xauth_file), "remove", cfg.display]
+
+
+def build_setfacl_readonly_cmd(cfg: HandoffConfig) -> list[str]:
+    """Grant read-only to the numeric container uid (1001) only.
+
+    Base perms are set to 0600 (owner rw, no group, no other). The ACL adds a
+    single named user entry ``u:1001:r`` with no write/execute. No group ACL,
+    no mask widening beyond read. ``-b`` is NOT used (that would wipe the base
+    owner entry). The file must exist before this runs.
+    """
+    return ["setfacl", "-m", f"u:{cfg.gui_readonly_uid}:r", str(cfg.xauth_file)]
+
+
+def build_setfacl_clear_cmd(cfg: HandoffConfig) -> list[str]:
+    """Remove only the numeric container uid ACL entry (used during cleanup)."""
+    return ["setfacl", "-x", f"u:{cfg.gui_readonly_uid}", str(cfg.xauth_file)]
+
+
+def _generate_xauth_cookie() -> str:
+    """16-byte random cookie as 32 hex chars (never persisted/logged)."""
+    import secrets
+
+    return secrets.token_hex(16)
+
+
+def xauth_file_permissions_model() -> dict[str, object]:
+    """Canonical permissions model for the dedicated auth file.
+
+    Returned as data so tests can assert the contract without real files:
+      * owner: host operator uid 1000
+      * base mode: 0o600 (rw owner only; no group, no other)
+      * acl: exactly one named user entry u:1001:r (read-only, no write/exec)
+      * world-readable: forbidden (other must have no bits)
+    """
+    return {
+        "owner_uid": HOST_AUTH_UID,
+        "owner_gid": HOST_AUTH_GID,
+        "base_mode": 0o600,
+        "acl_entries": (f"u:{GUI_READONLY_UID}:r",),
+        "world_readable": False,
+    }
+
+
+def tmpfs_parity_with_compose_worker() -> str:
+    """The /dev/shm tmpfs mount spec, matching the healthy compose worker.
+
+    Compose worker uses: /dev/shm:rw,nosuid,size=256m. The headed one-off must
+    match exactly (rw,nosuid,size=256m) — no exec, no shared, fixed 256m.
+    """
+    return "/dev/shm:rw,nosuid,size=256m"  # noqa: S108 - compose tmpfs mount spec, not a temp path
 
 
 # ---------------------------------------------------------------------------
@@ -663,6 +815,96 @@ def read_state(cfg: HandoffConfig) -> dict:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Dedicated ephemeral Xauthority lifecycle (orchestration + safety)
+#
+# Side-effecting counterpart to the pure builders above. All filesystem writes
+# happen ONLY under the configured handoff cache subdir and are removed on
+# every stop / rollback / failure path. The cookie is generated offline and is
+# never logged, echoed, or persisted beyond the dedicated -auth file.
+# ---------------------------------------------------------------------------
+
+
+class XauthManager:
+    """Create/teardown the dedicated ephemeral Xauthority for the headed worker."""
+
+    def __init__(self, cfg: HandoffConfig) -> None:
+        self.cfg = cfg
+
+    def _run(self, cmd: list[str]) -> subprocess.CompletedProcess:
+        if self.cfg.runner is not None:
+            return self.cfg.runner(cmd)
+        return subprocess.run(  # noqa: S603, S607
+            cmd, capture_output=True, text=True, check=False  # noqa: S603, S607
+        )
+
+    def setup(self) -> None:
+        """Create the dedicated auth file: 0700 dir, 0600 owner, offline cookie,
+
+        read-only ACL for the container uid only. Idempotent-safe: refuses if a
+        file already exists with an unexpected state is avoided by the preflight
+        safe-clean path, so here we (re)create deterministically.
+        """
+        self.cfg.xauth_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
+        if not self.cfg.xauth_file.exists():
+            self.cfg.xauth_file.touch()
+        # Strict base ownership/mode before writing the cookie.
+        try:
+            os.chown(self.cfg.xauth_file, self.cfg.host_auth_uid, self.cfg.host_auth_gid)
+        except OSError:
+            # Same-uid chown is always allowed; only a cross-uid attempt can fail
+            # and never happens here (host operator owns the handoff cache dir).
+            pass
+        os.chmod(self.cfg.xauth_file, 0o600)
+        # Generate the OFFLINE cookie and write it exclusively into this file.
+        res = self._run(build_xauth_add_cmd(self.cfg))
+        if res.returncode != 0:
+            raise RuntimeError(
+                f"xauth cookie generation failed: {(res.stderr or '').strip()}"
+            )
+        # xauth may have widened perms; re-assert the restrictive base mode.
+        os.chmod(self.cfg.xauth_file, 0o600)
+        # Named POSIX ACL: read-only to the numeric container uid ONLY.
+        acl = self._run(build_setfacl_readonly_cmd(self.cfg))
+        if acl.returncode != 0:
+            raise RuntimeError(
+                f"setfacl read-only ACL failed: {(acl.stderr or '').strip()}"
+            )
+
+    def teardown(self) -> None:
+        """Remove the auth file and its ACL. Best-effort; never raises."""
+        try:
+            if self.cfg.xauth_file.exists():
+                self._run(build_setfacl_clear_cmd(self.cfg))
+                self.cfg.xauth_file.unlink()
+        except OSError:
+            pass
+        try:
+            if self.cfg.xauth_dir.exists() and not any(self.cfg.xauth_dir.iterdir()):
+                self.cfg.xauth_dir.rmdir()
+        except OSError:
+            pass
+
+
+def default_leftover_xauth(cfg: HandoffConfig) -> tuple[bool, str]:
+    """Fail-closed leftover-auth handling consistent with state ownership.
+
+    A leftover dedicated auth file is only acceptable when NO active handoff
+    state exists: in that case it is safely cleaned so ``start`` can recreate a
+    fresh one. If active handoff state exists (an inconsistent/active handoff),
+    preflight refuses rather than silently removing an in-use secret.
+    """
+    if not cfg.xauth_file.exists():
+        return True, ""
+    if cfg.state_file.exists():
+        return False, f"leftover auth file with active handoff state: {cfg.xauth_file}"
+    try:
+        cfg.xauth_file.unlink()
+    except OSError as exc:
+        return False, f"leftover auth file present and not removable: {cfg.xauth_file} ({exc})"
+    return True, ""
+
+
 class GuiHandoff:
     def __init__(self, cfg: HandoffConfig, profile: Path | None = None) -> None:
         self.cfg = cfg
@@ -670,12 +912,14 @@ class GuiHandoff:
         self._host_procs: list[tuple[str, subprocess.Popen]] = []
         self._stages: set[str] = set()
         self._begin_signin_ok: bool = False
+        self._xauth = XauthManager(cfg)
         self._checks = cfg.checks or {
             "binaries": default_require_binaries,
             "ports": lambda: default_ports_free(cfg),
             "repo_clean": lambda: default_repo_clean(cfg),
             "no_stale_gui": lambda: default_no_stale_gui_container(cfg),
             "no_active_state": lambda: default_no_active_handoff_state(cfg),
+            "leftover_xauth": lambda: default_leftover_xauth(cfg),
             "container": lambda: default_container_healthy(cfg),
             "profile_owner": lambda: default_profile_ownership_inside_worker(
                 cfg, self._run
@@ -787,6 +1031,12 @@ class GuiHandoff:
         self._stages = set()
         self._host_procs = []
         try:
+            # Create the dedicated ephemeral Xauthority FIRST (before launching
+            # Xvfb, which needs -auth pointing at it). The cookie is generated
+            # offline; the file is 0600 owner with read-only ACL for the
+            # container uid only. Always torn down on stop / rollback / failure.
+            self._xauth.setup()
+            self._stages.add("xauth")
             # Launch the FULL host GUI stack first and wait fail-closed for every
             # readiness gate BEFORE touching the normal browser-worker. This
             # minimizes worker downtime and means any readiness failure rolls back
@@ -861,6 +1111,8 @@ class GuiHandoff:
         # 3) Restart ONLY browser-worker and wait healthy (cp untouched).
         self._start_worker()
         self._wait_worker_healthy()
+        # 4) Remove the dedicated ephemeral Xauthority (cookie never lingers).
+        self._xauth.teardown()
         try:
             self.cfg.state_file.unlink()
         except OSError:
@@ -888,6 +1140,7 @@ class GuiHandoff:
     # -- internals --------------------------------------------------------
     def _rollback(self) -> None:
         # Reverse of start: remove headed container, restore worker, host stack.
+        # Always tear down the dedicated Xauthority (cookie must never linger).
         if "gui_container" in self._stages or "gui_health" in self._stages:
             self._rm_gui_container()
         if "worker_stopped" in self._stages:
@@ -896,6 +1149,7 @@ class GuiHandoff:
         for _name, proc in reversed(self._host_procs):
             self._terminate(proc)
         self._host_procs = []
+        self._xauth.teardown()
 
 
 def _pid_alive(pid: int) -> bool:

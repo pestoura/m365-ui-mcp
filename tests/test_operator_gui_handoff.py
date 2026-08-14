@@ -212,7 +212,9 @@ def test_attest_subtree_variants_allowed():
 
 def test_required_binaries_exclude_host_chromium_and_setpriv(cfg: m.HandoffConfig):
     req = m.REQUIRED_BINARIES
-    assert set(req) == {"Xvfb", "x11vnc", "websockify", "docker"}
+    # xauth + setfacl are now required for the dedicated ephemeral Xauthority;
+    # host Chromium and setpriv are still NOT required.
+    assert set(req) == {"Xvfb", "x11vnc", "websockify", "docker", "xauth", "setfacl"}
     assert "chromium" not in req
     assert "setpriv" not in req
 
