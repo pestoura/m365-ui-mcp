@@ -169,9 +169,50 @@ async def test_matrix_3_common_and_planner_attested_gate_may_pass() -> None:
     assert await _planner_plans_status(app) == 200
 
 
-def test_common_auth_attested_unit_unverified_fragment() -> None:
-    # Unit level: common.auth fragments present but UNVERIFIED => False.
-    assert common_auth_attested() is False  # source contract has common.auth.* UNVERIFIED
+def test_common_auth_attested_unit_unverified_fragment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Unit level: when BOTH common.auth fragments are present but UNVERIFIED =>
+    # False. This proves the function inspects attestation state, not mere
+    # fragment presence. (The shipped source contract promotes both fragments to
+    # ATTESTED, so the default path returns True; here we force the unverified
+    # state to exercise the fail-closed branch.)
+    source = load_ui_contract_set()
+    unverified = tuple(
+        UIContractFragment(
+            fragment_id=f.fragment_id,
+            fragment_version=f.fragment_version,
+            scope=f.scope,
+            application=f.application,
+            surface=f.surface,
+            capability_keys=f.capability_keys,
+            attested=False,
+            attestation_status="UNVERIFIED_LIVE",
+            selectors={
+                name: {**meta, "status": "UNVERIFIED_LIVE"}
+                for name, meta in f.selectors.items()
+            },
+        )
+        if f.fragment_id in ("common.auth.email", "common.auth.password")
+        else f
+        for f in source.fragments
+    )
+    patched = UIContractSet(
+        set_version=source.set_version,
+        legacy_version=source.legacy_version,
+        fragments=unverified,
+    )
+    monkeypatch.setattr(
+        "planner_mcp.ui_contract.load_ui_contract_set", lambda *a, **k: patched
+    )
+    assert common_auth_attested() is False
+
+
+def test_common_auth_attested_unit_source_contract_is_promoted() -> None:
+    # The shipped source contract promotes both atomic common.auth fragments to
+    # ATTESTED by explicit evidence-backed PR promotion, so the default path
+    # returns True. Keeps the inverse of the unverified test green.
+    assert common_auth_attested() is True
 
 
 def test_common_auth_attested_unit_missing_fragment_fails_closed(
@@ -244,8 +285,10 @@ def test_common_auth_attested_unit_attested_fragment(
 def test_common_auth_attested_unit_only_email_attested_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Only one of the two atomic auth fragments attested => False. Both must be
-    # effectively attested before AUTH-101 may apply credentials.
+    # Only one of the two atomic auth fragments attested (email) while password
+    # stays UNVERIFIED => False. Both must be effectively attested before AUTH-101
+    # may apply credentials. The shipped source promotes BOTH, so we must force
+    # the password fragment back to UNVERIFIED to model the single-fragment case.
     source = load_ui_contract_set()
 
     def _attest(fragment: UIContractFragment) -> UIContractFragment:
@@ -265,8 +308,25 @@ def test_common_auth_attested_unit_only_email_attested_fails_closed(
             selectors=attested_selectors,
         )
 
+    def _unverify(fragment: UIContractFragment) -> UIContractFragment:
+        unverified_selectors = {
+            name: {**meta, "status": "UNVERIFIED_LIVE"}
+            for name, meta in fragment.selectors.items()
+        }
+        return UIContractFragment(
+            fragment_id=fragment.fragment_id,
+            fragment_version=fragment.fragment_version,
+            scope=fragment.scope,
+            application=fragment.application,
+            surface=fragment.surface,
+            capability_keys=fragment.capability_keys,
+            attested=False,
+            attestation_status="UNVERIFIED_LIVE",
+            selectors=unverified_selectors,
+        )
+
     common = tuple(
-        _attest(f) if f.fragment_id == "common.auth.email" else f
+        _attest(f) if f.fragment_id == "common.auth.email" else _unverify(f)
         for f in source.fragments
         if f.fragment_id in ("common.auth.email", "common.auth.password")
     )

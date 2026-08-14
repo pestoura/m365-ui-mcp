@@ -49,13 +49,9 @@
           "attested": false,
           "fail_closed_error": "UI_CONTRACT_UNATTESTED",
           "selector_count": 12,
-          "ui_contract_set_digest": "sha256:4a089bcf14fb3583f1a46a4514f6cf491b2a3876302299e4005a703f5f22c4cd",
+          "ui_contract_set_digest": "sha256:b620abbb71680c84daa382dc80fa31fe7db774ad39dc3fc99784be97fcc8d2e1",
           "ui_contract_version": "0.1.0",
           "unverified_selectors": [
-            "auth.login_email_input",
-            "auth.login_next_button",
-            "auth.login_password_input",
-            "auth.login_signin_button",
             "plan.list_container",
             "plan.list_item",
             "plan.title",
@@ -71,7 +67,7 @@
           "mode": "mock",
           "ok": true,
           "ui_contract_attested": false,
-          "ui_contract_set_digest": "sha256:4ebf8e6ed34497501ca699e7252682179148ad30e9e45f048fb7a4a5c7a58ab3",
+          "ui_contract_set_digest": "sha256:561568bc66fab9e78496c41442e492a6058fdf2b3dcabf27793afda634df0903",
           "ui_contract_version": "0.1.0",
           "version": "0.1.0"
         }
@@ -493,7 +489,7 @@
           "BLOCKED",
           "OUT_OF_SCOPE"
         ],
-        "ui_contract_set_digest": "sha256:4a089bcf14fb3583f1a46a4514f6cf491b2a3876302299e4005a703f5f22c4cd",
+        "ui_contract_set_digest": "sha256:b620abbb71680c84daa382dc80fa31fe7db774ad39dc3fc99784be97fcc8d2e1",
         "ui_fragment_attestation": [
           {
             "application": "planner",
@@ -972,13 +968,9 @@
         "attested": false,
         "fail_closed_error": "UI_CONTRACT_UNATTESTED",
         "selector_count": 12,
-        "ui_contract_set_digest": "sha256:4a089bcf14fb3583f1a46a4514f6cf491b2a3876302299e4005a703f5f22c4cd",
+        "ui_contract_set_digest": "sha256:b620abbb71680c84daa382dc80fa31fe7db774ad39dc3fc99784be97fcc8d2e1",
         "ui_contract_version": "0.1.0",
         "unverified_selectors": [
-          "auth.login_email_input",
-          "auth.login_next_button",
-          "auth.login_password_input",
-          "auth.login_signin_button",
           "plan.list_container",
           "plan.list_item",
           "plan.title",
@@ -1297,5 +1289,5 @@
   },
   "live_support_claimed": false,
   "mode": "mock",
-  "digest": "sha256:8c4366003c2196630855718bade7dd0d39b255a38bcd28700af1c2b9ac76ddc5"
+  "digest": "sha256:b29b5dd7e551407ae20d73baceced36b9824990feedbe476e55ac26894bda1be"
 }

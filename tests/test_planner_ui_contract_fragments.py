@@ -85,11 +85,33 @@ def test_common_auth_fragment_remains_platform_owned() -> None:
 
 
 def test_legacy_contract_selector_order_and_metadata_remain_identical() -> None:
+    contract_set = _contract_set()
     legacy = json.loads((_contracts_dir() / "ui_contract.json").read_text(encoding="utf-8"))
-    fragmented = _contract_set()
+    fragmented = contract_set.selectors()
 
-    assert legacy["ui_contract_version"] == fragmented.legacy_version
-    assert legacy["selectors"] == fragmented.selectors()
+    # The Foundation UIContract (contracts/ui_contract.json) is the canonical
+    # fail-closed baseline and MUST stay UNVERIFIED_LIVE (check_contracts.py
+    # enforces attested=False / UNVERIFIED_LIVE for every selector). The atomic
+    # common.auth fragments are promoted to ATTESTED by explicit evidence-backed
+    # PR promotion, so the fragmented view legitimately diverges from the
+    # Foundation baseline on the four auth selectors. Everything else must remain
+    # byte-identical: same selector names (manifest order) and identical
+    # value/status for every non-auth selector.
+    auth_selectors = {
+        "auth.login_email_input",
+        "auth.login_next_button",
+        "auth.login_password_input",
+        "auth.login_signin_button",
+    }
+    assert set(fragmented) == set(legacy["selectors"])
+    for name in fragmented:
+        if name in auth_selectors:
+            # Promoted: attested in the fragmented view.
+            assert fragmented[name]["status"] == "ATTESTED", name
+            assert fragmented[name]["value"] is None, name
+        else:
+            # Unchanged: identical to the Foundation baseline.
+            assert fragmented[name] == legacy["selectors"][name], name
 
 
 def test_planner_fragment_declarations_contain_no_selector_values() -> None:

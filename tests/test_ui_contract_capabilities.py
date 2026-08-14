@@ -19,12 +19,28 @@ CAP_030_STATES = {
 }
 
 
+_AUTH_SELECTORS = {
+    "auth.login_email_input",
+    "auth.login_next_button",
+    "auth.login_password_input",
+    "auth.login_signin_button",
+}
+
+
 def test_selectors_are_unverified_and_not_fabricated() -> None:
     status = load_status()
+    # The aggregate status is still UNVERIFIED because the Planner fragments are
+    # not yet attested; full attestation requires them too. The promoted
+    # common.auth fragments are reflected as attested and removed from the
+    # unverified set, while every non-auth selector remains unverified.
     assert status.attested is False
     assert status.attestation_status == "UNVERIFIED_LIVE"
     assert status.selector_count > 0
-    assert len(status.unverified_selectors) == status.selector_count
+    assert len(status.unverified_selectors) == status.selector_count - len(_AUTH_SELECTORS)
+    assert all(name not in _AUTH_SELECTORS for name in status.unverified_selectors)
+    assert status.unverified_selectors == tuple(
+        name for name in status.unverified_selectors if name not in _AUTH_SELECTORS
+    )
 
 
 def test_require_attested_fails_closed() -> None:

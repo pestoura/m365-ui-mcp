@@ -83,9 +83,36 @@ def test_capability_backed_tools_resolve_to_at_least_one_fragment() -> None:
         assert resolved, name
 
 
+# Fragments promoted by explicit, evidence-backed PR promotion (live UNIQUE_MATCH
+# on every selector, reviewed contract JSON edit) are permitted to be ATTESTED.
+# This global invariant therefore scopes to the NON-auth fragments: every other
+# fragment must still be UNVERIFIED_LIVE by default, and the auth fragments that
+# ARE attested must satisfy total consistency (fragment + all selectors ATTESTED,
+# value None, locator plans preserved, no drift).
+ATTESTED_AUTH_FRAGMENT_IDS = ("common.auth.email", "common.auth.password")
+
+
+def _auth_fragment_is_consistently_attested(fragment: object) -> bool:
+    fragment = fragment  # type: ignore[assignment]
+    if not fragment.attested:  # type: ignore[attr-defined]
+        return False
+    if fragment.attestation_status != "ATTESTED":  # type: ignore[attr-defined]
+        return False
+    for selector in fragment.selectors.values():  # type: ignore[attr-defined]
+        if selector["status"] != "ATTESTED":
+            return False
+        if selector["value"] is not None:
+            return False
+    return True
+
+
 def test_no_capability_or_fragment_claims_live_attestation_yet() -> None:
     contract_set = load_ui_contract_set()
     for fragment in contract_set.fragments:
+        if fragment.fragment_id in ATTESTED_AUTH_FRAGMENT_IDS:
+            # Evidence-backed promotion: total consistency required.
+            assert _auth_fragment_is_consistently_attested(fragment), fragment.fragment_id
+            continue
         assert fragment.attested is False, fragment.fragment_id
         assert fragment.attestation_status == "UNVERIFIED_LIVE", fragment.fragment_id
         for selector in fragment.selectors.values():
