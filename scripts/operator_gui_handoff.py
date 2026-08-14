@@ -112,6 +112,17 @@ PROC_ALIVE_GRACE = 10.0
 POLL_INTERVAL = 0.1
 X11_SOCKET_NAME = "X99"
 
+# Bounded cold-start polling budget for the headed one-off container's in-loopback
+# /health probe. The headed worker's /health returns {"ok": true, ...} the moment
+# the worker app binds 127.0.0.1:8090 inside the container (it does NOT gate on
+# headed-Chromium/X readiness), so the wait is a bounded readiness poll with a
+# fail-closed ceiling — not a long hang. Each attempt is a docker exec of a
+# ~5s-timeout urlopen; a not-yet-ready port fails fast via connection-refused, so
+# the realistic worst case is ~60s, with GUI_HEALTH_BUDGET_S as the hard ceiling.
+GUI_HEALTH_ATTEMPTS = 30
+GUI_HEALTH_INTERVAL = 2.0
+GUI_HEALTH_BUDGET_S = GUI_HEALTH_ATTEMPTS * (5.0 + GUI_HEALTH_INTERVAL)
+
 # In-container loopback health/begin-signin probes (no network exposure).
 HEALTH_PROBE_PY = (
     "import json,urllib.request;"
@@ -263,6 +274,28 @@ def build_docker_exec_health_cmd(cfg: HandoffConfig) -> list[str]:
 def build_docker_exec_begin_signin_cmd(cfg: HandoffConfig) -> list[str]:
     """Invoke the operator-only begin-signin ONCE, inside the headed container."""
     return ["docker", "exec", cfg.gui_container, "python", "-c", BEGIN_SIGNIN_PY]
+
+
+def parse_gui_health_ok(stdout: str) -> bool:
+    """Robustly parse the headed worker's /health probe output.
+
+    Fail-closed: returns ``True`` only when the payload is valid JSON whose
+    ``ok`` key is exactly ``True``. Anything else — empty output, non-JSON
+    text, a JSON object without ``ok``, ``ok`` being a non-boolean, or
+    ``ok: false`` (explicit degraded) — is rejected. Substring matching on the
+    literal ``"ok"`` is intentionally NOT used, because it yields false
+    positives on payloads like ``{"error":"...ok..."}`` or ``{"ok":false}``.
+    """
+    text = (stdout or "").strip()
+    if not text:
+        return False
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    return data.get("ok") is True
 
 
 # Explicit, minimal env for the headed one-off container. No container env/secrets
@@ -723,12 +756,20 @@ class GuiHandoff:
         self._run(build_docker_stop_gui_cmd(self.cfg))
         self._run(build_docker_rm_gui_cmd(self.cfg))
 
-    def _wait_gui_health(self, attempts: int = 30) -> bool:
+    def _wait_gui_health(
+        self,
+        attempts: int = GUI_HEALTH_ATTEMPTS,
+        interval: float = GUI_HEALTH_INTERVAL,
+    ) -> bool:
         for _ in range(attempts):
             res = self._run(build_docker_exec_health_cmd(self.cfg))
-            if res.returncode == 0 and "ok" in res.stdout:
+            # Fail-closed: accept ONLY a clean docker-exec success returning a
+            # JSON payload whose "ok" is exactly True. A non-zero exec, empty
+            # output, non-JSON text, or {"ok":false} is treated as not-ready and
+            # retried within the bounded budget before failing closed.
+            if res.returncode == 0 and parse_gui_health_ok(res.stdout):
                 return True
-            time.sleep(2.0)
+            time.sleep(interval)
         return False
 
     def _invoke_begin_signin(self) -> None:
