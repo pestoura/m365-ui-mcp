@@ -428,6 +428,23 @@ route applies `auth.login_email_input` and `auth.login_password_input` and addit
 progression; none of the four is an MFA control (`AUTH-101`, `ADR-009`). These are contract/metadata
 declarations only; this step introduces no runtime browser behavior beyond the click sequence above.
 
+**AUTH-105 — Operator-only read-only live attestation observation (4-key `common.auth`).** A complete,
+evaluator-compatible `AttestationObservation` (`source=LIVE_UI`, current `contract_set_digest`/campaign
+binding, selector order exactly matching the fragment) must be producible from the ALREADY-RUNNING dedicated
+professional browser context, observing EXACTLY the four `common.auth` progression selectors
+(`auth.login_email_input` -> `auth.login_next_button` -> `auth.login_password_input` ->
+`auth.login_signin_button`) and emitting per-selector result + value-free `structural_digest` only. The
+primitive is a GET on `POST`-free `/auth/bootstrap/collect-observation` with SOCKET-level loopback admission
+only (404 for non-loopback, no query string, no body), reuses `collect_structural_observation` so the output
+is byte-compatible with `scripts/collect_live_attestation_observation.py` and consumable by
+`attest_ui_contract.py evaluate`, and never fills/clicks/types/navigates/evaluates or returns DOM/URL/value/
+credential. It MUST NOT weaken the fail-closed evaluator or attestation gate: the observation is emitted at
+`target_level=DISCOVERY`, so evaluation can only yield `REVIEW_REQUIRED`; promotion stays PR/evidence based.
+It fails closed (503, no exception text) when the running context is unusable or any selector cannot be
+deterministically counted. It does NOT replace the per-stage `discover-email`/`discover-password` routes
+(AUTH bootstrapping); it is the consolidated evidence primitive that lets a 4-key UNIQUE_MATCH observation be
+collected and evaluated in one step.
+
 ---
 
 ## 10. Traceability
@@ -446,6 +463,7 @@ declarations only; this step introduces no runtime browser behavior beyond the c
 | AUTH-094…095 | Operator-only fixed-target bootstrap navigation |
 | AUTH-096…098 | Two-step operator begin-signin flow |
 | AUTH-099…101 | Encrypted-store operator sign-in + sanitized MFA notification |
+| AUTH-105 | Operator-only read-only live attestation observation (4-key) |
 
 
 

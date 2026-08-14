@@ -31,6 +31,10 @@ from m365_browser_worker.bootstrap_navigation import (
     evaluate_microsoft_auth_target,
     is_loopback_peer,
 )
+from m365_browser_worker.collect_observation import (
+    COLLECT_OBSERVATION_KEYS,
+    collect_running_observation,
+)
 from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
 from m365_browser_worker.operator_signin import (
@@ -718,6 +722,81 @@ def create_app(
             operation=DISCOVER_PASSWORD_OPERATION,
             keys=PASSWORD_DISCOVERY_KEYS,
         )
+
+    @app.get("/auth/bootstrap/collect-observation")
+    async def auth_bootstrap_collect_observation(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback read-only 4-key LIVE_UI attestation observation (AUTH-105).
+
+        Minimal primitive that closes the evidence gap documented in
+        references/common_auth_four_selector_gate.md: produce a COMPLETE
+        AttestationObservation (source=LIVE_UI, current contract_set_digest/campaign
+        binding, selector order exactly matching the fragment) from the ALREADY-RUNNING
+        dedicated professional browser context, observing EXACTLY the four common.auth
+        progression selectors and emitting per-selector result + structural_digest only.
+
+        Security shape (mirrors the sibling bootstrap routes):
+
+        * NOT an MCP tool, absent from every tool/capability/agent-card catalog, the
+          typed ``/operations`` dispatcher and the control-plane worker client;
+        * SOCKET-level loopback admission only (``127.0.0.1``/``::1``); proxy headers
+          are never consulted, so a Docker-network peer gets ``404``;
+        * GET only: takes NO parameters. Any query string is rejected and no request
+          body is processed. The fixed key scope (4 common.auth selectors, fragment
+          order) is the ONLY thing probed — no caller-supplied selector/stage/url/js;
+        * reuses ``collect_structural_observation`` exactly, so the produced
+          ``AttestationObservation`` is byte-compatible with
+          ``scripts/collect_live_attestation_observation.py`` and consumable by
+          ``attest_ui_contract.py evaluate``;
+        * the injected live probe counts declared candidates via
+          ``locator_runtime.build_locator`` only — NO wait, NO fill, NO click, NO
+          navigate, NO ``page.evaluate``, and no DOM/URL/value/credential is ever read
+          or returned;
+        * it NEVER weakens the fail-closed evaluator or the attestation gate: the
+          observation is emitted at ``target_level=DISCOVERY`` with ``source=LIVE_UI``,
+          so evaluation can only ever yield REVIEW_REQUIRED; it promotes nothing;
+        * fails closed (503, no exception text) when the running context is unusable or
+          any selector cannot be deterministically counted.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+
+        if _is_mock():
+            # Mock mode has no live context to observe; report the fixed closed scope
+            # without performing or fabricating any observation.
+            return {
+                "ok": True,
+                "mode": "mock",
+                "fragment_id": "common.auth",
+                "target_level": "DISCOVERY",
+                "source": "LIVE_UI",
+                "scope": list(COLLECT_OBSERVATION_KEYS),
+            }
+
+        try:
+            observation = await collect_running_observation(
+                worker_browser,
+                fragment_id="common.auth",
+                level="DISCOVERY",
+            )
+        except DiscoveryError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "OBSERVATION_FAILED", "message": exc.reason},
+            ) from None
+
+        return {
+            "ok": True,
+            "observation": observation.canonical_payload(),
+        }
 
     @app.get("/auth/session")
     async def auth_session() -> dict[str, Any]:
