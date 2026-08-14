@@ -61,12 +61,27 @@ def test_planner_partition_preserves_eight_app_selectors_and_ten_legacy_selector
 
 def test_common_auth_fragment_remains_platform_owned() -> None:
     contract_set = _contract_set()
-    common = tuple(fragment for fragment in contract_set.fragments if fragment.scope == "common")
+    common = tuple(
+        fragment
+        for fragment in contract_set.fragments
+        if fragment.scope == "common"
+    )
 
-    assert len(common) == 1
-    assert common[0].fragment_id == "common.auth"
-    assert common[0].application is None
-    assert tuple(common[0].selectors) == COMMON_AUTH_SELECTORS
+    # The two atomic ``common.auth`` fragments must remain platform-owned:
+    # scope == common, application is None, and together they declare exactly the
+    # four authentication selectors. The email and password surfaces never coexist
+    # on the same Microsoft Entra ID sign-in page, so a single fragment was
+    # structurally impossible to collect.
+    assert len(common) == 2
+    assert {fragment.fragment_id for fragment in common} == {
+        "common.auth.email",
+        "common.auth.password",
+    }
+    for fragment in common:
+        assert fragment.application is None
+    assert tuple(
+        sel for fragment in common for sel in fragment.selectors
+    ) == COMMON_AUTH_SELECTORS
 
 
 def test_legacy_contract_selector_order_and_metadata_remain_identical() -> None:

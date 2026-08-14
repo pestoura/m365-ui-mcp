@@ -27,11 +27,14 @@ import pytest
 
 from m365_browser_worker.bootstrap_navigation import is_loopback_peer
 from m365_browser_worker.collect_observation import (
-    COLLECT_OBSERVATION_KEYS,
+    COLLECT_OBSERVATION_EMAIL_KEYS,
+    COLLECT_OBSERVATION_FRAGMENT_IDS,
     COLLECT_OBSERVATION_OPERATION,
+    COLLECT_OBSERVATION_PASSWORD_KEYS,
     collect_running_observation,
 )
 from m365_browser_worker.operator_signin import (
+    COMMON_AUTH_FRAGMENT_IDS,
     EMAIL_SELECTOR_NAME,
     NEXT_SELECTOR_NAME,
     PASSWORD_SELECTOR_NAME,
@@ -161,13 +164,15 @@ def _client(app, *, peer: tuple[str, int] = ("127.0.0.1", 4242)) -> httpx.AsyncC
     return httpx.AsyncClient(transport=transport, base_url="http://worker")
 
 
-def test_collect_observation_scope_is_fixed_four_keys() -> None:
-    assert COLLECT_OBSERVATION_KEYS == (
-        EMAIL_SELECTOR_NAME,
-        NEXT_SELECTOR_NAME,
+def test_collect_observation_scope_is_fixed_two_fragments() -> None:
+    # Email fragment: email input + next button. Password fragment: password
+    # input + sign-in button. No caller may supply these values.
+    assert COLLECT_OBSERVATION_EMAIL_KEYS == (EMAIL_SELECTOR_NAME, NEXT_SELECTOR_NAME)
+    assert COLLECT_OBSERVATION_PASSWORD_KEYS == (
         PASSWORD_SELECTOR_NAME,
         SIGNIN_SELECTOR_NAME,
     )
+    assert COLLECT_OBSERVATION_FRAGMENT_IDS == COMMON_AUTH_FRAGMENT_IDS
     # Operation name must avoid the auth_bootstrap.py grep tokens goto/navigate.
     assert "goto" not in COLLECT_OBSERVATION_OPERATION
     assert "navigate" not in COLLECT_OBSERVATION_OPERATION
@@ -189,11 +194,18 @@ async def test_loopback_peer_accepted(live_env) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    obs = body["observation"]
-    assert obs["source"] == "LIVE_UI"
-    assert obs["target_level"] == "DISCOVERY"
-    keys = [item["selector_key"] for item in obs["selector_observations"]]
-    assert keys == list(COLLECT_OBSERVATION_KEYS)
+    observations = body["observations"]
+    assert len(observations) == 2
+    by_fragment = {obs["fragment_id"]: obs for obs in observations}
+    assert set(by_fragment) == set(COLLECT_OBSERVATION_FRAGMENT_IDS)
+    for obs in observations:
+        assert obs["source"] == "LIVE_UI"
+        assert obs["target_level"] == "DISCOVERY"
+        keys = [item["selector_key"] for item in obs["selector_observations"]]
+        if obs["fragment_id"] == "common.auth.email":
+            assert keys == list(COLLECT_OBSERVATION_EMAIL_KEYS)
+        else:
+            assert keys == list(COLLECT_OBSERVATION_PASSWORD_KEYS)
 
 
 async def test_docker_network_peer_denied(live_env) -> None:
@@ -259,10 +271,10 @@ async def test_no_new_post_route_registered() -> None:
 
 
 async def test_produced_observation_evaluator_compatible(live_env) -> None:
-    """A 4-key UNIQUE_MATCH observation is structurally valid and stays REVIEW_REQUIRED.
+    """Each fragment observation is structurally valid and stays REVIEW_REQUIRED.
 
-    It must NOT weaken the fail-closed evaluator: the observation binds to the
-    current contract_set_digest and matches the fragment selector set/order, but
+    It must NOT weaken the fail-closed evaluator: each observation binds to the
+    current contract_set_digest and matches its fragment's selector set/order, but
     because it is DISCOVERY/LIVE_UI it can only yield REVIEW_REQUIRED — never
     PASSED. Promotion stays PR/evidence based.
     """
@@ -271,36 +283,42 @@ async def test_produced_observation_evaluator_compatible(live_env) -> None:
     async with _client(app) as client:
         response = await client.get(COLLECT_PATH)
     assert response.status_code == 200
-    obs = observation_from_dict(response.json()["observation"])
+    observations = response.json()["observations"]
+    assert len(observations) == 2
 
     contract_set = load_ui_contract_set()
-    decision = evaluate_attestation_observation(contract_set, obs)
-
-    # Binding is valid (no SELECTOR_SET_OR_ORDER_MISMATCH / digest mismatch).
-    assert decision.state.value == "REVIEW_REQUIRED"
-    assert "SELECTOR_SET_OR_ORDER_MISMATCH" not in decision.reasons
-    assert "CONTRACT_SET_DIGEST_MISMATCH" not in decision.reasons
-    # No gate weakening: never PASSED from a DISCOVERY observation.
-    assert decision.state.value != "PASSED"
+    for obs in observations:
+        parsed = observation_from_dict(obs)
+        decision = evaluate_attestation_observation(contract_set, parsed)
+        # Binding is valid (no SELECTOR_SET_OR_ORDER_MISMATCH / digest mismatch).
+        assert decision.state.value == "REVIEW_REQUIRED"
+        assert "SELECTOR_SET_OR_ORDER_MISMATCH" not in decision.reasons
+        assert "CONTRACT_SET_DIGEST_MISMATCH" not in decision.reasons
+        # No gate weakening: never PASSED from a DISCOVERY observation.
+        assert decision.state.value != "PASSED"
 
 
 async def test_collect_running_observation_yields_complete_observation() -> None:
     browser = _CollectBrowser()
-    observation = await collect_running_observation(browser, fragment_id="common.auth")
-    assert observation.source is ObservationSource.LIVE_UI
-    assert observation.target_level is AttestationLevel.DISCOVERY
-    assert len(observation.selector_observations) == 4
-    assert tuple(o.selector_key for o in observation.selector_observations) == (
-        EMAIL_SELECTOR_NAME,
-        NEXT_SELECTOR_NAME,
-        PASSWORD_SELECTOR_NAME,
-        SIGNIN_SELECTOR_NAME,
+    email_obs = await collect_running_observation(
+        browser, fragment_id="common.auth.email"
     )
-    # No DOM/URL/value/credential ever leaves: only result + structural_digest.
-    for sel in observation.selector_observations:
-        assert sel.result.value in {"NO_MATCH", "UNIQUE_MATCH", "AMBIGUOUS"}
-        if sel.result.value == "UNIQUE_MATCH":
-            assert sel.structural_digest is not None
-            assert sel.structural_digest.startswith("sha256:")
-        else:
-            assert sel.structural_digest is None
+    password_obs = await collect_running_observation(
+        browser, fragment_id="common.auth.password"
+    )
+    for observation, keys in (
+        (email_obs, (EMAIL_SELECTOR_NAME, NEXT_SELECTOR_NAME)),
+        (password_obs, (PASSWORD_SELECTOR_NAME, SIGNIN_SELECTOR_NAME)),
+    ):
+        assert observation.source is ObservationSource.LIVE_UI
+        assert observation.target_level is AttestationLevel.DISCOVERY
+        assert len(observation.selector_observations) == 2
+        assert tuple(o.selector_key for o in observation.selector_observations) == keys
+        # No DOM/URL/value/credential ever leaves: only result + structural_digest.
+        for sel in observation.selector_observations:
+            assert sel.result.value in {"NO_MATCH", "UNIQUE_MATCH", "AMBIGUOUS"}
+            if sel.result.value == "UNIQUE_MATCH":
+                assert sel.structural_digest is not None
+                assert sel.structural_digest.startswith("sha256:")
+            else:
+                assert sel.structural_digest is None

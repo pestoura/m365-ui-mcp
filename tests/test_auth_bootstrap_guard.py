@@ -598,7 +598,7 @@ async def test_live_auth_blocked_on_wrong_origin() -> None:
 async def test_operator_observation_binds_to_contract_set_digest_and_schema() -> None:
     contract_set = load_ui_contract_set()
     campaign = build_attestation_campaign(
-        contract_set, AttestationLevel.DISCOVERY, fragment_ids=("common.auth",)
+        contract_set, AttestationLevel.DISCOVERY, fragment_ids=("common.auth.email",)
     )
 
     def fake_probe(selector_key: str, metadata) -> int:
@@ -607,7 +607,7 @@ async def test_operator_observation_binds_to_contract_set_digest_and_schema() ->
         return 1
 
     observation = await collect_structural_observation(
-        "common.auth", AttestationLevel.DISCOVERY, live_probe=fake_probe
+        "common.auth.email", AttestationLevel.DISCOVERY, live_probe=fake_probe
     )
     assert observation.campaign_id == campaign.campaign_id
     assert observation.contract_set_digest == campaign.contract_set_digest
@@ -621,12 +621,12 @@ def test_mock_observation_cannot_promote_live_support() -> None:
     # End-to-end guard that MOCK evidence can never promote live support.
     contract_set = load_ui_contract_set()
     campaign = build_attestation_campaign(
-        contract_set, AttestationLevel.DISCOVERY, fragment_ids=("common.auth",)
+        contract_set, AttestationLevel.DISCOVERY, fragment_ids=("common.auth.email",)
     )
     observation = AttestationObservation(
         campaign_id=campaign.campaign_id,
         contract_set_digest=campaign.contract_set_digest,
-        fragment_id="common.auth",
+        fragment_id="common.auth.email",
         fragment_version="0.1.0",
         target_level=AttestationLevel.DISCOVERY,
         source=ObservationSource.MOCK,  # NOT live
@@ -655,9 +655,9 @@ async def test_no_runtime_contract_mutation_in_collection_harness(tmp_path) -> N
         return 1
 
     observation = await collect_structural_observation(
-        "common.auth", AttestationLevel.DISCOVERY, live_probe=fake_probe
+        "common.auth.email", AttestationLevel.DISCOVERY, live_probe=fake_probe
     )
-    out = tmp_path / "common.auth.observation.json"
+    out = tmp_path / "common.auth.email.observation.json"
     payload = observation.canonical_payload()
 
     out.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")

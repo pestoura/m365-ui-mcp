@@ -417,10 +417,11 @@ environment variable, no argv, no ChatGPT, and no Telegram credentials are ever
 involved. The operator submit route clicks the Microsoft "Next" control to advance
 from the email step and the Microsoft form "Sign in" control to finalize credential
 submission; neither carries credentials and neither is an MFA control. MFA approval
-is still Microsoft Authenticator-only, and `common.auth` must be attested before any
-sign-in field is applied (fail closed otherwise).
+is still Microsoft Authenticator-only, and BOTH `common.auth` fragments
+(`common.auth.email` and `common.auth.password`, see `AUTH-107`) must be attested
+before any sign-in field is applied (fail closed otherwise).
 
-**AUTH-104 — Source-controlled sign-in progression selectors.** The `common.auth` contract declares
+**AUTH-104 — Source-controlled sign-in progression selectors.** The `common.auth` fragments declare
 four sign-in progression selectors: `auth.login_email_input`, `auth.login_next_button`,
 `auth.login_password_input` and `auth.login_signin_button`. All four remain `UNVERIFIED_LIVE` value-null
 placeholders. `auth.login_next_button` and `auth.login_signin_button` are progression-only selectors
@@ -430,12 +431,13 @@ route applies `auth.login_email_input` and `auth.login_password_input` and addit
 progression; none of the four is an MFA control (`AUTH-101`, `ADR-009`). These are contract/metadata
 declarations only; this step introduces no runtime browser behavior beyond the click sequence above.
 
-**AUTH-105 — Operator-only read-only live attestation observation (4-key `common.auth`).** A complete,
+**AUTH-105 — Operator-only read-only live attestation observation (per-fragment `common.auth`).** A complete,
 evaluator-compatible `AttestationObservation` (`source=LIVE_UI`, current `contract_set_digest`/campaign
 binding, selector order exactly matching the fragment) must be producible from the ALREADY-RUNNING dedicated
-professional browser context, observing EXACTLY the four `common.auth` progression selectors
-(`auth.login_email_input` -> `auth.login_next_button` -> `auth.login_password_input` ->
-`auth.login_signin_button`) and emitting per-selector result + value-free `structural_digest` only. The
+professional browser context, observing EXACTLY one atomic `common.auth` fragment's progression selectors —
+`common.auth.email` (`auth.login_email_input` -> `auth.login_next_button`) or `common.auth.password`
+(`auth.login_password_input` -> `auth.login_signin_button`) — and emitting per-selector result + value-free
+`structural_digest` only. Any other fragment id fails closed. The
 primitive is a GET on `POST`-free `/auth/bootstrap/collect-observation` with SOCKET-level loopback admission
 only (404 for non-loopback, no query string, no body), reuses `collect_structural_observation` so the output
 is byte-compatible with `scripts/collect_live_attestation_observation.py` and consumable by
@@ -444,7 +446,7 @@ credential. It MUST NOT weaken the fail-closed evaluator or attestation gate: th
 `target_level=DISCOVERY`, so evaluation can only yield `REVIEW_REQUIRED`; promotion stays PR/evidence based.
 It fails closed (503, no exception text) when the running context is unusable or any selector cannot be
 deterministically counted. It does NOT replace the per-stage `discover-email`/`discover-password` routes
-(AUTH bootstrapping); it is the consolidated evidence primitive that lets a 4-key UNIQUE_MATCH observation be
+(AUTH bootstrapping); it is the evidence primitive that lets a per-fragment UNIQUE_MATCH observation be
 collected and evaluated in one step.
 
 **AUTH-106 — Operator-only pre-attestation email stage (headless-safe deadlock break).** With the
@@ -461,6 +463,34 @@ preserved: dedicated persistent professional profile, approved Microsoft authent
 email value, no URL/DOM/cookie/token/UPN/tenant exposure. Canonical auth path remains private Chromium headless +
 Playwright + persistent professional profile + operator-only fixed-target bootstrap + encrypted credential
 store + out-of-band MFA approval.
+
+**AUTH-107 — Atomic `common.auth` fragment split (email / password surfaces).** The single `common.auth`
+UIContract fragment was structurally impossible to attest: `_validate_observation_binding` demands the exact
+SET AND ORDER of the fragment's selectors, `effectively_attested` is all-or-nothing, and the email and
+password surfaces never coexist on the same Microsoft Entra ID sign-in page (the password/sign-in selectors
+only appear AFTER email -> Next, at which point the email selectors are gone). `common.auth` is therefore
+split into TWO atomic fragments, each independently collectable on its REAL surface:
+`common.auth.email` = {`auth.login_email_input`, `auth.login_next_button`} and
+`common.auth.password` = {`auth.login_password_input`, `auth.login_signin_button`}. The authentication gate
+`common_auth_attested()` returns True ONLY when BOTH fragments exist and are `effectively_attested`; a missing
+fragment or a single attested fragment fails closed. AUTH-101 therefore requires BOTH. The evaluator, the
+binding validation, and the fail-closed attestation semantics are UNCHANGED — no union-of-stages relaxation is
+introduced; the fix is contract granularity, not gate weakening. The legacy flat `contracts/ui_contract.json`
+continues to declare all four `auth.*` selectors so the legacy projection and the frozen mock-parity baseline
+remain byte-consistent. Promotion of each fragment to `ATTESTED` stays PR/evidence based with human review,
+per fragment, on fresh live UNIQUE_MATCH evidence for exactly that fragment's two selectors.
+
+**AUTH-108 — `/health` reports the full-set contract digest bound by observations.** Live attestation
+observations bind `load_ui_contract_set().digest()` — the SHA-256 of the COMPLETE UIContract set (every
+fragment). The compatibility `load_status()` view projects to Planner scope and digests only common + Planner
+fragments, so its digest differs by construction once other application fragments exist. Reporting the
+projection digest on the worker `/health` endpoint made every operator digest comparison mismatch and was the
+real origin of the `CONTRACT_SET_DIGEST_MISMATCH` class of failures. `/health` and every operator
+digest-comparison path MUST therefore report the FULL-SET digest via
+`planner_mcp.ui_contract.full_contract_set_digest()`. The planner-projection digest is retained ONLY where the
+legacy-projection contract and the frozen parity baseline require it (`planner_readiness`,
+`planner_ui_contract_status`). This is explicitly NOT a relaxation: `_validate_observation_binding` still
+requires an exact digest match, and observations still bind the full set.
 
 ---
 
@@ -480,8 +510,10 @@ store + out-of-band MFA approval.
 | AUTH-094…095 | Operator-only fixed-target bootstrap navigation |
 | AUTH-096…098 | Two-step operator begin-signin flow |
 | AUTH-099…101 | Encrypted-store operator sign-in + sanitized MFA notification |
-| AUTH-105 | Operator-only read-only live attestation observation (4-key) |
+| AUTH-105 | Operator-only read-only live attestation observation (per-fragment) |
 | AUTH-106 | Operator-only pre-attestation email stage (headless deadlock break) |
+| AUTH-107 | Atomic `common.auth` fragment split (email / password surfaces) |
+| AUTH-108 | `/health` reports the full-set contract digest bound by observations |
 
 
 

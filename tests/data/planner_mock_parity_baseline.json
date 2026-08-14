@@ -1,8 +1,4 @@
 {
-  "description": "PLN-MIG-008 frozen Planner mock parity baseline (normalized). Mock-only; no live support claimed.",
-  "mode": "mock",
-  "live_support_claimed": false,
-  "digest": "sha256:236cd06ba7f7872bff247504b4f437771005fc7a0fc09f25d3c6b186a887b7bc",
   "tools": {
     "planner_health": {
       "contract_version": "0.1.0",
@@ -53,7 +49,7 @@
           "attested": false,
           "fail_closed_error": "UI_CONTRACT_UNATTESTED",
           "selector_count": 12,
-          "ui_contract_set_digest": "sha256:4f9f05be66c6b007e021de4ef515fac3abd71f45feb29830339b7c926aa578d8",
+          "ui_contract_set_digest": "sha256:4a089bcf14fb3583f1a46a4514f6cf491b2a3876302299e4005a703f5f22c4cd",
           "ui_contract_version": "0.1.0",
           "unverified_selectors": [
             "auth.login_email_input",
@@ -75,7 +71,7 @@
           "mode": "mock",
           "ok": true,
           "ui_contract_attested": false,
-          "ui_contract_set_digest": "sha256:4f9f05be66c6b007e021de4ef515fac3abd71f45feb29830339b7c926aa578d8",
+          "ui_contract_set_digest": "sha256:4ebf8e6ed34497501ca699e7252682179148ad30e9e45f048fb7a4a5c7a58ab3",
           "ui_contract_version": "0.1.0",
           "version": "0.1.0"
         }
@@ -497,7 +493,7 @@
           "BLOCKED",
           "OUT_OF_SCOPE"
         ],
-        "ui_contract_set_digest": "sha256:4f9f05be66c6b007e021de4ef515fac3abd71f45feb29830339b7c926aa578d8",
+        "ui_contract_set_digest": "sha256:4a089bcf14fb3583f1a46a4514f6cf491b2a3876302299e4005a703f5f22c4cd",
         "ui_fragment_attestation": [
           {
             "application": "planner",
@@ -976,7 +972,7 @@
         "attested": false,
         "fail_closed_error": "UI_CONTRACT_UNATTESTED",
         "selector_count": 12,
-        "ui_contract_set_digest": "sha256:4f9f05be66c6b007e021de4ef515fac3abd71f45feb29830339b7c926aa578d8",
+        "ui_contract_set_digest": "sha256:4a089bcf14fb3583f1a46a4514f6cf491b2a3876302299e4005a703f5f22c4cd",
         "ui_contract_version": "0.1.0",
         "unverified_selectors": [
           "auth.login_email_input",
@@ -1298,5 +1294,8 @@
       "schema_version": "0.1.0",
       "tool": "planner_smoke_test"
     }
-  }
+  },
+  "live_support_claimed": false,
+  "mode": "mock",
+  "digest": "sha256:8c4366003c2196630855718bade7dd0d39b255a38bcd28700af1c2b9ac76ddc5"
 }

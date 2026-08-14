@@ -30,9 +30,10 @@ def test_fragment_set_preserves_legacy_selector_surface_and_order() -> None:
     assert contract_set.legacy_version == legacy["ui_contract_version"]
     assert selectors == legacy["selectors"]
     assert tuple(selectors) == tuple(legacy["selectors"])
-    assert len(contract_set.fragments) == 4
+    assert len(contract_set.fragments) == 5
     assert tuple(fragment.fragment_id for fragment in contract_set.fragments) == (
-        "common.auth",
+        "common.auth.email",
+        "common.auth.password",
         "planner.plan-surface",
         "planner.task-surface",
         "planner.account",
@@ -46,6 +47,7 @@ def test_fragments_cover_common_application_and_surface_scopes() -> None:
         "application",
         "surface",
     }
+    # 4 common.auth selectors (split across two atomic fragments) + 8 planner.
     assert sum(len(fragment.selectors) for fragment in contract_set.fragments) == 12
 
 

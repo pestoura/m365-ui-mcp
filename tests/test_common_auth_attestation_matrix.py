@@ -170,20 +170,22 @@ async def test_matrix_3_common_and_planner_attested_gate_may_pass() -> None:
 
 
 def test_common_auth_attested_unit_unverified_fragment() -> None:
-    # Unit level: common.auth present but UNVERIFIED => False.
-    assert common_auth_attested() is False  # source contract has common.auth UNVERIFIED
+    # Unit level: common.auth fragments present but UNVERIFIED => False.
+    assert common_auth_attested() is False  # source contract has common.auth.* UNVERIFIED
 
 
 def test_common_auth_attested_unit_missing_fragment_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # (4) Missing common.auth fragment => fail closed (False). No other
+    # (4) Missing a common.auth fragment => fail closed (False). No other
     # fragment's attestation state leaks into the auth signal.
     no_common = UIContractSet(
         set_version="0.2.0",
         legacy_version="0.1.0",
         fragments=tuple(
-            f for f in load_ui_contract_set().fragments if f.fragment_id != "common.auth"
+            f
+            for f in load_ui_contract_set().fragments
+            if f.fragment_id not in ("common.auth.email", "common.auth.password")
         ),
     )
     monkeypatch.setattr(
@@ -195,37 +197,93 @@ def test_common_auth_attested_unit_missing_fragment_fails_closed(
 def test_common_auth_attested_unit_attested_fragment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # common.auth explicitly ATTESTED (fragment + selectors) => True even when
-    # every other fragment stays UNVERIFIED (proves fragment scoping).
+    # BOTH common.auth fragments explicitly ATTESTED (fragment + selectors) =>
+    # True even when every other fragment stays UNVERIFIED (proves fragment
+    # scoping and the both-fragments requirement).
     source = load_ui_contract_set()
-    attested_selectors = {
-        name: {**meta, "status": "ATTESTED"}
-        for name, meta in source.fragments[0].selectors.items()
-    }
-    common = UIContractFragment(
-        fragment_id="common.auth",
-        fragment_version="0.1.0",
-        scope="common",
-        application=None,
-        surface=None,
-        capability_keys=(),
-        attested=True,
-        attestation_status="ATTESTED",
-        selectors=attested_selectors,
+
+    def _attest(fragment: UIContractFragment) -> UIContractFragment:
+        attested_selectors = {
+            name: {**meta, "status": "ATTESTED"}
+            for name, meta in fragment.selectors.items()
+        }
+        return UIContractFragment(
+            fragment_id=fragment.fragment_id,
+            fragment_version=fragment.fragment_version,
+            scope=fragment.scope,
+            application=fragment.application,
+            surface=fragment.surface,
+            capability_keys=fragment.capability_keys,
+            attested=True,
+            attestation_status="ATTESTED",
+            selectors=attested_selectors,
+        )
+
+    common = tuple(
+        _attest(f)
+        for f in source.fragments
+        if f.fragment_id in ("common.auth.email", "common.auth.password")
     )
-    # Keep planner fragments UNVERIFIED; only common.auth is promoted.
+    # Keep planner fragments UNVERIFIED; only common.auth.* is promoted.
     others = tuple(
-        f for f in source.fragments if f.fragment_id != "common.auth"
+        f
+        for f in source.fragments
+        if f.fragment_id not in ("common.auth.email", "common.auth.password")
     )
     patched = UIContractSet(
         set_version=source.set_version,
         legacy_version=source.legacy_version,
-        fragments=(common, *others),
+        fragments=(*common, *others),
     )
     monkeypatch.setattr(
         "planner_mcp.ui_contract.load_ui_contract_set", lambda *a, **k: patched
     )
     assert common_auth_attested() is True
+
+
+def test_common_auth_attested_unit_only_email_attested_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Only one of the two atomic auth fragments attested => False. Both must be
+    # effectively attested before AUTH-101 may apply credentials.
+    source = load_ui_contract_set()
+
+    def _attest(fragment: UIContractFragment) -> UIContractFragment:
+        attested_selectors = {
+            name: {**meta, "status": "ATTESTED"}
+            for name, meta in fragment.selectors.items()
+        }
+        return UIContractFragment(
+            fragment_id=fragment.fragment_id,
+            fragment_version=fragment.fragment_version,
+            scope=fragment.scope,
+            application=fragment.application,
+            surface=fragment.surface,
+            capability_keys=fragment.capability_keys,
+            attested=True,
+            attestation_status="ATTESTED",
+            selectors=attested_selectors,
+        )
+
+    common = tuple(
+        _attest(f) if f.fragment_id == "common.auth.email" else f
+        for f in source.fragments
+        if f.fragment_id in ("common.auth.email", "common.auth.password")
+    )
+    others = tuple(
+        f
+        for f in source.fragments
+        if f.fragment_id not in ("common.auth.email", "common.auth.password")
+    )
+    patched = UIContractSet(
+        set_version=source.set_version,
+        legacy_version=source.legacy_version,
+        fragments=(*common, *others),
+    )
+    monkeypatch.setattr(
+        "planner_mcp.ui_contract.load_ui_contract_set", lambda *a, **k: patched
+    )
+    assert common_auth_attested() is False
 
 
 async def test_wrong_profile_denied_pre_attestation() -> None:

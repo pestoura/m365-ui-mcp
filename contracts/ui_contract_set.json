@@ -3,8 +3,12 @@
   "legacy_ui_contract_version": "0.1.0",
   "fragments": [
     {
-      "fragment_id": "common.auth",
-      "path": "ui_fragments/common/auth.json"
+      "fragment_id": "common.auth.email",
+      "path": "ui_fragments/common/auth_email.json"
+    },
+    {
+      "fragment_id": "common.auth.password",
+      "path": "ui_fragments/common/auth_password.json"
     },
     {
       "fragment_id": "planner.plan-surface",

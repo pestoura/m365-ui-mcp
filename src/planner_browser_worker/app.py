@@ -33,7 +33,9 @@ from m365_browser_worker.bootstrap_navigation import (
     is_loopback_peer,
 )
 from m365_browser_worker.collect_observation import (
-    COLLECT_OBSERVATION_KEYS,
+    COLLECT_OBSERVATION_EMAIL_KEYS,
+    COLLECT_OBSERVATION_FRAGMENT_IDS,
+    COLLECT_OBSERVATION_PASSWORD_KEYS,
     collect_running_observation,
 )
 from m365_browser_worker.executor import ProfileSerializedExecutor
@@ -64,7 +66,7 @@ from planner_mcp.errors import (
     WorkerUnavailable,
 )
 from planner_mcp.logging_setup import configure_logging
-from planner_mcp.ui_contract import load_status
+from planner_mcp.ui_contract import full_contract_set_digest, load_status
 
 from . import __version__, mock_data
 from .browser import BrowserConfig, PersistentBrowser
@@ -201,7 +203,11 @@ def create_app(
             "mode": _mode(),
             "version": __version__,
             "ui_contract_version": ui.version,
-            "ui_contract_set_digest": ui.contract_set_digest,
+            # Full-set digest: the EXACT value the live attestation observation
+            # collector binds (contract_set.digest() over every fragment). This
+            # must match what /auth/bootstrap/collect-observation reports, so
+            # observations never fail with CONTRACT_SET_DIGEST_MISMATCH.
+            "ui_contract_set_digest": full_contract_set_digest(),
             "ui_contract_attested": ui.attested,
             "live_ready": readiness.ready,
         }
@@ -899,18 +905,24 @@ def create_app(
             return {
                 "ok": True,
                 "mode": "mock",
-                "fragment_id": "common.auth",
+                "fragment_ids": list(COLLECT_OBSERVATION_FRAGMENT_IDS),
                 "target_level": "DISCOVERY",
                 "source": "LIVE_UI",
-                "scope": list(COLLECT_OBSERVATION_KEYS),
+                "scope": {
+                    "common.auth.email": list(COLLECT_OBSERVATION_EMAIL_KEYS),
+                    "common.auth.password": list(COLLECT_OBSERVATION_PASSWORD_KEYS),
+                },
             }
 
+        observations: list[dict[str, Any]] = []
         try:
-            observation = await collect_running_observation(
-                worker_browser,
-                fragment_id="common.auth",
-                level="DISCOVERY",
-            )
+            for fragment_id in COLLECT_OBSERVATION_FRAGMENT_IDS:
+                observation = await collect_running_observation(
+                    worker_browser,
+                    fragment_id=fragment_id,
+                    level="DISCOVERY",
+                )
+                observations.append(observation.canonical_payload())
         except DiscoveryError as exc:
             raise HTTPException(
                 status_code=503,
@@ -919,7 +931,7 @@ def create_app(
 
         return {
             "ok": True,
-            "observation": observation.canonical_payload(),
+            "observations": observations,
         }
 
     @app.get("/auth/session")

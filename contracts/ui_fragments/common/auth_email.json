@@ -1,0 +1,32 @@
+{
+  "fragment_id": "common.auth.email",
+  "fragment_version": "0.1.0",
+  "scope": "common",
+  "application": null,
+  "surface": null,
+  "capability_keys": [],
+  "attested": false,
+  "attestation_status": "UNVERIFIED_LIVE",
+  "selectors": {
+    "auth.login_email_input": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE",
+      "locators": [
+        {"strategy": "role", "value": "textbox", "name": "Email, phone, or Skype"},
+        {"strategy": "placeholder", "value": "Email, phone, or Skype"},
+        {"strategy": "label", "value": "Email, phone, or Skype"},
+        {"strategy": "role", "value": "textbox", "name": "E-mail, telemóvel ou Skype"},
+        {"strategy": "placeholder", "value": "E-mail, telemóvel ou Skype"},
+        {"strategy": "label", "value": "E-mail, telemóvel ou Skype"}
+      ]
+    },
+    "auth.login_next_button": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE",
+      "locators": [
+        {"strategy": "role", "value": "button", "name": "Next"},
+        {"strategy": "role", "value": "button", "name": "Seguinte"}
+      ]
+    }
+  }
+}
