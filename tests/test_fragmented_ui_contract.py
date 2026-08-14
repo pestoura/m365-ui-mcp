@@ -22,14 +22,37 @@ def _planner_contract_set():
     return project_ui_contract_set(load_ui_contract_set(), "planner")
 
 
+_AUTH_SELECTORS = {
+    "auth.login_email_input",
+    "auth.login_next_button",
+    "auth.login_password_input",
+    "auth.login_signin_button",
+}
+
+
 def test_fragment_set_preserves_legacy_selector_surface_and_order() -> None:
     contract_set = _planner_contract_set()
     legacy = json.loads((contracts_dir() / "ui_contract.json").read_text(encoding="utf-8"))
     selectors = contract_set.selectors()
 
     assert contract_set.legacy_version == legacy["ui_contract_version"]
-    assert selectors == legacy["selectors"]
-    assert tuple(selectors) == tuple(legacy["selectors"])
+    # The Foundation UIContract (contracts/ui_contract.json) is the canonical
+    # fail-closed baseline and MUST stay UNVERIFIED_LIVE (check_contracts.py
+    # enforces attested=False / UNVERIFIED_LIVE for every selector). The atomic
+    # common.auth fragments are promoted to ATTESTED by explicit evidence-backed
+    # PR promotion, so the fragmented view legitimately diverges from the
+    # Foundation baseline on the four auth selectors. Everything else must remain
+    # byte-identical: same selector names (manifest order) and identical
+    # value/status for every non-auth selector.
+    assert set(selectors) == set(legacy["selectors"])
+    for name in selectors:
+        if name in _AUTH_SELECTORS:
+            # Promoted: attested in the fragmented view, value never live-derived.
+            assert selectors[name]["status"] == "ATTESTED", name
+            assert selectors[name]["value"] is None, name
+        else:
+            # Unchanged: identical to the Foundation baseline.
+            assert selectors[name] == legacy["selectors"][name], name
     assert len(contract_set.fragments) == 5
     assert tuple(fragment.fragment_id for fragment in contract_set.fragments) == (
         "common.auth.email",
@@ -56,9 +79,17 @@ def test_planner_status_remains_fail_closed_and_compatible() -> None:
     legacy = json.loads((contracts_dir() / "ui_contract.json").read_text(encoding="utf-8"))
     assert status.version == "0.1.0"
     assert status.selector_count == 12
+    # The aggregate ``load_status`` still reports unattested because the Planner
+    # fragments remain UNVERIFIED (full attestation requires them too). But the
+    # promoted common.auth fragments are no longer in the unverified set: the
+    # auth selectors have been removed from ``unverified_selectors`` while the 8
+    # planner selectors remain. This proves the promotion is reflected in the
+    # aggregate view without weakening the planner-attestation gate.
     assert status.attested is False
     assert status.attestation_status == "UNVERIFIED_LIVE"
-    assert status.unverified_selectors == tuple(legacy["selectors"])
+    assert status.unverified_selectors == tuple(
+        name for name in legacy["selectors"] if name not in _AUTH_SELECTORS
+    )
 
 
 def test_duplicate_selector_across_fragments_fails_closed(tmp_path: Path) -> None:

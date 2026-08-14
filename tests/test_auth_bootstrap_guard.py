@@ -648,8 +648,13 @@ def test_mock_observation_cannot_promote_live_support() -> None:
 
 async def test_no_runtime_contract_mutation_in_collection_harness(tmp_path) -> None:
     # The collection harness writes an observation file but must never modify the
-    # source contract JSON nor self-promote ATTESTED.
+    # source contract JSON nor self-promote ATTESTED. The shipped contract may
+    # already promote the common.auth fragments (evidence-backed PR promotion),
+    # so the invariant is: running collection does NOT change the loaded contract
+    # set (digest identical before/after) and does not promote any fragment that
+    # was not already attested.
     before = load_ui_contract_set()
+    before_attested = {f.fragment_id for f in before.fragments if f.attested}
 
     def fake_probe(selector_key: str, metadata) -> int:
         return 1
@@ -664,11 +669,11 @@ async def test_no_runtime_contract_mutation_in_collection_harness(tmp_path) -> N
     assert out.exists()
 
     after = load_ui_contract_set()
+    # No mutation of the source contract set by the collection harness.
     assert after.digest() == before.digest()
-    assert not any(fragment.attested for fragment in after.fragments)
-    assert not any(
-        fragment.attestation_status == "ATTESTED" for fragment in after.fragments
-    )
+    # The harness never promotes a fragment that was not already attested.
+    after_attested = {f.fragment_id for f in after.fragments if f.attested}
+    assert after_attested == before_attested
 
 
 def test_auth_bootstrap_guard_module_has_no_generic_browser_tokens() -> None:
