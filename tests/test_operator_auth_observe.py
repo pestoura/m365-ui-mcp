@@ -319,10 +319,11 @@ async def test_mfa_required_unique_number(live_env) -> None:
 
 
 async def test_mfa_ambiguous_returns_null(live_env) -> None:
-    # More than one 2-digit candidate in a number-matching context: ambiguous.
+    # Two distinct phrase-bound number-match candidates on the surface:
+    # genuinely ambiguous, never guess.
     body = (
-        "Enter the number 42 or 17 shown in your Microsoft Authenticator app. "
-        "Number matching 42 17."
+        "Enter the number 42 and enter the number 17 shown in your "
+        "Microsoft Authenticator app to sign in."
     )
     browser = _ObserveBrowser(pages=[_auth_page(body)])
     app = create_app(browser=browser)
@@ -360,7 +361,7 @@ async def test_waiting_for_mfa(live_env) -> None:
 
 async def test_ambiguous_unknown_preserves_existing_context(live_env) -> None:
     context = AuthContext(state=AuthState.AUTHENTICATED)
-    body = "Enter the number 42 or 17 shown in your Microsoft Authenticator app."
+    body = "Enter the number 42 and enter the number 17 shown in your Microsoft Authenticator app."
     browser = _ObserveBrowser(pages=[_auth_page(body)])
     result = await observe_signin_state(browser, context)
     assert result.state is AuthState.UNKNOWN
@@ -372,7 +373,7 @@ async def test_ambiguous_unknown_preserves_existing_context(live_env) -> None:
 
 async def test_ambiguous_unknown_does_not_persist_in_app_context(live_env) -> None:
     browser = _ObserveBrowser(
-        pages=[_auth_page("Enter the number 42 or 17 in Authenticator.")]
+        pages=[_auth_page("Enter the number 42 and enter the number 17 in Authenticator.")]
     )
     app = create_app(browser=browser)
     async with _client(app) as client:

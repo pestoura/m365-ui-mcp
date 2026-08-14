@@ -26,7 +26,12 @@ from typing import Any
 
 from planner_mcp.auth import AuthContext, AuthState, MfaChallenge
 
-from .auth_flow import build_challenge, classify_page, resolve_mfa_number_unique
+from .auth_flow import (
+    _number_match_candidates,
+    build_challenge,
+    classify_page,
+    resolve_mfa_number_unique,
+)
 
 
 @dataclass(frozen=True)
@@ -57,15 +62,18 @@ def classify_live(page_text: str) -> tuple[AuthState, MfaChallenge | None, bool]
     if state is AuthState.MFA_REQUIRED:
         number = resolve_mfa_number_unique(page_text)
         if number is None:
-            # Looks like MFA but the number is not uniquely resolvable: do not
-            # synthesize a challenge. Surface AUTH_REQUIRED-style ambiguity as a
-            # fail-closed UNKNOWN so no guessed value propagates.
+            # Unique candidate at classify time but not resolvable: surface as a
+            # fail-closed ambiguous UNKNOWN rather than guessing a value.
             return AuthState.UNKNOWN, None, True
         challenge = build_challenge(number, operation_id="auth-live")
         return state, challenge, False
     if state is AuthState.WAITING_FOR_MFA:
         # Approval-waiting: no number to read; challenge stays None.
         return state, None, False
+    # Ambiguous number-matching surface: multiple phrase-bound candidates on the
+    # page. Never synthesize a single value; fail closed to UNKNOWN ambiguous.
+    if len(_number_match_candidates(page_text)) > 1:
+        return AuthState.UNKNOWN, None, True
     return state, None, False
 
 
