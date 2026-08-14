@@ -662,7 +662,7 @@ def create_app(
         page = discovery_guard(operation)
         try:
             discoveries: list[KeyDiscovery] = [
-                discover_key(page, selector_key) for selector_key in keys
+                await discover_key(page, selector_key) for selector_key in keys
             ]
         except DiscoveryError as exc:
             raise HTTPException(

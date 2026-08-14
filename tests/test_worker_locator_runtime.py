@@ -45,13 +45,13 @@ class FakeLocator:
     def first(self) -> FakeLocator:
         return self
 
-    def wait_for(self, *, state: str = "visible", timeout: int | None = None) -> None:
+    async def wait_for(self, *, state: str = "visible", timeout: int | None = None) -> None:
         self.wait_calls.append((state, timeout))
         if self._wait_timeout:
             # Mimics a Playwright bounded-wait TimeoutError.
             raise TimeoutError("locator did not become visible within timeout")
 
-    def count(self) -> int:
+    async def count(self) -> int:
         self.count_calls += 1
         return self._count
 
@@ -329,3 +329,51 @@ async def test_negative_timeout_fails_closed_before_any_page_call() -> None:
 
     assert excinfo.value.reason == "negative timeout"
     assert page.calls == []
+
+
+# --- async await regression ---------------------------------------------------
+
+
+class FakeFlagLocator:
+    """Async fake that records execution via in-method flags.
+
+    Mirrors the Playwright Async API (``async wait_for`` / ``async count``) and
+    flips a dedicated flag from inside each coroutine so a test can prove the
+    resolver actually awaited both before returning.
+    """
+
+    def __init__(self, *, wait_timeout: bool = False, count: int = 1) -> None:
+        self._wait_timeout = wait_timeout
+        self._count = count
+        self.wait_executed = False
+        self.count_executed = False
+
+    @property
+    def first(self) -> FakeFlagLocator:
+        return self
+
+    async def wait_for(self, *, state: str = "visible", timeout: int | None = None) -> None:
+        self.wait_executed = True
+        if self._wait_timeout:
+            raise TimeoutError("locator did not become visible within timeout")
+
+    async def count(self) -> int:
+        self.count_executed = True
+        return self._count
+
+
+async def test_resolver_awaits_both_wait_for_and_count() -> None:
+    # The flags start cleared; the resolver must flip both by the time it returns.
+    locator = FakeFlagLocator(count=1)
+    page = FakePage({(LABEL.value, "Email", None): locator})
+    plan = _plan("auth.email", _candidate(LABEL, "Email"))
+
+    assert locator.wait_executed is False
+    assert locator.count_executed is False
+
+    result = await resolve_visible_locator(page, plan)
+
+    assert isinstance(result, ResolvedLocator)
+    # Both async fake methods ran (not just returned coroutine objects).
+    assert locator.wait_executed is True
+    assert locator.count_executed is True

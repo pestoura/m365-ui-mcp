@@ -39,13 +39,13 @@ class LocatorLike(Protocol):
     @property
     def first(self) -> WaitableLocator: ...
 
-    def count(self) -> int: ...
+    async def count(self) -> int: ...
 
 
 class WaitableLocator(Protocol):
     """Structural view of a Playwright locator ready for ``wait_for``."""
 
-    def wait_for(self, *, state: str = "visible", timeout: int | None = None) -> None: ...
+    async def wait_for(self, *, state: str = "visible", timeout: int | None = None) -> None: ...
 
 
 class PageLike(Protocol):
@@ -113,14 +113,14 @@ async def resolve_visible_locator(
     for candidate in plan.ordered_candidates():
         locator = build_locator(page, candidate)
         try:
-            locator.first.wait_for(state="visible", timeout=timeout_ms)
+            await locator.first.wait_for(state="visible", timeout=timeout_ms)
         except Exception:  # noqa: BLE001
             # Any bounded wait failure (including a Playwright timeout) means this
             # candidate is not provably visible; fall through to the next candidate.
             last_reason = "no visible match within timeout"
             continue
         try:
-            count = locator.count()
+            count = await locator.count()
         except Exception:  # noqa: BLE001
             last_reason = "match count could not be determined"
             continue

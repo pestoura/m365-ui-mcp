@@ -72,7 +72,7 @@ class _FakeLocator:
         self._count = count
         self.count_calls = 0
 
-    def count(self) -> int:
+    async def count(self) -> int:
         self.count_calls += 1
         return self._count
 
@@ -445,15 +445,15 @@ def _auth_metadata() -> dict[str, object]:
     return raw["selectors"]
 
 
-def test_discover_key_unique_match_digest_present() -> None:
+async def test_discover_key_unique_match_digest_present() -> None:
     page = _FakePage({})
-    discovery = discover_key(page, EMAIL_SELECTOR_NAME)
+    discovery = await discover_key(page, EMAIL_SELECTOR_NAME)
     assert discovery.result is DiscoveryResultKind.UNIQUE_MATCH
     assert discovery.structural_digest is not None
     assert discovery.structural_digest.startswith("sha256:")
 
 
-def test_discover_key_no_match_no_digest() -> None:
+async def test_discover_key_no_match_no_digest() -> None:
     behaviors = {
         ("role", "textbox", "Email, phone, or Skype"): 0,
         ("placeholder", "Email, phone, or Skype"): 0,
@@ -462,28 +462,28 @@ def test_discover_key_no_match_no_digest() -> None:
         ("placeholder", "E-mail, telemóvel ou Skype"): 0,
         ("label", "E-mail, telemóvel ou Skype"): 0,
     }
-    discovery = discover_key(_FakePage(behaviors), EMAIL_SELECTOR_NAME)
+    discovery = await discover_key(_FakePage(behaviors), EMAIL_SELECTOR_NAME)
     assert discovery.result is DiscoveryResultKind.NO_MATCH
     assert discovery.structural_digest is None
 
 
-def test_discover_key_ambiguous() -> None:
+async def test_discover_key_ambiguous() -> None:
     behaviors = {("role", "textbox", "Email, phone, or Skype"): 3}
-    discovery = discover_key(_FakePage(behaviors), EMAIL_SELECTOR_NAME)
+    discovery = await discover_key(_FakePage(behaviors), EMAIL_SELECTOR_NAME)
     assert discovery.result is DiscoveryResultKind.AMBIGUOUS
     assert discovery.structural_digest is None
 
 
-def test_discover_key_missing_plan_fails_closed() -> None:
+async def test_discover_key_missing_plan_fails_closed() -> None:
     # An unknown selector is not a declared common.auth progression key -> ValueError
     # inside common_auth_locator_plan -> sanitized DiscoveryError.
     with pytest.raises(DiscoveryError):
-        discover_key(_FakePage({}), "auth.login_unknown_selector")
+        await discover_key(_FakePage({}), "auth.login_unknown_selector")
 
 
-def test_discover_key_count_failure_fails_closed() -> None:
+async def test_discover_key_count_failure_fails_closed() -> None:
     class _BoomLocator:
-        def count(self) -> int:
+        async def count(self) -> int:
             raise RuntimeError("injected count failure")
 
     class _BoomPage(_FakePage):
@@ -491,16 +491,74 @@ def test_discover_key_count_failure_fails_closed() -> None:
             return _BoomLocator()
 
     with pytest.raises(DiscoveryError):
-        discover_key(_BoomPage({}), EMAIL_SELECTOR_NAME)
+        await discover_key(_BoomPage({}), EMAIL_SELECTOR_NAME)
 
 
-def test_discover_key_never_fills_or_clicks() -> None:
+async def test_discover_key_never_fills_or_clicks() -> None:
     page = _FakePage({})
-    discover_key(page, EMAIL_SELECTOR_NAME)
+    await discover_key(page, EMAIL_SELECTOR_NAME)
     # The page only receives count() calls via the locator primitives; there is
     # no fill/click/type method on the discovery path.
     for call in page.calls:
         assert call[0] in ("role", "label", "placeholder", "test_id", "css")
+
+
+class _AwaitFlagLocator:
+    """Async Playwright Locator double that records whether ``count`` ran.
+
+    Flipping ``count_executed`` from inside the coroutine lets a test prove
+    ``discover_key`` truly awaited ``locator.count()`` rather than returning a
+    coroutine object. Mirrors the async Playwright Locator API consumed by
+    ``bootstrap_discovery`` via ``build_locator`` -> ``locator.count()``.
+    """
+
+    def __init__(self, count: int) -> None:
+        self._count = count
+        self.count_executed = False
+
+    async def count(self) -> int:
+        self.count_executed = True
+        return self._count
+
+
+async def test_discover_key_actually_awaits_count() -> None:
+    # Prove the resolver awaits locator.count() (not just returns a coroutine).
+    locator = _AwaitFlagLocator(1)
+    page = _FakePage({})
+    page.get_by_role = lambda role, *, name=None: locator  # type: ignore[method-assign]
+    assert locator.count_executed is False
+    discovery = await discover_key(page, EMAIL_SELECTOR_NAME)
+    assert locator.count_executed is True
+    assert discovery.result is DiscoveryResultKind.UNIQUE_MATCH
+
+
+async def test_discover_key_await_preserves_semantics() -> None:
+    # NO_MATCH / UNIQUE_MATCH / AMBIGUOUS semantics preserved through await.
+    no_match = _AwaitFlagLocator(0)
+    unique = _AwaitFlagLocator(1)
+    ambiguous = _AwaitFlagLocator(3)
+
+    nm_page = _FakePage({})
+    nm_page.get_by_role = lambda role, *, name=None: no_match  # type: ignore[method-assign]
+    un_page = _FakePage({})
+    un_page.get_by_role = lambda role, *, name=None: unique  # type: ignore[method-assign]
+    am_page = _FakePage({})
+    am_page.get_by_role = lambda role, *, name=None: ambiguous  # type: ignore[method-assign]
+
+    nm = await discover_key(nm_page, EMAIL_SELECTOR_NAME)
+    un = await discover_key(un_page, EMAIL_SELECTOR_NAME)
+    am = await discover_key(am_page, EMAIL_SELECTOR_NAME)
+
+    assert nm.result is DiscoveryResultKind.NO_MATCH
+    assert nm.structural_digest is None
+    assert un.result is DiscoveryResultKind.UNIQUE_MATCH
+    assert un.structural_digest is not None
+    assert am.result is DiscoveryResultKind.AMBIGUOUS
+    assert am.structural_digest is None
+    # Every locator's async count was actually awaited.
+    assert no_match.count_executed is True
+    assert unique.count_executed is True
+    assert ambiguous.count_executed is True
 
 
 # --------------------------------------------------------------------------
@@ -544,11 +602,11 @@ def test_selector_structural_shape_matches_script_helper() -> None:
     assert "Email, phone, or Skype" not in json.dumps(ours)
 
 
-def test_discover_key_digest_is_script_compatible() -> None:
+async def test_discover_key_digest_is_script_compatible() -> None:
     attestation = _load_attestation_script_module()
     metadata = _auth_metadata()
     page = _FakePage({})
-    discovery = discover_key(page, EMAIL_SELECTOR_NAME)
+    discovery = await discover_key(page, EMAIL_SELECTOR_NAME)
     assert discovery.result is DiscoveryResultKind.UNIQUE_MATCH
     expected_shape = attestation._selector_structural_shape(
         EMAIL_SELECTOR_NAME, {"locators": metadata[EMAIL_SELECTOR_NAME]["locators"]}, 0, 1

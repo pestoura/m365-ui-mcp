@@ -131,7 +131,7 @@ class KeyDiscovery:
         return payload
 
 
-def discover_key(page: Any, selector_key: str) -> KeyDiscovery:
+async def discover_key(page: Any, selector_key: str) -> KeyDiscovery:
     """Resolve/count declared candidates only for one fixed selector key.
 
     Reuses ``common_auth_locator_plan`` (UNVERIFIED_LIVE plans are permitted,
@@ -160,7 +160,7 @@ def discover_key(page: Any, selector_key: str) -> KeyDiscovery:
     primary = plan.primary
     locator = build_locator(page, primary)
     try:
-        count = int(locator.count())
+        count = int(await locator.count())
     except Exception as exc:
         raise DiscoveryError("locator count could not be determined") from exc
 
