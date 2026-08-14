@@ -285,110 +285,6 @@ assertion across the whole API).
 
 ---
 
-## 12. Operator-only GUI handoff (host-side, fail-closed)
-
-**WORKER-120 — Operator-only GUI handoff is host-side and lives outside the worker.** It provides a
-loopback-only VNC view of the worker profile for an operator so they can complete an interactive
-Microsoft sign-in by hand. It is never an MCP tool, never exposed over HTTP, and the headed browser is
-a SEPARATE one-off container — never the worker itself, never alongside the control plane.
-
-**WORKER-121 — Start fails closed.** It refuses unless the production checkout is clean with ONLY the
-generated `.jarvas/attest/` subtree allowed untracked, the required host binaries are present
-(`Xvfb`, `x11vnc`, `websockify`, `docker` — host Chromium/setpriv are NOT required), every loopback
-port (`5999`, `6080`) is free, no stale GUI one-off container or active handoff state exists, the
-expected `browser-worker` container exists and is `healthy`, and the profile ownership inside the
-healthy normal worker is exactly the numeric `1001:1001` (verified via `docker exec`/`stat`, never by
-stating the host Docker volume mountpoint and never by chown). Any single failure aborts start with no
-side effects.
-
-**WORKER-122 — GUI start order is fixed and reversible.** Host stack launches Xvfb → x11vnc →
-websockify (loopback). Then ONLY `browser-worker` is gracefully stopped and verified exited. Then the
-headed one-off container is launched. On any launch failure the started steps are rolled back in reverse
-order and `browser-worker` is restarted to healthy.
-
-**WORKER-123 — Network exposure is loopback-only.** Xvfb disables TCP; x11vnc and websockify bind
-`127.0.0.1`; noVNC is served locally only. The headed container publishes NO ports and joins ONLY the
-`*m365-egress` network (never `browser-internal`), so the control plane cannot route to it. The handoff
-never exposes anything beyond `127.0.0.1` and never touches Cloudflare.
-
-**WORKER-124 — Headed browser uses the same profile owner, with no CDP.** The headed one-off container
-runs the exact currently deployed browser-worker image as the same non-root image user (`1001:1001`),
-mounts the same named volume at `/var/lib/planner-worker/profile` RW, and carries no
-`--remote-debugging-port`, `--remote-debugging-pipe`, or CDP surface. The profile is never chowned;
-ownership is preserved.
-
-**WORKER-125 — Stop touches only browser-worker.** `stop` removes the headed one-off container first
-(profile flush), terminates the host GUI stack, then restarts ONLY `browser-worker` and waits for
-healthy. The control plane is never stopped, started, or referenced.
-
-**WORKER-126 — State is sanitized and external to the profile.** Only PIDs, health booleans, the
-headed container name, the local noVNC endpoint, and `begin_signin_ok` are stored in a state file
-outside the profile. No credentials, cookies, tokens, Microsoft page content, UPN, URLs, or browser
-data are written. No passwords/tokens appear in logs.
-
-**WORKER-127 — No credential or tenant handling.** The handoff invokes the operator-only
-`POST /auth/bootstrap/begin-signin` exactly once inside the headed container (no URL args, no
-credentials, no retry) and performs no other navigation/typing/clicking. It never reads or writes
-cookies/storage state beyond that endpoint and never contacts M365 except through that in-process
-worker path. It is observation-only at the GUI layer.
-
-**WORKER-128 — No arbitrary env copy.** The headed one-off container receives only an explicit, minimal
-env: `M365_MODE=live` (and `PLANNER_MODE=live`), `M365_BROWSER_HEADLESS=0`
-(`PLANNER_BROWSER_HEADLESS=0`), `M365_BROWSER_PROFILE_DIR=/var/lib/planner-worker/profile`
-(`PLANNER_BROWSER_PROFILE_DIR` mirrored), the worker port, and `DISPLAY=:99`. Container env/secrets are
-never copied.
-
-**WORKER-129 — Headed container is isolated from the worker trust domain.** It has NO published ports,
-joins ONLY `*m365-egress`, has no `browser-worker` alias, drops ALL capabilities, sets
-`no-new-privileges`, and is bounded by memory/pids limits. The in-process egress interceptor is
-preserved; Graph/non-HTTPS/arbitrary hosts remain denied.
-
-**WORKER-130 — Profile ownership is proven inside the healthy worker.** Before any launch, profile
-ownership is verified from INSIDE the healthy normal `browser-worker` via `docker exec` + `stat` on
-`/var/lib/planner-worker/profile` and a representative persistent content entry, requiring `1001:1001`.
-The Docker volume host mountpoint is never stated on the host; chown is never used.
-
-**WORKER-131 — Worker is stopped before the GUI container.** The normal `browser-worker` is gracefully
-stopped and its `exited` status is verified BEFORE the headed one-off container is launched, so the
-profile is never held by two Chromium instances at once. No stale GUI container may exist at launch.
-
-**WORKER-132 — Begin-signin runs exactly once after headed health.** After the headed worker reports
-`/health` (probed via `docker exec` loopback), `POST /auth/bootstrap/begin-signin` is invoked exactly
-once inside the container with no URL args, no credentials, and no retry beyond the health wait. No
-other navigation/type/click occurs.
-
-**WORKER-133 — Rollback restores the normal worker.** Any start failure performs reverse cleanup
-(remove headed container, restart and wait for `browser-worker` healthy, terminate host stack) so the
-production worker is always restored to healthy.
-
-**WORKER-134 — Stop order is deterministic.** `stop` removes the headed one-off container first, then
-terminates the host GUI stack in reverse launch order, then restarts ONLY `browser-worker` and waits
-healthy. Control-plane is never referenced.
-
-**WORKER-135 — Status is sanitized.** The reported status carries only booleans, the headed container
-name, and the local noVNC endpoint — no Microsoft page content, cookies, tokens, or UPN.
-
-**WORKER-136 — Host GUI stack readiness is bounded and fail-closed.** After launching Xvfb `:99`,
-`start` WAITS for `/tmp/.X11-unix/X99` to exist as a Unix socket AND for the Xvfb process to remain
-alive, with a bounded timeout/poll. After x11vnc starts it WAITS bounded for `127.0.0.1:5999` to accept
-TCP while x11vnc stays alive; after websockify starts it WAITS bounded for `127.0.0.1:6080` likewise.
-All host-stack readiness gates run BEFORE the normal browser-worker is stopped, minimizing worker
-downtime and confining any readiness failure to host-stack rollback only.
-
-**WORKER-137 — Headed container starts only after host-stack readiness is GREEN.** The normal
-`browser-worker` is stopped and the headed one-off container launched ONLY after the X socket, VNC
-listener, and websockify listener are all confirmed ready. Readiness gates cannot abort after the
-worker is already down (no partial headed session against a not-yet-ready display).
-
-**WORKER-138 — Rollback is scope-aware around worker stop.** If a readiness gate fails BEFORE the
-normal `browser-worker` is stopped, rollback terminates only the already-launched host stack and does
-NOT restart the worker (it was never stopped). If a failure occurs AFTER the worker stop, rollback
-restores the worker to healthy exactly as before (WORKER-133), preserving the existing posture.
-
-See `docs/operator-gui-handoff.md` and `scripts/operator_gui_handoff.py`.
-
----
-
 ## 13. Traceability
 
 | ID range | Area |
@@ -403,6 +299,5 @@ See `docs/operator-gui-handoff.md` and `scripts/operator_gui_handoff.py`.
 | WORKER-090…094 | Errors, timeouts, retries, breaker |
 | WORKER-100…105 | API boundary |
 | WORKER-110…118 | Tests |
-| WORKER-120…135 | Operator-only GUI handoff |
 
 
