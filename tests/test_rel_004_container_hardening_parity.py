@@ -88,12 +88,13 @@ def test_control_plane_is_read_only_and_worker_exception_is_explicit() -> None:
     assert "profile" in blocks["browser-worker"]
 
 
-def test_worker_publishes_no_port_and_control_plane_binds_loopback_only() -> None:
+def test_worker_publishes_only_loopback_8090_and_control_plane_binds_loopback_only() -> None:
     blocks = _service_blocks()
-    worker_directives = [
-        line for line in blocks["browser-worker"].splitlines() if not line.lstrip().startswith("#")
-    ]
-    assert not any(line.strip() == "ports:" for line in worker_directives)
+    # Parse only declared port mappings (quoted "- HOST:CONTAINER"), not comments.
+    worker_ports = re.findall(r'^\s*-\s*"([^"]+)"', blocks["browser-worker"], flags=re.MULTILINE)
+    assert worker_ports == ["127.0.0.1:8090:8090"], worker_ports
+    assert not any(p.startswith("0.0.0.0") for p in worker_ports)  # noqa: S104 - asserting absence of all-interfaces bind
+    # Control plane stays loopback-only (unchanged invariant).
     published = re.findall(r'^\s*-\s*"([^"]+)"', blocks["control-plane"], flags=re.MULTILINE)
     assert published, "control plane must publish exactly one reviewed port"
     for mapping in published:

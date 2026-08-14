@@ -11,8 +11,12 @@ services:
       PLANNER_WORKER_HOST: 0.0.0.0
       PLANNER_WORKER_PORT: "8090"
     networks: [browser-internal, m365-egress]
-    # No published ports: the worker is reachable only from the control plane.
-    # Outbound traffic is additionally constrained by the browser egress allowlist.
+    # Published ONLY on host loopback 127.0.0.1:8090 — never 0.0.0.0, never public.
+    # In-container bind stays 0.0.0.0:8090; the host publishes the loopback address
+    # only, so the worker is reachable on the host via 127.0.0.1:8090 while remaining
+    # on the internal Docker network for the control plane. Egress stays closed.
+    ports:
+      - "127.0.0.1:8090:8090"
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]

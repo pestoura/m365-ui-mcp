@@ -252,8 +252,9 @@ surface is limited to the profile volume and tmpfs.
 
 **SEC-104** `tmpfs` for scratch (`/tmp` with `noexec,nosuid`, and `/dev/shm` sized for Chromium).
 
-**SEC-105** The worker is attached only to an `internal: true` Docker network and publishes **no
-port**. The control plane publishes only to `127.0.0.1`.
+**SEC-105** The worker is attached only to an `internal: true` Docker network and is published on
+the host **exclusively at `127.0.0.1:8090`** (loopback only, never `0.0.0.0`, never a public
+interface). The control plane publishes only to `127.0.0.1`.
 
 **SEC-106** **No host Docker socket** is mounted into any container.
 
@@ -286,7 +287,7 @@ Dockerfiles, so drift fails CI rather than being discovered in deployment.
 | `cap_drop: [ALL]` | required | required | `SEC-102` |
 | Read-only root filesystem | required | documented exception (writable profile) | `SEC-103` |
 | tmpfs scratch with `noexec,nosuid` | required | required (plus sized `/dev/shm`) | `SEC-104` |
-| No published port beyond loopback | `127.0.0.1` only | none | `SEC-105` |
+| No published port beyond loopback | `127.0.0.1` only | `127.0.0.1:8090` only | `SEC-105` |
 | No Docker socket mount | required | required | `SEC-106` |
 | No host/home/personal bind mount | required | required | `SEC-107`, `PRIV-050` |
 | Single-owner named volume | `mcp-state` | `browser-profile` | `SEC-108` |
