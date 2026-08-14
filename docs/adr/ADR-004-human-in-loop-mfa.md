@@ -18,8 +18,10 @@ collapse the authentication trust boundary and create unacceptable credential/ph
    env, disk, logs or worker state.
 2. **Authentication is interactive in the dedicated professional Chromium profile.** The human
    performs credential entry directly in the browser; the worker observes authentication state.
-   The interactive GUI handoff (`docs/operator-gui-handoff.md`) remains a supported **fallback
-   only**. For the operator path, local encrypted-store automation (AUTH-101) supersedes the
+   There is no headed/graphical fallback; the headed GUI/VNC/X11 handoff was explored and
+   explicitly rejected (see
+   [`../archive/ADR-ARCHIVED-gui-vnc-handoff.md`](../archive/ADR-ARCHIVED-gui-vnc-handoff.md)).
+   For the operator path, local encrypted-store automation (AUTH-101) supersedes the
    "human types the password" step while preserving every no-plaintext/no-env/no-argv/no-ChatGPT/
    no-Telegram-credential invariant; MFA approval stays Microsoft Authenticator-only.
 3. **MFA approval occurs exclusively in Microsoft Authenticator.** The system may detect number

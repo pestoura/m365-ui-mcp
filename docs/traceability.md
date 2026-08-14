@@ -134,7 +134,6 @@ The canonical path is fixed by the backlog:
 | Container boundary is hardened | deployment, privacy-boundary | P-064 | non-root/read-only/cap-drop/no-new-privileges/no-host-mount checks |
 | Supply chain is evidenced | deployment, release-process | P-065, P-068 | Trivy, real digest pinning, CycloneDX SBOM validation |
 | Telemetry is redacted and low-cardinality | observability, security | P-008, P-009, P-063 | adversarial redaction + metric-label tests |
-| Operator-only GUI handoff is host-side, loopback-only, headed-container one-off, fail-closed | browser-worker, operator-gui-handoff; WORKER-120…138 | P-007, P-064 | preflight/teardown/rollback tests + loopback/CDP/chown/attest-allowlist/begin-signin-once assertion tests + bounded host-stack readiness-gate tests (delayed X socket, Xvfb death, VNC/websockify listener timeout, readiness-before-worker-stop ordering, scope-aware rollback) |
 
 ## 8. Capability claim traceability
 

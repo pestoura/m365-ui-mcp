@@ -408,9 +408,11 @@ narrowly-scoped operator-only `POST /auth/bootstrap/operator-submit` route. That
 route applies ONLY the two `common.auth` sign-in fields (`auth.login_email_input`,
 `auth.login_password_input`) to the already-open Microsoft authentication page;
 no URL, generic DOM primitive, Graph surface or locator guessing is reachable, and
-the worker never prints, logs, env-stores or state-stores the values. The interactive
-**GUI handoff** (`docs/operator-gui-handoff.md`) remains a supported **fallback
-only**. Preserved invariants from AUTH-002 / ADR-004: no plaintext persistence, no
+the worker never prints, logs, env-stores or state-stores the values. There is no
+headed/graphical fallback: the canonical path is headless Chromium + Playwright over
+the persistent professional profile (see
+[`archive/ADR-ARCHIVED-gui-vnc-handoff.md`](archive/ADR-ARCHIVED-gui-vnc-handoff.md)).
+Preserved invariants from AUTH-002 / ADR-004: no plaintext persistence, no
 environment variable, no argv, no ChatGPT, and no Telegram credentials are ever
 involved. The operator submit route clicks the Microsoft "Next" control to advance
 from the email step and the Microsoft form "Sign in" control to finalize credential
