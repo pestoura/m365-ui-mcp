@@ -24,6 +24,9 @@ from m365_browser_worker.bootstrap_navigation import (
 )
 from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
+from m365_browser_worker.operator_signin import (
+    validate_signin_input,
+)
 from m365_browser_worker.protocol import (
     WorkerOperation,
     WorkerRequestEnvelope,
@@ -424,6 +427,87 @@ def create_app(
             "target_class": MICROSOFT_AUTH_TARGET_CLASS,
             "auth_state": live_auth_state().value,
         }
+
+    @app.post("/auth/bootstrap/operator-submit")
+    async def auth_bootstrap_operator_submit(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback encrypted-store sign-in submit (AUTH-101).
+
+        Third step of the operator flow: apply the two memory-only sign-in fields
+        to the already-open Microsoft authentication page. Hardened shape:
+
+        * NOT an MCP tool; absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client.
+        * SOCKET-level loopback admission only (``127.0.0.1``/``::1``); proxy
+          headers are never consulted; a Docker-network peer gets ``404``.
+        * The caller is the operator-local ``scripts/operator_auth_login.py`` which
+          decrypts two already-provisioned systemd-creds secrets, keeps them
+          memory-only, and forwards them through a local stdin/IPC path. The
+          worker never reads the encrypted store, never prints values, and never
+          places them in argv/env/log/state.
+        * The route accepts exactly the closed ``{email, password}`` contract
+          (``validate_signin_input``). Any extra/unknown key, or a missing key, is
+          rejected with ``400`` and never reaches the browser.
+        * No URL/selector/Graph field is accepted. The browser applies ONLY the two
+          ``common.auth`` sign-in selectors, resolved from the attested UIContract
+          store (no locator guessing). A non-attested ``common.auth`` fails closed
+          and types nothing.
+        * There is no submit click: automation never satisfies MFA. The human
+          completes MFA in Microsoft Authenticator; the browser observes the state.
+        * Returns only ``{ok, auth_state}``. No value, URL, DOM, cookie, token,
+          UPN, tenant id or browser handle is ever returned.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+
+        try:
+            raw = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body must not echo values
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "Body must be a JSON object"},
+            ) from None
+        try:
+            signin = validate_signin_input(raw)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": str(exc)},
+            ) from exc
+
+        if not _is_mock():
+            # Fail closed before any browser interaction: the two memory-only
+            # fields must never be applied when the common.auth UIContract
+            # fragment is not attested. (Route docstring contract.)
+            if not worker_browser.common_auth_attested():
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "NOT_ATTESTED",
+                        "message": "common.auth UIContract not attested; operator submit refused",
+                    },
+                )
+
+        if _is_mock():
+            # Mock mode has no live page to fill; report the closed admission only.
+            return {"ok": True, "auth_state": AuthState.UNKNOWN.value}
+
+        try:
+            await worker_browser.submit_operator_signin(signin)
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        # Submission is not authentication: the human still completes MFA in
+        # Microsoft Authenticator, so the closed state remains UNKNOWN.
+        return {"ok": True, "auth_state": AuthState.UNKNOWN.value}
 
     @app.get("/auth/session")
     async def auth_session() -> dict[str, Any]:

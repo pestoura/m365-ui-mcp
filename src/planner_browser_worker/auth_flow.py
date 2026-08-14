@@ -28,6 +28,25 @@ def detect_mfa_number(page_text: str) -> str | None:
     return None
 
 
+def resolve_mfa_number_unique(page_text: str) -> str | None:
+    """Fail-closed MFA number resolver for the LIVE state machine.
+
+    Returns the number ONLY when exactly one 2-digit candidate is present in a
+    number-matching context. If the page contains zero candidates, or more than
+    one distinct candidate (ambiguous), it returns ``None`` so the caller fails
+    closed instead of guessing a challenge value. This is stricter than
+    :func:`detect_mfa_number`, which keeps a best-effort fallback for
+    non-live/observational use.
+    """
+    lowered = page_text.lower()
+    if "authenticator" not in lowered and "number matching" not in lowered:
+        return None
+    candidates = {m.group(1) for m in _BARE_TWO_DIGIT.finditer(page_text)}
+    if len(candidates) == 1:
+        return next(iter(candidates))
+    return None
+
+
 def build_challenge(
     number: str, *, operation_id: str, description: str = "Sign in to Microsoft Planner",
     ttl_seconds: int = 120,

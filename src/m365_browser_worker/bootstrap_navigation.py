@@ -54,6 +54,12 @@ MICROSOFT_AUTH_TARGET_CLASS = "microsoft_auth"
 # widened.
 AUTH_BEGIN_SIGNIN_OPERATION = "auth_begin_signin"
 
+# Worker-local operation name for the operator-only encrypted-store sign-in
+# submit (AUTH-101). It applies ONLY the two memory-only sign-in fields to the
+# already-open Microsoft authentication page; no URL, no generic DOM primitive,
+# no Graph surface, no locator guessing.
+AUTH_OPERATOR_SUBMIT_OPERATION = "auth_operator_submit"
+
 # Socket peer addresses accepted for the operator-only endpoint. IPv4-mapped
 # IPv6 loopback is included because dual-stack sockets may report that form.
 _LOOPBACK_PEERS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})

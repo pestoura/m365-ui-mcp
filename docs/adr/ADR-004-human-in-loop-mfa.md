@@ -12,9 +12,16 @@ collapse the authentication trust boundary and create unacceptable credential/ph
 ## Decision
 
 1. **The Microsoft password never enters Planner MCP.** It is not stored in the repository,
-   environment, configuration, state DB, Hermes, logs, evidence or tool payloads.
+   environment, configuration, state DB, Hermes, logs, evidence or tool payloads. For the
+   operator path it is retrieved from a local encrypted systemd-creds store and kept
+   memory-only by `scripts/operator_auth_login.py` (AUTH-101); it is never placed in argv,
+   env, disk, logs or worker state.
 2. **Authentication is interactive in the dedicated professional Chromium profile.** The human
    performs credential entry directly in the browser; the worker observes authentication state.
+   The interactive GUI handoff (`docs/operator-gui-handoff.md`) remains a supported **fallback
+   only**. For the operator path, local encrypted-store automation (AUTH-101) supersedes the
+   "human types the password" step while preserving every no-plaintext/no-env/no-argv/no-ChatGPT/
+   no-Telegram-credential invariant; MFA approval stays Microsoft Authenticator-only.
 3. **MFA approval occurs exclusively in Microsoft Authenticator.** The system may detect number
    matching and emit a sanitized event containing only the approved fields (`mfa_number`,
    `operation_id`, `service`, sanitized `description`, `expiry`).

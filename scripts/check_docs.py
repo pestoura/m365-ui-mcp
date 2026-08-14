@@ -50,6 +50,7 @@ ADRS = {
     "ADR-006-ui-contract-attestation.md": "006",
     "ADR-007-professional-profile-boundary.md": "007",
     "ADR-008-graph-api-non-dependency.md": "008",
+    "ADR-009-operator-encrypted-store-signin.md": "009",
 }
 
 TARGETS = CANONICAL_DOCS + A1_3_DOCS
@@ -140,10 +141,10 @@ def validate_text(path: Path, display: str, *, require_vision: bool = False) -> 
         if bad in text:
             errors.append(f"POSSIBLE SECRET IN DOC: {display} contains {bad!r}")
 
-    # A1 has exactly ADR-001..ADR-008. Four-digit ADR-000x references came from a
+    # A1 has ADR-001..ADR-009. Four-digit ADR-000x references came from a
     # parallel/non-canonical specification and must never re-enter A1.
     for number in ADR_REF_RE.findall(text):
-        if len(number) != 3 or not 1 <= int(number) <= 8:
+        if len(number) != 3 or not 1 <= int(number) <= 9:
             errors.append(f"INVALID ADR REFERENCE: {display} contains ADR-{number}")
 
     # R-nn was an unrelated traceability namespace introduced by the parallel

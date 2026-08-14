@@ -17,6 +17,7 @@ from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_sta
 from m365_browser_worker.bootstrap_navigation import (
     AUTH_BEGIN_SIGNIN_OPERATION,
     AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+    AUTH_OPERATOR_SUBMIT_OPERATION,
     MICROSOFT_AUTH_BOOTSTRAP_URL,
     PLANNER_WEB_BOOTSTRAP_URL,
     classify_begin_signin_source,
@@ -26,6 +27,12 @@ from m365_browser_worker.bootstrap_navigation import (
     is_reusable_bootstrap_page,
 )
 from m365_browser_worker.egress import enforce_route_egress
+from m365_browser_worker.operator_signin import (
+    EMAIL_SELECTOR_NAME,
+    PASSWORD_SELECTOR_NAME,
+    OperatorSignInInput,
+    ui_contract_selector_value,
+)
 from m365_mcp.config import browser_runtime_settings
 from planner_mcp.errors import (
     BlockerConditionalAccess,
@@ -252,6 +259,85 @@ class PersistentBrowser:
 
         # Exactly one navigation per operator call; no retry loop.
         await page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)
+
+    async def submit_operator_signin(self, signin: OperatorSignInInput) -> None:
+        """Apply the operator-sign-in fields to the Microsoft sign-in page.
+
+        This is the ONLY credential-application primitive. It receives a
+        memory-only ``OperatorSignInInput`` (built by the operator-local
+        encrypted-store helper) and fills exactly the two ``common.auth`` sign-in
+        fields (``auth.login_email_input``, ``auth.login_password_input``) on the
+        current Microsoft authentication page. It is fail-closed:
+
+        * the destination is never supplied — the values are applied only to the
+          already-open page on an approved Microsoft authentication origin;
+        * the password value is used for exactly one ``fill`` call and is not
+          stored, logged, or returned;
+        * if ``common.auth`` is not attested, both sign-in locators are
+          UNVERIFIED_LIVE with no guessed value, so the call raises and types
+          nothing (no locator guessing, no fallback to non-declared fields);
+        * there is no submit click: automation never satisfies MFA or finalizes
+          an interactive challenge. The human completes MFA in Microsoft
+          Authenticator and the browser observes the resulting state.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "operator sign-in requires a started live browser",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "operator sign-in requires the dedicated persistent professional browser profile",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "operator sign-in requires the page to be on an approved "
+                "Microsoft authentication origin",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        if not common_auth_attested():
+            # Locators are UNVERIFIED_LIVE with no guessed value: fail closed and
+            # type nothing rather than guessing selectors against the live page.
+            raise PolicyDenied(
+                "operator sign-in requires the common.auth UIContract fragment to "
+                "be attested before any sign-in field may be applied",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        # Locator values are NEVER read from code. They are resolved only through
+        # the attested UIContract store, which supplies evidence-gated selectors.
+        # Until attestation lands real values, this guard above already fails
+        # closed; the resolved locators below MUST come from the store, never a
+        # hardcoded string.
+        email_locator = ui_contract_selector_value(EMAIL_SELECTOR_NAME)
+        password_locator = ui_contract_selector_value(PASSWORD_SELECTOR_NAME)
+        if email_locator is None or password_locator is None:
+            raise PolicyDenied(
+                "operator sign-in sign-in locators are not attested; refusing to "
+                "guess selectors",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+
+        page = self._require_single_auth_page()
+        # Memory-only: the password is consumed for exactly one fill and then
+        # dropped. It is never written to state, logs, argv, env or responses.
+        await page.fill(email_locator, signin.email)
+        await page.fill(password_locator, signin.password)
+
+    def _require_single_auth_page(self) -> Any:
+        """Return the single open Microsoft auth page, or fail closed."""
+        if self._context is None:
+            raise WorkerUnavailable(
+                "no browser context available for operator sign-in",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        pages = [p for p in self._context.pages if str(p.url)]
+        if len(pages) != 1:
+            raise PolicyDenied(
+                "operator sign-in requires exactly one open authentication page",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        return pages[0]
 
     @asynccontextmanager
     async def operation_page(self, operation: str) -> AsyncIterator[Any]:
