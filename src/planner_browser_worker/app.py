@@ -14,6 +14,15 @@ from fastapi.responses import JSONResponse
 from m365_browser_worker.account_context import AccountContext, unverified_account_context
 from m365_browser_worker.apps.planner import PlannerWorkerAdapter
 from m365_browser_worker.auth_bootstrap import AuthBootstrapGuard
+from m365_browser_worker.bootstrap_discovery import (
+    DISCOVER_EMAIL_OPERATION,
+    DISCOVER_PASSWORD_OPERATION,
+    EMAIL_DISCOVERY_KEYS,
+    PASSWORD_DISCOVERY_KEYS,
+    DiscoveryError,
+    KeyDiscovery,
+    discover_key,
+)
 from m365_browser_worker.bootstrap_navigation import (
     AUTH_BEGIN_SIGNIN_OPERATION,
     AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
@@ -475,7 +484,7 @@ def create_app(
 
         try:
             raw = await request.json()
-        except Exception:  # noqa: BLE001 - malformed body must not echo values
+        except Exception:
             raise HTTPException(
                 status_code=400,
                 detail={"error": "INVALID_REQUEST", "message": "Body must be a JSON object"},
@@ -488,18 +497,17 @@ def create_app(
                 detail={"error": "INVALID_REQUEST", "message": str(exc)},
             ) from exc
 
-        if not _is_mock():
+        if not _is_mock() and not worker_browser.common_auth_attested():
             # Fail closed before any browser interaction: the two memory-only
             # fields must never be applied when the common.auth UIContract
             # fragment is not attested. (Route docstring contract.)
-            if not worker_browser.common_auth_attested():
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "error": "NOT_ATTESTED",
-                        "message": "common.auth UIContract not attested; operator submit refused",
-                    },
-                )
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "NOT_ATTESTED",
+                    "message": "common.auth UIContract not attested; operator submit refused",
+                },
+            )
 
         if _is_mock():
             # Mock mode has no live page to fill; report the closed admission only.
@@ -576,6 +584,140 @@ def create_app(
             "mfa_number": result.mfa_number,
             "mfa_ambiguous": result.mfa_ambiguous,
         }
+
+    def discovery_guard(operation: str) -> Any | None:
+        """Fail-closed operator-only discovery preconditions.
+
+        Live mode ONLY. Returns the single open authentication page when every
+        precondition holds, otherwise raises a sanitized ``503``:
+
+        * started live browser (mock short-circuits via ``_is_mock``);
+        * the dedicated persistent professional profile;
+        * an approved Microsoft authentication origin;
+        * exactly one open authentication page.
+
+        Precondition failures never leak exception text or selector values.
+        """
+        if not worker_browser.started:
+            raise HTTPException(
+                status_code=503,
+                detail=WorkerUnavailable(
+                    "bootstrap discovery requires a started live browser",
+                    operation=operation,
+                ).to_dict(),
+            )
+        if not worker_browser.is_dedicated_persistent_profile():
+            raise HTTPException(
+                status_code=503,
+                detail=PolicyDenied(
+                    "bootstrap discovery requires the dedicated persistent "
+                    "professional browser profile",
+                    operation=operation,
+                ).to_dict(),
+            )
+        if not worker_browser.auth_origin_approved():
+            raise HTTPException(
+                status_code=503,
+                detail=PolicyDenied(
+                    "bootstrap discovery requires the page to be on an approved "
+                    "Microsoft authentication origin",
+                    operation=operation,
+                ).to_dict(),
+            )
+        try:
+            return worker_browser._require_single_auth_page()
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+    async def _discover_route(
+        request: Request, *, operation: str, keys: tuple[str, ...]
+    ) -> dict[str, Any]:
+        """Fixed, read-only bootstrap discovery for one hard-coded key scope.
+
+        OPERATOR-ONLY loopback admission only (same socket-level decision as the
+        other bootstrap routes). No query string, no request body, no
+        caller-supplied selector/stage/url/js. Probes ONLY the fixed keys in
+        ``keys`` (email route: email input + next button; password route:
+        password input + sign-in button). Returns a sanitized per-key semantic
+        result (NO_MATCH / UNIQUE_MATCH / AMBIGUOUS) and, for UNIQUE_MATCH only,
+        a value-free structural digest. Never fills/clicks/types/navigates.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+
+        if _is_mock():
+            # Mock mode has no live page to probe; return the fixed closed scope
+            # without performing or fabricating any discovery.
+            return {"ok": True, "mode": "mock", "scope": list(keys)}
+
+        page = discovery_guard(operation)
+        try:
+            discoveries: list[KeyDiscovery] = [
+                discover_key(page, selector_key) for selector_key in keys
+            ]
+        except DiscoveryError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "DISCOVERY_FAILED", "message": exc.reason},
+            ) from None
+
+        return {
+            "ok": True,
+            "keys": [discovery.to_dict() for discovery in discoveries],
+        }
+
+    @app.get("/auth/bootstrap/discover-email")
+    async def auth_bootstrap_discover_email(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback read-only discovery of the email sign-in keys.
+
+        Fixed scope: ``auth.login_email_input`` and ``auth.login_next_button``.
+        Security shape (see the sibling bootstrap routes):
+
+        * NOT an MCP tool, absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client;
+        * SOCKET-level loopback admission only; proxy headers are never consulted;
+        * GET only: any query string is rejected and no request body is processed;
+        * the fixed hard-coded key scope is the ONLY thing probed. No
+          caller-supplied selector/stage/url/js is accepted;
+        * reuses ``common_auth_locator_plan`` (UNVERIFIED_LIVE plans allowed, no
+          attestation gate) and the ``locator_runtime`` primitives to resolve and
+          count declared candidates only. It NEVER fills, clicks, types, evaluates
+          scripts, or navigates;
+        * returns only ``{ok, keys:[{selector_key, result, structural_digest?}]}``.
+          No locator strategy/value/name, raw counts, DOM/page text, URL, cookie,
+          token, UPN, tenant id, or account identifier is ever returned.
+        """
+        return await _discover_route(
+            request,
+            operation=DISCOVER_EMAIL_OPERATION,
+            keys=EMAIL_DISCOVERY_KEYS,
+        )
+
+    @app.get("/auth/bootstrap/discover-password")
+    async def auth_bootstrap_discover_password(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback read-only discovery of the password sign-in keys.
+
+        Fixed scope: ``auth.login_password_input`` and
+        ``auth.login_signin_button``. Identical hardened shape to the email
+        discovery route (loopback admission, no parameters, fixed key scope,
+        reuse of ``common_auth_locator_plan`` + ``locator_runtime``, read-only,
+        sanitized per-key results with a value-free structural digest on
+        UNIQUE_MATCH only).
+        """
+        return await _discover_route(
+            request,
+            operation=DISCOVER_PASSWORD_OPERATION,
+            keys=PASSWORD_DISCOVERY_KEYS,
+        )
 
     @app.get("/auth/session")
     async def auth_session() -> dict[str, Any]:
