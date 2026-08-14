@@ -492,8 +492,17 @@ def test_notifier_delivery_failure_is_degradation_not_approval() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_credential_loader_keeps_values_memory_only(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_credential_loader_keeps_values_memory_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     login = _OPERATOR_AUTH_LOGIN
+
+    # Hermetic in CI: redirect the module's credential store to an isolated
+    # tmp dir and create only the dummy encrypted credential file (placeholder
+    # content, never a real secret). Production source is untouched.
+    monkeypatch.setattr(login, "_CREDSTORE_DIR", tmp_path)
+    dummy_cred = tmp_path / "m365-ui-mcp.username.cred"
+    dummy_cred.write_text("dummy-encrypted-placeholder-not-a-secret", encoding="utf-8")
 
     captured: dict[str, list[str]] = {}
 
