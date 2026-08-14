@@ -23,6 +23,7 @@ Covers, explicitly (AUTH-099 / AUTH-100 / AUTH-101):
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 from collections.abc import Iterator
@@ -56,6 +57,28 @@ from planner_mcp.worker_client import WorkerClient
 
 ROOT = Path(__file__).resolve().parent.parent
 OPERATOR_SUBMIT_PATH = "/auth/bootstrap/operator-submit"
+
+
+def _load_operator_auth_login():
+    """Robustly load the operator script by absolute path (CI-proof).
+
+    The repository-root ``scripts`` namespace is not importable in every
+    pytest environment (e.g. installed-package CI runs), so we load the module
+    file directly via importlib instead of ``import scripts...``. This keeps
+    production code, packaging semantics and runtime behavior unchanged.
+    """
+    script_path = ROOT / "scripts" / "operator_auth_login.py"
+    spec = importlib.util.spec_from_file_location(
+        "operator_auth_login", str(script_path)
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"could not load operator_auth_login from {script_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_OPERATOR_AUTH_LOGIN = _load_operator_auth_login()
 
 
 # --------------------------------------------------------------------------
@@ -470,7 +493,7 @@ def test_notifier_delivery_failure_is_degradation_not_approval() -> None:
 
 
 def test_credential_loader_keeps_values_memory_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    import scripts.operator_auth_login as login
+    login = _OPERATOR_AUTH_LOGIN
 
     captured: dict[str, list[str]] = {}
 
@@ -488,7 +511,7 @@ def test_credential_loader_keeps_values_memory_only(monkeypatch: pytest.MonkeyPa
 
 
 def test_credential_loader_rejects_missing_store(monkeypatch: pytest.MonkeyPatch) -> None:
-    import scripts.operator_auth_login as login
+    login = _OPERATOR_AUTH_LOGIN
 
     monkeypatch.setattr(login, "_CREDSTORE_DIR", Path("/nonexistent-credstore"))
     with pytest.raises(RuntimeError):
