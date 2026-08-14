@@ -66,7 +66,7 @@ async def test_async_live_probe_is_awaited_before_count() -> None:
         return 1
 
     observation = await module.collect_structural_observation(
-        "common.auth", AttestationLevel.DISCOVERY, live_probe=async_probe
+        "common.auth.email", AttestationLevel.DISCOVERY, live_probe=async_probe
     )
     assert observation.source is ObservationSource.LIVE_UI
     assert observation.selector_observations
@@ -83,7 +83,7 @@ async def test_sync_live_probe_still_supported() -> None:
         return 1
 
     observation = await module.collect_structural_observation(
-        "common.auth", AttestationLevel.DISCOVERY, live_probe=sync_probe
+        "common.auth.email", AttestationLevel.DISCOVERY, live_probe=sync_probe
     )
     assert observation.source is ObservationSource.LIVE_UI
     for item in observation.selector_observations:

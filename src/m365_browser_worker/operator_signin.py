@@ -14,10 +14,11 @@ Fail-closed invariants:
   only when those locators are attested. Until then the worker fails closed and
   types nothing.
 * Progression selector plans (email -> next -> password -> sign in) are loaded
-  from the shipped ``common.auth`` fragment WITHOUT requiring attestation, so
-  bootstrap discovery can enumerate them for an UNVERIFIED_LIVE flow. Loading is
-  fail-closed: only the four declared progression keys are accepted, and the
-  caller remains responsible for the attestation gate before any fill.
+  from the shipped ``common.auth.email`` / ``common.auth.password`` fragments
+  WITHOUT requiring attestation, so bootstrap discovery can enumerate them for an
+  UNVERIFIED_LIVE flow. Loading is fail-closed: only the four declared progression
+  keys are accepted, and the caller remains responsible for the attestation gate
+  before any fill.
 
 Requirement IDs: AUTH-099 (notification), AUTH-100 (fail-closed MFA), AUTH-101
 (encrypted-store operator sign-in automation, superseding "human types password").
@@ -30,7 +31,7 @@ from dataclasses import dataclass
 from m365_browser_worker.locators import LocatorPlan, locator_plan_from_metadata
 
 # The ONLY sign-in fields the worker is permitted to apply. Both must be declared
-# by the ``common.auth`` UIContract fragment. No submit/locator/Graph field is
+# by the ``common.auth`` UIContract fragments. No submit/locator/Graph field is
 # ever accepted here.
 ALLOWED_SIGNIN_FIELDS = ("email", "password")
 
@@ -39,15 +40,23 @@ EMAIL_SELECTOR_NAME = "auth.login_email_input"
 PASSWORD_SELECTOR_NAME = "auth.login_password_input"  # noqa: S105 - selector name, not a secret
 
 # Progression selectors of the Microsoft Entra ID sign-in flow. All four are
-# declared by the ``common.auth`` fragment; only these may be loaded as plans.
+# declared by the ``common.auth.email`` / ``common.auth.password`` fragments;
+# only these may be loaded as plans.
 NEXT_SELECTOR_NAME = "auth.login_next_button"
 SIGNIN_SELECTOR_NAME = "auth.login_signin_button"
 
+# The two atomic ``common.auth`` UIContract fragments. Each is independently
+# collectable/attestable because the email and password surfaces never coexist
+# on the same Microsoft Entra ID sign-in page. AUTH-101 requires BOTH fragments
+# to be effectively_attested before any credential field is applied.
+COMMON_AUTH_FRAGMENT_IDS = ("common.auth.email", "common.auth.password")
+
 # Worker-local operation name for the operator-only pre-attestation email stage
 # (AUTH-106). It fills ONLY the email field and clicks ONLY the Next control to
-# advance the live Microsoft authentication page to the password step so the four
-# ``common.auth`` selectors become observable for attestation. It NEVER types the
-# password or clicks Sign in, and it does NOT require attestation to run.
+# advance the live Microsoft authentication page to the password step so the
+# ``common.auth.password`` selectors become observable for attestation. It NEVER
+# types the password or clicks Sign in, and it does NOT require attestation to
+# run.
 AUTH_BEGIN_EMAIL_STAGE_OPERATION = "auth_begin_email_stage"
 
 # Exactly the four progression selector keys, in flow order.
@@ -71,7 +80,7 @@ def ui_contract_selector_value(selector_name: str) -> str | None:
 
     source = load_ui_contract_set()
     for fragment in source.fragments:
-        if fragment.fragment_id != "common.auth":
+        if fragment.fragment_id not in COMMON_AUTH_FRAGMENT_IDS:
             continue
         value = fragment.selectors.get(selector_name, {}).get("value")
         if isinstance(value, str) and value:
@@ -81,7 +90,7 @@ def ui_contract_selector_value(selector_name: str) -> str | None:
 
 
 def common_auth_locator_plan(selector_name: str) -> LocatorPlan | None:
-    """Load a progression selector plan from the shipped ``common.auth`` fragment.
+    """Load a progression selector plan from the shipped ``common.auth`` fragments.
 
     Fail-closed: only the four declared progression selector keys are permitted.
     Any other key raises ``ValueError`` so the caller cannot reach an arbitrary or
@@ -102,11 +111,11 @@ def common_auth_locator_plan(selector_name: str) -> LocatorPlan | None:
 
     source = load_ui_contract_set()
     for fragment in source.fragments:
-        if fragment.fragment_id != "common.auth":
+        if fragment.fragment_id not in COMMON_AUTH_FRAGMENT_IDS:
             continue
         metadata = fragment.selectors.get(selector_name)
         if metadata is None:
-            return None
+            continue
         return locator_plan_from_metadata(selector_name, metadata)
     return None
 

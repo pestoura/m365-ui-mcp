@@ -28,12 +28,14 @@ credential-flow or MFA-automation primitive.
    two provisioned systemd-creds secrets via `systemd-creds decrypt --user`, keeps
    them **memory-only**, and forwards them over a loopback `stdin`/IPC path to the
    narrowly-scoped operator-only `POST /auth/bootstrap/operator-submit` route.
-3. The worker route applies ONLY the two `common.auth` sign-in fields
+3. The worker route applies ONLY the two `common.auth` sign-in fields declared by the
+   atomic `common.auth.email`/`common.auth.password` fragments (AUTH-107)
    (`auth.login_email_input`, `auth.login_password_input`) to the already-open
    Microsoft authentication page. No URL, generic DOM primitive, Graph surface or
    locator guessing is reachable. The values are never printed, logged, env-stored
    or state-stored.
-4. `common.auth` MUST be attested before any sign-in field is applied; otherwise the
+4. BOTH `common.auth.email` and `common.auth.password` MUST be attested (AUTH-107)
+   before any sign-in field is applied; otherwise the
    worker fails closed and types nothing (no guessed selectors).
 5. MFA approval stays Microsoft Authenticator-only. The operator submit route clicks
    the Microsoft "Next" control to advance from the email step and the Microsoft

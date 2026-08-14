@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import re
 
+from fastapi.testclient import TestClient
+
 from m365_mcp.ui_contract_projection import project_ui_contract_set
 from m365_mcp.ui_contract_store import UIContractFragment, UIContractSet, load_ui_contract_set
-from planner_mcp.ui_contract import load_status
+from planner_browser_worker.app import create_app
+from planner_mcp.ui_contract import full_contract_set_digest, load_status
 
 
 def _fragment(
@@ -96,3 +99,31 @@ def test_planner_status_exposes_exact_legacy_projection_digest() -> None:
     status = load_status()
     assert status.contract_set_digest == expected
     assert status.to_dict()["ui_contract_set_digest"] == expected
+
+
+def test_full_contract_set_digest_is_the_complete_set_digest() -> None:
+    """AUTH-108 — the helper returns the digest observations actually bind."""
+    assert full_contract_set_digest() == load_ui_contract_set().digest()
+
+
+def test_worker_health_reports_full_set_digest_not_projection() -> None:
+    """AUTH-108 — /health must expose the FULL-SET digest.
+
+    Live attestation observations bind ``load_ui_contract_set().digest()``; the
+    Planner-projection digest differs by construction. Reporting the projection
+    digest on /health was the real origin of CONTRACT_SET_DIGEST_MISMATCH.
+    """
+    source = load_ui_contract_set()
+    full_digest = source.digest()
+    projection_digest = project_ui_contract_set(
+        source,
+        "planner",
+        set_version=source.legacy_version,
+    ).digest()
+
+    client = TestClient(create_app())
+    payload = client.get("/health").json()
+
+    assert payload["ui_contract_set_digest"] == full_digest
+    if projection_digest != full_digest:
+        assert payload["ui_contract_set_digest"] != projection_digest

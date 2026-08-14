@@ -19,7 +19,7 @@ planner.task-surface
   -> project_snapshot.read
 ```
 
-The current `common.auth` and `planner.account` fragments do not directly promote application capabilities. Authentication and account validity remain separate effective-evidence dimensions.
+The current `common.auth.email`, `common.auth.password` and `planner.account` fragments do not directly promote application capabilities. Authentication and account validity remain separate effective-evidence dimensions.
 
 Capabilities such as dependencies, scheduling, goals, sprints, resources, custom fields and portfolios are deliberately **not inferred** from generic plan/task/account selectors. Until dedicated UI evidence exists, their UI dependency remains undeclared and their effective support stays fail-closed.
 

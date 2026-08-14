@@ -1,8 +1,8 @@
 """Operator-only read-only live attestation observation collector.
 
 OPERATOR-ONLY, socket-loopback admitted, read-only observation of the
-EXACT four declared ``common.auth`` sign-in selectors against the
-ALREADY-RUNNING dedicated live Microsoft 365 professional browser context.
+declared ``common.auth`` sign-in selectors against the ALREADY-RUNNING dedicated
+live Microsoft 365 professional browser context.
 
 This is the minimal primitive that closes the evidence gap documented in
 ``references/common_auth_four_selector_gate.md``: there was no way to produce a
@@ -12,12 +12,19 @@ fragment, per-selector result + structural_digest only) from the live context
 without relaunching Playwright. The ``discover-*`` routes emit only per-stage
 fragments, which the evaluator rejects with ``SELECTOR_SET_OR_ORDER_MISMATCH``.
 
+The email and password surfaces never coexist on the same Microsoft Entra ID
+sign-in page: the password/sign-in selectors only appear AFTER email -> Next.
+The single ``common.auth`` fragment was therefore structurally impossible to
+collect in one shot. It has been split into two atomic fragments —
+``common.auth.email`` (email input + next button) and ``common.auth.password``
+(password input + sign-in button) — each independently collectable on its real
+surface. This primitive is invoked once per fragment.
+
 Hard invariants (requirement AUTH-105):
 
 * admission is a SOCKET-level loopback decision only (``is_loopback_peer``);
-* the fixed key scope is exactly the four ``common.auth`` progression selectors in
-  fragment order: ``auth.login_email_input`` -> ``auth.login_next_button`` ->
-  ``auth.login_password_input`` -> ``auth.login_signin_button``. No caller may
+* the fixed key scope is exactly the two ``common.auth.email`` OR two
+  ``common.auth.password`` progression selectors in fragment order. No caller may
   supply a selector/stage/url/js;
 * any query string is rejected and no request body is processed;
 * it reuses ``collect_structural_observation`` exactly so the produced
@@ -47,6 +54,7 @@ from typing import Any
 from m365_browser_worker.bootstrap_discovery import DiscoveryError
 from m365_browser_worker.locator_runtime import build_locator
 from m365_browser_worker.operator_signin import (
+    COMMON_AUTH_FRAGMENT_IDS,
     EMAIL_SELECTOR_NAME,
     NEXT_SELECTOR_NAME,
     PASSWORD_SELECTOR_NAME,
@@ -60,14 +68,15 @@ from m365_mcp.attestation import (
 from m365_mcp.attestation_collection import collect_structural_observation
 from m365_mcp.locators import locator_plan_from_metadata
 
-# Fixed, hard-coded observation scope. Exactly the four common.auth progression
-# selectors, in fragment order. No caller may supply these values.
-COLLECT_OBSERVATION_KEYS = (
-    EMAIL_SELECTOR_NAME,
-    NEXT_SELECTOR_NAME,
-    PASSWORD_SELECTOR_NAME,
-    SIGNIN_SELECTOR_NAME,
-)
+# Fixed, hard-coded observation scope. Exactly the two ``common.auth.email``
+# progression selectors (email input + next button), in fragment order. No caller
+# may supply these values.
+COLLECT_OBSERVATION_EMAIL_KEYS = (EMAIL_SELECTOR_NAME, NEXT_SELECTOR_NAME)
+# Exactly the two ``common.auth.password`` progression selectors (password input
+# + sign-in button), in fragment order. No caller may supply these values.
+COLLECT_OBSERVATION_PASSWORD_KEYS = (PASSWORD_SELECTOR_NAME, SIGNIN_SELECTOR_NAME)
+# Both atomic fragments, in attestation-collection order.
+COLLECT_OBSERVATION_FRAGMENT_IDS = COMMON_AUTH_FRAGMENT_IDS
 
 # Operation name used only for sanitized fail-closed detail/observability. It is
 # free of the tokens ``goto``/``navigate`` (auth_bootstrap.py greps for those).
@@ -77,7 +86,7 @@ COLLECT_OBSERVATION_OPERATION = "auth_bootstrap_collect_observation"
 async def collect_running_observation(
     browser: Any,
     *,
-    fragment_id: str = "common.auth",
+    fragment_id: str = "common.auth.email",
     level: AttestationLevel | str = AttestationLevel.DISCOVERY,
 ) -> AttestationObservation:
     """Build a complete LIVE_UI AttestationObservation from the running context.
@@ -87,11 +96,19 @@ async def collect_running_observation(
     counts declared candidates against ``browser._context`` only — read-only,
     no wait, no interaction.
 
+    This primitive is invoked once per atomic ``common.auth`` fragment
+    (``common.auth.email`` then ``common.auth.password``) because the email and
+    password surfaces never coexist on the same Microsoft Entra ID sign-in page.
+    A single fragment observation binds to the current ``contract_set_digest`` and
+    matches that fragment's selector set/order exactly.
+
     Raises ``DiscoveryError`` (fail closed) when the running context is unusable
     or any selector cannot be deterministically counted. It NEVER fabricates a
     match: a missing/ambiguous running surface yields honest NO_MATCH/AMBIGUOUS
     results that the evaluator will reject, exactly as designed.
     """
+    if fragment_id not in COMMON_AUTH_FRAGMENT_IDS:
+        raise DiscoveryError("unsupported observation fragment")
     if browser is None or not getattr(browser, "started", False):
         raise DiscoveryError("live observation requires a started live browser")
     context = getattr(browser, "_context", None)
@@ -112,7 +129,6 @@ async def collect_running_observation(
         except Exception as exc:  # noqa: BLE001 - sanitized fail-closed
             raise DiscoveryError("locator count could not be determined") from exc
 
-
     # collect_structural_observation awaits coroutine probes automatically
     # (inspect.iscoroutine), so passing the async live_probe is correct.
     observation = await collect_structural_observation(
@@ -128,12 +144,14 @@ async def collect_running_observation(
 
 
 def collect_keys() -> tuple[str, ...]:
-    """Return the fixed observation key scope (fragment order)."""
-    return COLLECT_OBSERVATION_KEYS
+    """Return the fixed observation key scope (email fragment order)."""
+    return COLLECT_OBSERVATION_EMAIL_KEYS
 
 
 __all__ = [
-    "COLLECT_OBSERVATION_KEYS",
+    "COLLECT_OBSERVATION_EMAIL_KEYS",
+    "COLLECT_OBSERVATION_PASSWORD_KEYS",
+    "COLLECT_OBSERVATION_FRAGMENT_IDS",
     "COLLECT_OBSERVATION_OPERATION",
     "collect_keys",
     "collect_running_observation",

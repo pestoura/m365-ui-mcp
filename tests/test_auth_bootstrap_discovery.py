@@ -55,9 +55,14 @@ DISCOVER_EMAIL_PATH = "/auth/bootstrap/discover-email"
 DISCOVER_PASSWORD_PATH = "/auth/bootstrap/discover-password"  # noqa: S105
 
 ROOT = Path(__file__).resolve().parent.parent
-_AUTH_FRAGMENT = (
-    ROOT / "contracts" / "ui_fragments" / "common" / "auth.json"
+_AUTH_EMAIL_FRAGMENT = (
+    ROOT / "contracts" / "ui_fragments" / "common" / "auth_email.json"
 )
+
+
+def _auth_metadata() -> dict[str, object]:
+    raw = json.loads(_AUTH_EMAIL_FRAGMENT.read_text(encoding="utf-8"))
+    return raw["selectors"]
 
 
 # --------------------------------------------------------------------------
@@ -438,11 +443,6 @@ async def test_response_leaks_no_values_or_secrets(live_env) -> None:
 # --------------------------------------------------------------------------
 # discover_key unit behavior (no network / browser)
 # --------------------------------------------------------------------------
-
-
-def _auth_metadata() -> dict[str, object]:
-    raw = json.loads(_AUTH_FRAGMENT.read_text(encoding="utf-8"))
-    return raw["selectors"]
 
 
 async def test_discover_key_unique_match_digest_present() -> None:

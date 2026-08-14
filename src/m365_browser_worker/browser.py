@@ -149,14 +149,15 @@ class PersistentBrowser:
         )
 
     def common_auth_attested(self) -> bool:
-        """Return whether the ``common.auth`` UIContract fragment is attested.
+        """Return whether the ``common.auth`` UIContract fragments are attested.
 
         Fragment-scoped: delegates to ``planner_mcp.ui_contract.common_auth_attested``
-        which inspects ONLY the ``common.auth`` fragment rather than the aggregated
-        common+Planner attestation status. This lets LIVE auth report AUTHENTICATED
-        once ``common.auth`` is legitimately attested even while Planner fragments
-        remain UNVERIFIED. The stricter full-contract ``ensure_live_allowed`` gate
-        is unchanged.
+        which inspects ONLY the two atomic ``common.auth`` fragments
+        (``common.auth.email`` and ``common.auth.password``) and returns True iff
+        BOTH are effectively attested. This lets LIVE auth report AUTHENTICATED
+        once both ``common.auth`` fragments are legitimately attested even while
+        Planner fragments remain UNVERIFIED. The stricter full-contract
+        ``ensure_live_allowed`` gate is unchanged.
         """
         return common_auth_attested()
 
@@ -473,13 +474,14 @@ class PersistentBrowser:
             )
         if not common_auth_attested():
             raise PolicyDenied(
-                "operator sign-in requires the common.auth UIContract fragment to "
-                "be attested before any sign-in field may be applied",
+                "operator sign-in requires the common.auth UIContract fragments "
+                "(common.auth.email and common.auth.password) to be attested "
+                "before any sign-in field may be applied",
                 operation=AUTH_OPERATOR_SUBMIT_OPERATION,
             )
 
         # Structured progression plans are loaded only from the attested
-        # common.auth fragment. If any of the four declared selectors is absent
+        # common.auth fragments. If any of the four declared selectors is absent
         # the flow cannot proceed; fail closed with no selector value leaked.
         email_plan = common_auth_locator_plan(EMAIL_SELECTOR_NAME)
         next_plan = common_auth_locator_plan(NEXT_SELECTOR_NAME)

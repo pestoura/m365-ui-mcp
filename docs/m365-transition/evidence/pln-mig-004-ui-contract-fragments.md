@@ -22,7 +22,7 @@ Make the Planner-specific portion of the fragmented UIContract an explicit Plann
    - application scope
    - selector: `account.context_menu`
 
-The common `common.auth` fragment remains platform-owned and now declares four authentication selectors: `auth.login_email_input`, `auth.login_next_button`, `auth.login_password_input` and `auth.login_signin_button`. The previously declared `auth.mfa_number_display` selector has been removed; MFA number extraction is now the bounded live observation primitive `AUTH-103` and is no longer a `common.auth` selector placeholder.
+The common authentication fragments remain platform-owned. They were subsequently split into the two atomic fragments `common.auth.email` (`auth.login_email_input`, `auth.login_next_button`) and `common.auth.password` (`auth.login_password_input`, `auth.login_signin_button`) per `AUTH-107`, because the email and password surfaces never coexist on the same Microsoft Entra ID sign-in page. The previously declared `auth.mfa_number_display` selector has been removed; MFA number extraction is now the bounded live observation primitive `AUTH-103` and is no longer a `common.auth` selector placeholder.
 
 ## Compatibility invariants
 

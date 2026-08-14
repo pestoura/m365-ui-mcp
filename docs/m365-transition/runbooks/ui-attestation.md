@@ -31,10 +31,12 @@ Mock observations may validate the evaluator but can never produce a live `HEALT
 
 ## Current contract condition
 
-At the start of `CORE-019`, the four current fragments are:
+At the start of `CORE-019`, the current fragments are (`common.auth` has since been
+split into the two atomic authentication fragments per `AUTH-107`):
 
 ```text
-common.auth
+common.auth.email
+common.auth.password
 planner.plan-surface
 planner.task-surface
 planner.account
@@ -306,7 +308,7 @@ not a generic browser primitive and never weakens the Planner/Outlook controls.
 ### Guard scope
 
 - Applies ONLY to `auth_status`, `auth_start`, `auth_resume`.
-- May operate BEFORE `common.auth` is attested, but ONLY when ALL of:
+- May operate BEFORE the `common.auth.email`/`common.auth.password` fragments are attested, but ONLY when ALL of:
   - the worker process owns a started live browser;
   - the browser is the **dedicated persistent professional profile**
     (`M365_BROWSER_PROFILE_DIR`, resolved by `browser_runtime_settings()`);
@@ -315,7 +317,7 @@ not a generic browser primitive and never weakens the Planner/Outlook controls.
     `account.microsoft.com`, `entra.microsoft.com`) or no page is open yet so
     bootstrap may begin navigation.
 - Fails closed on wrong origin / wrong profile / browser-not-started.
-- Once `common.auth` is legitimately attested (PR/evidence based), the normal
+- Once BOTH `common.auth` fragments are legitimately attested (PR/evidence based), the normal
   stricter full-contract behavior applies to the auth endpoints again.
 - Returns only `{state, mode}`. It never exposes raw DOM, page text, URLs,
   cookies, tokens, UPN, tenant IDs, mailbox content, or arbitrary navigation.
@@ -344,26 +346,38 @@ not a generic browser primitive and never weakens the Planner/Outlook controls.
    full-contract `live_guard` still enforces this; the bootstrap guard does not
    widen it.
 5. Collect sanitized live observations with the OPERATOR-ONLY script (never a
-   public MCP tool, never an exposed HTTP endpoint):
+   public MCP tool, never an exposed HTTP endpoint). The two atomic
+   authentication fragments are collected SEPARATELY, each on its own real live
+   surface (`AUTH-107`): the email surface before `begin-email`, the password
+   surface after it.
    ```text
    python scripts/collect_live_attestation_observation.py \
-     --fragment common.auth \
+     --fragment common.auth.email \
      --level DISCOVERY \
-     --out /secure/local/common.auth.observation.json
+     --out /secure/local/common.auth.email.observation.json
+
+   python scripts/collect_live_attestation_observation.py \
+     --fragment common.auth.password \
+     --level DISCOVERY \
+     --out /secure/local/common.auth.password.observation.json
    ```
    The script outputs ONLY campaign/fragment metadata and normalized structural
    SHA-256 digests / UNIQUE_MATCH results. It binds to the current
-   `contract_set_digest` and reuses the `attest_ui_contract.py` plan/evaluate
+   full-set `contract_set_digest` (`AUTH-108`) and reuses the
+   `attest_ui_contract.py` plan/evaluate
    schema. It NEVER marks a contract ATTESTED and NEVER edits source contract
    JSON. If Playwright or the dedicated live profile is unavailable, it refuses
    rather than fabricating evidence.
-6. Review the observation, then evaluate it (repository-side, safe):
+6. Review each observation, then evaluate it (repository-side, safe):
    ```text
-   python scripts/attest_ui_contract.py evaluate /secure/local/common.auth.observation.json
+   python scripts/attest_ui_contract.py evaluate /secure/local/common.auth.email.observation.json
+   python scripts/attest_ui_contract.py evaluate /secure/local/common.auth.password.observation.json
    ```
-7. Promote only through the normal PR + CI + review path. A passing observation
+7. Promote only through the normal PR + CI + review path, per fragment. A passing
+   observation
    is not attestation by itself; the fragment JSON is updated in the reviewed
-   change, not by the runtime or the collection script.
+   change, not by the runtime or the collection script. The authentication gate
+   opens only when BOTH atomic fragments are attested.
 
 ### Forbidden shortcuts
 
