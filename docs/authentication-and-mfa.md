@@ -508,6 +508,10 @@ only `{ok, auth_state, surface}` (closed `EMAIL_ENTRY` / `ACCOUNT_CHOOSER` / `US
 classification) — no URL, DOM, cookie, token, UPN, tenant id or account identifier. AUTH-109 never weakens the
 attestation/evaluator/fail-closed semantics and is not a generic browser primitive.
 
+**AUTH-110 — Deterministic, phrase-bound Authenticator number-match extraction.** The post-password MFA number-match value is extracted ONLY when the page carries the fixed explicit number-matching semantic context (e.g. "enter the number", "number matching", "the number shown on your") immediately preceding a 2-digit code, within a bounded no-newline-nearby window. A date, countdown, request id or other generic 2-digit value elsewhere on the page is NEVER a candidate, so a stray year/timestamp can never be mis-extracted. Extraction is fail-closed: exactly one phrase-bound candidate yields the number; zero candidates (no number-match prompt) or more than one distinct candidate (ambiguous surface) yields `None` and the state machine never guesses or synthesizes a challenge value. This is the determinism guarantee for the `AUTH-103` observe path: when `observe` returns a unique `mfa_number`, that sanitized value is the single authorized out-of-band notification payload (Hermes → Telegram; no approval capability). When `mfa_number` is `null`/`mfa_ambiguous:true`, the runner STOPs for human Authenticator approval and emits NO challenge value.
+
+**AUTH-111 — Operator-only deterministic canonical sign-in run orchestration.** The host-side `scripts/operator_auth_run.py` conductor encodes the exact once-only sequence `navigate → begin-signin → resolve-signin-surface (AUTH-109) → require surface EMAIL_ENTRY / discover-email UNIQUE_MATCH → operator-submit (AUTH-101)`, with NO human browser interaction. It is NOT an MCP tool and is NOT network-exposed. It (1) runs each operator-only loopback route exactly once in order; (2) enforces the deterministic surface gate after the resolver — the email-entry surface MUST be present (2× `UNIQUE_MATCH` on the email keys) before submit is allowed, probing `discover-email` a bounded number of times with a short sleep to absorb page-load timing (a first NO_MATCH probe is NOT the fail-closed STOP); (3) refuses operator-submit on any other surface (account chooser still showing, device enrolment / Conditional Access / unsupported method, ambiguous, unknown) — it never guesses, never clicks an identity, never proceeds; (4) drives `operator-submit` via the VERIFIED in-container loopback transport (host `urllib` to the published `127.0.0.1:8090` port is rejected `404` by socket-peer admission; the two provisioned credentials are decrypted host-side and handed to an in-container client over `docker exec` **stdin**, which POSTs from the container's own loopback). All fail-closed invariants from AUTH-019/094/096/101/106/109 apply; the script reports ONLY sanitized, value-free status and asserts NO authentication (the human still completes MFA in Microsoft Authenticator).
+
 ---
 
 ## 10. Traceability
@@ -531,6 +535,8 @@ attestation/evaluator/fail-closed semantics and is not a generic browser primiti
 | AUTH-107 | Atomic `common.auth` fragment split (email / password surfaces) |
 | AUTH-108 | `/health` reports the full-set contract digest bound by observations |
 | AUTH-109 | Operator-only deterministic pre-email sign-in surface resolver |
+| AUTH-110 | Deterministic, phrase-bound Authenticator number-match extraction |
+| AUTH-111 | Operator-only deterministic canonical sign-in run orchestration |
 
 
 
