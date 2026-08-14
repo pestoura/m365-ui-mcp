@@ -595,7 +595,7 @@ async def test_live_auth_blocked_on_wrong_origin() -> None:
                 os.environ[name] = previous[name]
 
 
-def test_operator_observation_binds_to_contract_set_digest_and_schema() -> None:
+async def test_operator_observation_binds_to_contract_set_digest_and_schema() -> None:
     contract_set = load_ui_contract_set()
     campaign = build_attestation_campaign(
         contract_set, AttestationLevel.DISCOVERY, fragment_ids=("common.auth",)
@@ -606,7 +606,7 @@ def test_operator_observation_binds_to_contract_set_digest_and_schema() -> None:
         # declared selector. This is a structural COUNT only; no content leaves.
         return 1
 
-    observation = collect_structural_observation(
+    observation = await collect_structural_observation(
         "common.auth", AttestationLevel.DISCOVERY, live_probe=fake_probe
     )
     assert observation.campaign_id == campaign.campaign_id
@@ -646,7 +646,7 @@ def test_mock_observation_cannot_promote_live_support() -> None:
     assert "NON_LIVE_EVIDENCE_CANNOT_PROMOTE" in decision.reasons
 
 
-def test_no_runtime_contract_mutation_in_collection_harness(tmp_path) -> None:
+async def test_no_runtime_contract_mutation_in_collection_harness(tmp_path) -> None:
     # The collection harness writes an observation file but must never modify the
     # source contract JSON nor self-promote ATTESTED.
     before = load_ui_contract_set()
@@ -654,7 +654,7 @@ def test_no_runtime_contract_mutation_in_collection_harness(tmp_path) -> None:
     def fake_probe(selector_key: str, metadata) -> int:
         return 1
 
-    observation = collect_structural_observation(
+    observation = await collect_structural_observation(
         "common.auth", AttestationLevel.DISCOVERY, live_probe=fake_probe
     )
     out = tmp_path / "common.auth.observation.json"

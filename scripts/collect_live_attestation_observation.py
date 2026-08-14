@@ -34,7 +34,9 @@ Supported fragments (phase order):
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
+import inspect
 import json
 import sys
 from datetime import UTC, datetime
@@ -95,7 +97,7 @@ def _selector_structural_shape(
     }
 
 
-def collect_structural_observation(
+async def collect_structural_observation(
     fragment_id: str,
     level: AttestationLevel | str,
     *,
@@ -124,7 +126,13 @@ def collect_structural_observation(
     selector_observations: list[SelectorObservation] = []
     for step in campaign.steps:
         metadata = fragment.selectors[step.selector_key]
-        match_count = int(live_probe(step.selector_key, metadata))
+        # The injected live_probe may be a sync test double or the async locator
+        # probe. Await only when required by the existing interface; never weaken
+        # the fail-closed structural-only contract (count, no content).
+        result = live_probe(step.selector_key, metadata)
+        if inspect.iscoroutine(result):
+            result = await result
+        match_count = int(result)
         if match_count == 1:
             result = SelectorObservationResult.UNIQUE_MATCH
             shape = _selector_structural_shape(
@@ -245,10 +253,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    observation = collect_structural_observation(
-        args.fragment,
-        args.level,
-        live_probe=_real_live_probe(),
+    observation = asyncio.run(
+        collect_structural_observation(
+            args.fragment,
+            args.level,
+            live_probe=_real_live_probe(),
+        )
     )
 
     # Bind and self-validate against the existing evaluator schema before writing.
