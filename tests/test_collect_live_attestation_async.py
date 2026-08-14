@@ -21,6 +21,7 @@ import importlib.util
 from pathlib import Path
 
 from m365_mcp.attestation import AttestationLevel, ObservationSource
+from m365_mcp.attestation_collection import collect_structural_observation
 from m365_mcp.ui_contract_store import load_ui_contract_set
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -40,9 +41,17 @@ def _load_script_module():
 
 def test_contract_loader_imported_from_ui_contract_store() -> None:
     # Defect (1) regression lock: the canonical contract loader must be sourced
-    # from m365_mcp.ui_contract_store, and attestation must not define it.
+    # from m365_mcp.ui_contract_store, and attestation must not define it. The
+    # operator script delegates building to m365_mcp.attestation_collection, which
+    # imports load_ui_contract_set from the canonical module.
     module = _load_script_module()
-    assert module.load_ui_contract_set is load_ui_contract_set
+    assert hasattr(module, "collect_structural_observation")
+    from m365_mcp.attestation_collection import (
+        load_ui_contract_set as shared_loader,
+    )
+
+    assert module.collect_structural_observation is collect_structural_observation
+    assert shared_loader is load_ui_contract_set
     import m365_mcp.attestation as attestation_mod
 
     assert not hasattr(attestation_mod, "load_ui_contract_set")
