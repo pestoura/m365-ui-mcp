@@ -45,13 +45,15 @@ async def test_no_unapproved_mutating_routes() -> None:
     app = create_app()
     # POST is allowed only for the typed operation boundary, protocol
     # negotiation, and the OPERATOR-ONLY loopback auth-bootstrap navigation
-    # (AUTH-094) plus the OPERATOR-ONLY begin-signin transition (AUTH-096):
-    # both are zero-parameter, fixed-target, no-state-mutation-in-M365 routes.
+    # (AUTH-094), the OPERATOR-ONLY begin-signin transition (AUTH-096), and the
+    # OPERATOR-ONLY encrypted-store sign-in submit (AUTH-101): all are
+    # zero-parameter / closed-body, fixed-target, no-state-mutation-in-M365 routes.
     allowed_posts = {
         "/operations",
         "/protocol/negotiate",
         "/auth/bootstrap/navigate",
         "/auth/bootstrap/begin-signin",
+        "/auth/bootstrap/operator-submit",
     }
     for route in app.routes:
         methods = getattr(route, "methods", set()) or set()

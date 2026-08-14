@@ -11,21 +11,36 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_status
 from m365_browser_worker.bootstrap_navigation import (
     AUTH_BEGIN_SIGNIN_OPERATION,
     AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+    AUTH_OBSERVE_OPERATION,
+    AUTH_OPERATOR_SUBMIT_OPERATION,
     MICROSOFT_AUTH_BOOTSTRAP_URL,
     PLANNER_WEB_BOOTSTRAP_URL,
     classify_begin_signin_source,
     evaluate_bootstrap_target,
     evaluate_microsoft_auth_target,
     is_permitted_begin_signin_source,
+    is_planner_web_surface_url,
     is_reusable_bootstrap_page,
 )
 from m365_browser_worker.egress import enforce_route_egress
+from m365_browser_worker.locator_runtime import (
+    LocatorRuntimeError,
+    resolve_visible_locator,
+)
+from m365_browser_worker.operator_signin import (
+    EMAIL_SELECTOR_NAME,
+    NEXT_SELECTOR_NAME,
+    PASSWORD_SELECTOR_NAME,
+    SIGNIN_SELECTOR_NAME,
+    OperatorSignInInput,
+    common_auth_locator_plan,
+)
 from m365_mcp.config import browser_runtime_settings
 from planner_mcp.errors import (
     BlockerConditionalAccess,
@@ -63,6 +78,11 @@ CONDITIONAL_ACCESS_MARKERS = (
     "company portal",
 )
 
+# Bounded per-stage timeout for each sequential sign-in progression locator
+# resolution. Each email/next/password/sign-in stage waits at most this long for
+# a unique visible match before failing closed. Keeps the operator submit path
+# from hanging against a live Microsoft sign-in page.
+OPERATOR_SIGNIN_STAGE_TIMEOUT_MS = 5_000
 
 def detect_conditional_access_block(page_text: str) -> bool:
     """Detect a Conditional Access managed-device wall from page text."""
@@ -253,6 +273,170 @@ class PersistentBrowser:
         # Exactly one navigation per operator call; no retry loop.
         await page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)
 
+    async def submit_operator_signin(self, signin: OperatorSignInInput) -> None:
+        """Apply the operator-sign-in fields to the Microsoft sign-in page in sequence.
+
+        This is the ONLY credential-application primitive. It receives a
+        memory-only ``OperatorSignInInput`` (built by the operator-local
+        encrypted-store helper) and drives the standard Microsoft Entra ID
+        sign-in progression on the already-open authentication page:
+
+        1. resolve ``auth.login_email_input`` and fill ``signin.email``;
+        2. resolve ``auth.login_next_button`` and click it (the Microsoft
+           "Next"/"Avançar" control advances email to the password step);
+        3. re-assert the page is still on an approved Microsoft authentication
+           origin (the Next navigation must not have escaped the auth surface);
+        4. resolve and wait for ``auth.login_password_input`` and fill
+           ``signin.password``;
+        5. resolve ``auth.login_signin_button`` and click it (the Microsoft
+           form "Sign in"/"Iniciar sessão" finalizes the credential submission).
+
+        It is fail-closed:
+
+        * the destination is never supplied — the values are applied only to the
+          already-open page on an approved Microsoft authentication origin;
+        * all four locators are loaded as structured plans via
+          ``common_auth_locator_plan`` and resolved through the fail-closed
+          ``locator_runtime``; if any plan is missing, the call raises
+          ``PolicyDenied`` with no selector value or DOM surfaced;
+        * a ``LocatorRuntimeError`` (ambiguous match, no visible match within
+          the bounded stage timeout, negative timeout) is converted to
+          ``PolicyDenied`` carrying only the ``selector_key`` and a sanitized
+          ``reason`` — never a candidate value or DOM text;
+        * the password value is used for exactly one ``fill`` call and is not
+          stored, logged, or returned;
+        * no MFA control is clicked and no MFA state is polled here — the human
+          completes MFA in Microsoft Authenticator and the browser observes the
+          resulting state. The Next and Microsoft form Sign-in clicks are
+          permitted; MFA approval remains exclusively human.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "operator sign-in requires a started live browser",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "operator sign-in requires the dedicated persistent professional browser profile",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "operator sign-in requires the page to be on an approved "
+                "Microsoft authentication origin",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        if not common_auth_attested():
+            raise PolicyDenied(
+                "operator sign-in requires the common.auth UIContract fragment to "
+                "be attested before any sign-in field may be applied",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+
+        # Structured progression plans are loaded only from the attested
+        # common.auth fragment. If any of the four declared selectors is absent
+        # the flow cannot proceed; fail closed with no selector value leaked.
+        email_plan = common_auth_locator_plan(EMAIL_SELECTOR_NAME)
+        next_plan = common_auth_locator_plan(NEXT_SELECTOR_NAME)
+        password_plan = common_auth_locator_plan(PASSWORD_SELECTOR_NAME)
+        signin_plan = common_auth_locator_plan(SIGNIN_SELECTOR_NAME)
+        if email_plan is None or next_plan is None or password_plan is None or signin_plan is None:
+            raise PolicyDenied(
+                "operator sign-in progression selectors are incomplete; refusing to "
+                "guess locators",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+
+        page = self._require_single_auth_page()
+        timeout_ms = OPERATOR_SIGNIN_STAGE_TIMEOUT_MS
+
+        # Stage 1 — resolve and fill the email field.
+        try:
+            email_locator = await resolve_visible_locator(
+                cast("Any", page), email_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "operator sign-in could not resolve the email field",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
+        # Memory-only: the email is consumed for exactly one fill and then
+        # dropped. It is never written to state, logs, argv, env or responses.
+        await cast("Any", email_locator.locator).fill(signin.email)
+
+        # Stage 2 — resolve and click the Next control to advance to password.
+        try:
+            next_locator = await resolve_visible_locator(
+                cast("Any", page), next_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "operator sign-in could not resolve the next control",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
+        await cast("Any", next_locator.locator).click()
+
+        # Stage 3 — re-assert the auth origin after the Next navigation. The
+        # click must not have escaped the approved Microsoft authentication
+        # surface; otherwise stop before typing the password.
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "operator sign-in lost the approved Microsoft authentication origin "
+                "after the next control",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+
+        # Stage 4 — resolve (waiting) and fill the password field.
+        try:
+            password_locator = await resolve_visible_locator(
+                cast("Any", page), password_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "operator sign-in could not resolve the password field",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
+        # Memory-only: the password is consumed for exactly one fill and then
+        # dropped. It is never written to state, logs, argv, env or responses.
+        await cast("Any", password_locator.locator).fill(signin.password)
+
+        # Stage 5 — resolve and click the Microsoft form Sign-in control. MFA
+        # approval stays exclusively human in Microsoft Authenticator and the
+        # Telegram notification channel.
+        try:
+            signin_locator = await resolve_visible_locator(
+                cast("Any", page), signin_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "operator sign-in could not resolve the sign-in control",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
+        await cast("Any", signin_locator.locator).click()
+
+    def _require_single_auth_page(self) -> Any:
+        """Return the single open Microsoft auth page, or fail closed."""
+        if self._context is None:
+            raise WorkerUnavailable(
+                "no browser context available for operator sign-in",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        pages = [p for p in self._context.pages if str(p.url)]
+        if len(pages) != 1:
+            raise PolicyDenied(
+                "operator sign-in requires exactly one open authentication page",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+        return pages[0]
+
     @asynccontextmanager
     async def operation_page(self, operation: str) -> AsyncIterator[Any]:
         """Yield one fresh page and close it deterministically after the operation.
@@ -316,6 +500,72 @@ class PersistentBrowser:
         finally:
             if playwright is not None:
                 await playwright.stop()
+
+    async def read_visible_body_bounded(self, max_chars: int = 2000) -> str:
+        """Read only visible body text internally, bounded and never returned.
+
+        Narrow operator observation primitive. It is callable ONLY when:
+
+        * the browser is started;
+        * the process owns the dedicated persistent professional profile;
+        * the live context is positioned on an approved Microsoft
+          authentication origin; and
+        * exactly ONE page is open (the single auth page).
+
+        Any other condition fails closed: the method raises and returns nothing,
+        so no URL/DOM/page text/cookie/token can leak through this surface. The
+        caller (the observation endpoint) consumes the string internally for
+        classification and must never log it or return it. The returned text is
+        truncated to ``max_chars`` (the visible body subset) so even accidental
+        capture of a credential-shaped value is bounded.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "operator observation requires a started live browser",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "operator observation requires the dedicated persistent "
+                "professional browser profile",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        if self._context is None:
+            raise WorkerUnavailable(
+                "no browser context available for operator observation",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        pages = [p for p in self._context.pages if str(p.url)]
+        if len(pages) != 1:
+            raise PolicyDenied(
+                "operator observation requires exactly one open authentication page",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        page = pages[0]
+        # The read is permitted on an approved Microsoft authentication origin
+        # (the in-progress sign-in page) or on the fixed Planner Web surface
+        # (the post-sign-in transition the observation must detect). A Planner
+        # Web page is a *allowed* host but NOT an approved auth origin, so the
+        # closed surface check is evaluated together with the auth-origin
+        # approval. Any other origin fails closed.
+        if not (
+            self.auth_origin_approved() or is_planner_web_surface_url(str(page.url))
+        ):
+            raise PolicyDenied(
+                "operator observation only permits the approved Microsoft "
+                "authentication origin or the fixed Planner Web surface",
+                operation=AUTH_OBSERVE_OPERATION,
+            )
+        try:
+            body_text = await page.locator("body").inner_text()
+        except Exception:  # noqa: BLE001 - observation must fail closed, never echo
+            raise PolicyDenied(
+                "operator observation could not read the visible page surface",
+                operation=AUTH_OBSERVE_OPERATION,
+            ) from None
+        if not isinstance(body_text, str):
+            return ""
+        return body_text[:max_chars]
 
     def guard_conditional_access(self, page_text: str) -> None:
         """Raise the fail-closed blocker when Conditional Access demands enrolment."""

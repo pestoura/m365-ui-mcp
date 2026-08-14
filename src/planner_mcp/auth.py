@@ -29,7 +29,9 @@ _ALLOWED: dict[AuthState, frozenset[AuthState]] = {
     AuthState.AUTH_REQUIRED: frozenset(
         {AuthState.MFA_REQUIRED, AuthState.AUTHENTICATED, AuthState.AUTH_FAILED}
     ),
-    AuthState.MFA_REQUIRED: frozenset({AuthState.WAITING_FOR_MFA, AuthState.AUTH_FAILED}),
+    AuthState.MFA_REQUIRED: frozenset(
+        {AuthState.WAITING_FOR_MFA, AuthState.AUTH_FAILED, AuthState.AUTHENTICATED}
+    ),
     AuthState.WAITING_FOR_MFA: frozenset(
         {AuthState.AUTHENTICATED, AuthState.AUTH_FAILED, AuthState.MFA_REQUIRED}
     ),

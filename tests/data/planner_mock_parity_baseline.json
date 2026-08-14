@@ -2,7 +2,7 @@
   "description": "PLN-MIG-008 frozen Planner mock parity baseline (normalized). Mock-only; no live support claimed.",
   "mode": "mock",
   "live_support_claimed": false,
-  "digest": "sha256:fdd974d0f8d07a1d4c999d5ba2216c6fdd9e87ca75c535fa73560a900195501a",
+  "digest": "sha256:236cd06ba7f7872bff247504b4f437771005fc7a0fc09f25d3c6b186a887b7bc",
   "tools": {
     "planner_health": {
       "contract_version": "0.1.0",
@@ -52,12 +52,14 @@
           "attestation_status": "UNVERIFIED_LIVE",
           "attested": false,
           "fail_closed_error": "UI_CONTRACT_UNATTESTED",
-          "selector_count": 10,
-          "ui_contract_set_digest": "sha256:b0cb5790245fedc9b7f4dc299388287e8912dcaf3fd773c7490ee27c97e41147",
+          "selector_count": 12,
+          "ui_contract_set_digest": "sha256:4f9f05be66c6b007e021de4ef515fac3abd71f45feb29830339b7c926aa578d8",
           "ui_contract_version": "0.1.0",
           "unverified_selectors": [
             "auth.login_email_input",
-            "auth.mfa_number_display",
+            "auth.login_next_button",
+            "auth.login_password_input",
+            "auth.login_signin_button",
             "plan.list_container",
             "plan.list_item",
             "plan.title",
@@ -73,7 +75,7 @@
           "mode": "mock",
           "ok": true,
           "ui_contract_attested": false,
-          "ui_contract_set_digest": "sha256:b0cb5790245fedc9b7f4dc299388287e8912dcaf3fd773c7490ee27c97e41147",
+          "ui_contract_set_digest": "sha256:4f9f05be66c6b007e021de4ef515fac3abd71f45feb29830339b7c926aa578d8",
           "ui_contract_version": "0.1.0",
           "version": "0.1.0"
         }
@@ -495,7 +497,7 @@
           "BLOCKED",
           "OUT_OF_SCOPE"
         ],
-        "ui_contract_set_digest": "sha256:b0cb5790245fedc9b7f4dc299388287e8912dcaf3fd773c7490ee27c97e41147",
+        "ui_contract_set_digest": "sha256:4f9f05be66c6b007e021de4ef515fac3abd71f45feb29830339b7c926aa578d8",
         "ui_fragment_attestation": [
           {
             "application": "planner",
@@ -973,12 +975,14 @@
         "attestation_status": "UNVERIFIED_LIVE",
         "attested": false,
         "fail_closed_error": "UI_CONTRACT_UNATTESTED",
-        "selector_count": 10,
-        "ui_contract_set_digest": "sha256:b0cb5790245fedc9b7f4dc299388287e8912dcaf3fd773c7490ee27c97e41147",
+        "selector_count": 12,
+        "ui_contract_set_digest": "sha256:4f9f05be66c6b007e021de4ef515fac3abd71f45feb29830339b7c926aa578d8",
         "ui_contract_version": "0.1.0",
         "unverified_selectors": [
           "auth.login_email_input",
-          "auth.mfa_number_display",
+          "auth.login_next_button",
+          "auth.login_password_input",
+          "auth.login_signin_button",
           "plan.list_container",
           "plan.list_item",
           "plan.title",

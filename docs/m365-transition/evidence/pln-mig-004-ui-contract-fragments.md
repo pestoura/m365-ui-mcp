@@ -22,7 +22,7 @@ Make the Planner-specific portion of the fragmented UIContract an explicit Plann
    - application scope
    - selector: `account.context_menu`
 
-The common `common.auth` fragment remains platform-owned and retains the two authentication selectors `auth.login_email_input` and `auth.mfa_number_display`.
+The common `common.auth` fragment remains platform-owned and now declares four authentication selectors: `auth.login_email_input`, `auth.login_next_button`, `auth.login_password_input` and `auth.login_signin_button`. The previously declared `auth.mfa_number_display` selector has been removed; MFA number extraction is now the bounded live observation primitive `AUTH-103` and is no longer a `common.auth` selector placeholder.
 
 ## Compatibility invariants
 
@@ -32,8 +32,8 @@ Acceptance tests prove:
 
 - 3/3 Planner fragments match the canonical contract set;
 - 8/8 Planner-owned selector names are preserved;
-- 2/2 common authentication selectors remain platform-owned;
-- all 10 historical selectors remain present and in canonical order;
+- 4/4 common authentication selectors remain platform-owned;
+- all 11 legacy-equivalent selectors (8 Planner-owned plus 3 sign-in progression selectors) remain present and in canonical order;
 - the legacy `contracts/ui_contract.json` selector mapping remains exactly equal to the fragmented contract projection;
 - no selector value is duplicated into Python application metadata.
 

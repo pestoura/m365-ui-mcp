@@ -9,7 +9,15 @@
       "value": null,
       "status": "UNVERIFIED_LIVE"
     },
-    "auth.mfa_number_display": {
+    "auth.login_next_button": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "auth.login_password_input": {
+      "value": null,
+      "status": "UNVERIFIED_LIVE"
+    },
+    "auth.login_signin_button": {
       "value": null,
       "status": "UNVERIFIED_LIVE"
     },

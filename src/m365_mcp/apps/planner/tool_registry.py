@@ -116,7 +116,7 @@ def planner_tool_definitions() -> tuple[ToolDefinition, ...]:
             domain="auth",
             risk_class="SESSION_OBSERVATION",
             implementation_state=ImplementationState.IMPLEMENTED_MOCK_ONLY,
-            ui_contract_dependencies=("auth.login_email_input", "auth.mfa_number_display"),
+            ui_contract_dependencies=("auth.login_email_input",),
         ),
         _read_tool(
             schemas,
@@ -125,7 +125,7 @@ def planner_tool_definitions() -> tuple[ToolDefinition, ...]:
             domain="auth",
             risk_class="SESSION_INTERACTION",
             implementation_state=ImplementationState.IMPLEMENTED_MOCK_ONLY,
-            ui_contract_dependencies=("auth.login_email_input", "auth.mfa_number_display"),
+            ui_contract_dependencies=("auth.login_email_input", "auth.login_password_input"),
             read_back_strategy="AUTH_STATE_RE_READ",
             idempotency_semantics="key_required",
         ),
@@ -136,7 +136,7 @@ def planner_tool_definitions() -> tuple[ToolDefinition, ...]:
             domain="auth",
             risk_class="SESSION_INTERACTION",
             implementation_state=ImplementationState.IMPLEMENTED_MOCK_ONLY,
-            ui_contract_dependencies=("auth.mfa_number_display",),
+            ui_contract_dependencies=("auth.login_password_input",),
             read_back_strategy="AUTH_STATE_RE_READ",
         ),
         _read_tool(

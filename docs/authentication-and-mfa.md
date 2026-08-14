@@ -175,6 +175,13 @@ worker extracts the displayed number through a UIContract-declared read probe, v
 short integer, and publishes it in `mfa_number`. If the number cannot be extracted with confidence
 it is published as `null` with description `mfa_approval_pending`; a number is never guessed.
 
+**AUTH-103 — MFA number extraction is a bounded live observation, not a `common.auth` selector.** The
+displayed MFA number is read exclusively through the bounded live observation primitive described
+under `AUTH-042`/`AUTH-100`. It is intentionally NOT a `common.auth` selector placeholder
+(`auth.mfa_number_display` was removed during the contract redesign): the value is volatile, live-only
+and must never be frozen into the source-controlled selector contract. No sign-in progression selector
+carries MFA state.
+
 **AUTH-043 — Notification is one-way.** The sanitized event may be delivered to the operator via
 Hermes/Telegram so the human knows which number to select. That channel carries no approval
 capability, accepts no reply that affects the flow, and is never on the critical path
@@ -364,6 +371,63 @@ step hits the worker-local `POST http://127.0.0.1:8090/auth/bootstrap/begin-sign
 endpoint, which is operator-only and never exposed as an MCP tool or over the
 public network.
 
+**AUTH-099 — Sanitized one-way MFA notification contract.** The only outbound
+surface permitted to carry an MFA challenge is
+`planner_mcp.notifications.mfa` (see `hermes-integration.md`). It emits a
+*sanitized, closed* `MfaNotification` (exactly `mfa_number`, `operation_id`,
+`service`, `description`, `expires_at` plus the non-actionable
+`approve_in_authenticator_only` / `approval_channel` markers) built from
+`planner_mcp.auth.MfaChallenge`. It has **no MFA-approval capability** and carries
+**no Telegram/Hermes credentials, webhook URLs or secrets of any kind**. Delivery
+is one-way: a failed delivery is a notification degradation, never a fabricated
+approval and never a Planner operation success. When no direct adapter is wired in
+this repo, the external Hermes→Telegram adapter consumes the stable serialized
+`MfaNotification` JSON (the documented one-way CLI/JSON contract) exactly as a
+read-only observer (AUTH-003, ADR-004).
+
+**AUTH-100 — Fail-closed live MFA state.** `MFA_REQUIRED` / `WAITING_FOR_MFA` are
+*resolved* live states, not static constants. The worker wires
+`planner_browser_worker.auth_flow.classify_page` / `detect_mfa_number` /
+`MfaChallenge` into `planner_browser_worker.auth_state_machine`, which advances the
+`AuthState` lifecycle only on a *uniquely* resolvable number-matching probe
+(`resolve_mfa_number_unique`). When the number cannot be read unambiguously, or
+the page is not a number-matching/approval context, the state machine fails closed
+to `UNKNOWN` and emits **no** challenge value. Transitions go through the guarded
+`AuthContext.transition`, so crafted text cannot push the machine into a privileged
+state. Email/MFA *locators* remain evidence-gated under `common.auth`; they are
+never guessed from code.
+
+**AUTH-101 — Encrypted-store operator sign-in automation (supersedes "human types
+password").** AUTH-001's "human types the password interactively" obligation is
+superseded for the operator path by local encrypted-store automation: the
+operator-local `scripts/operator_auth_login.py` decrypts two already-provisioned
+*systemd user* credentials from the fixed store under
+`~/.local/lib/credstore.encrypted` via `systemd-creds decrypt --user`, keeps them
+**memory-only**, and forwards them through a loopback `stdin`/IPC path to the
+narrowly-scoped operator-only `POST /auth/bootstrap/operator-submit` route. That
+route applies ONLY the two `common.auth` sign-in fields (`auth.login_email_input`,
+`auth.login_password_input`) to the already-open Microsoft authentication page;
+no URL, generic DOM primitive, Graph surface or locator guessing is reachable, and
+the worker never prints, logs, env-stores or state-stores the values. The interactive
+**GUI handoff** (`docs/operator-gui-handoff.md`) remains a supported **fallback
+only**. Preserved invariants from AUTH-002 / ADR-004: no plaintext persistence, no
+environment variable, no argv, no ChatGPT, and no Telegram credentials are ever
+involved. The operator submit route clicks the Microsoft "Next" control to advance
+from the email step and the Microsoft form "Sign in" control to finalize credential
+submission; neither carries credentials and neither is an MFA control. MFA approval
+is still Microsoft Authenticator-only, and `common.auth` must be attested before any
+sign-in field is applied (fail closed otherwise).
+
+**AUTH-104 — Source-controlled sign-in progression selectors.** The `common.auth` contract declares
+four sign-in progression selectors: `auth.login_email_input`, `auth.login_next_button`,
+`auth.login_password_input` and `auth.login_signin_button`. All four remain `UNVERIFIED_LIVE` value-null
+placeholders. `auth.login_next_button` and `auth.login_signin_button` are progression-only selectors
+(the "Next" and "Sign in"/"Iniciar sessão" controls); neither carries credentials. The operator submit
+route applies `auth.login_email_input` and `auth.login_password_input` and additionally clicks
+`auth.login_next_button` and `auth.login_signin_button` to drive the standard Microsoft Entra ID
+progression; none of the four is an MFA control (`AUTH-101`, `ADR-009`). These are contract/metadata
+declarations only; this step introduces no runtime browser behavior beyond the click sequence above.
+
 ---
 
 ## 10. Traceability
@@ -381,6 +445,7 @@ public network.
 | AUTH-090…093 | Evidence and tests |
 | AUTH-094…095 | Operator-only fixed-target bootstrap navigation |
 | AUTH-096…098 | Two-step operator begin-signin flow |
+| AUTH-099…101 | Encrypted-store operator sign-in + sanitized MFA notification |
 
 
 

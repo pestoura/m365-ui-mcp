@@ -46,14 +46,14 @@ def test_fragments_cover_common_application_and_surface_scopes() -> None:
         "application",
         "surface",
     }
-    assert sum(len(fragment.selectors) for fragment in contract_set.fragments) == 10
+    assert sum(len(fragment.selectors) for fragment in contract_set.fragments) == 12
 
 
 def test_planner_status_remains_fail_closed_and_compatible() -> None:
     status = load_status()
     legacy = json.loads((contracts_dir() / "ui_contract.json").read_text(encoding="utf-8"))
     assert status.version == "0.1.0"
-    assert status.selector_count == 10
+    assert status.selector_count == 12
     assert status.attested is False
     assert status.attestation_status == "UNVERIFIED_LIVE"
     assert status.unverified_selectors == tuple(legacy["selectors"])

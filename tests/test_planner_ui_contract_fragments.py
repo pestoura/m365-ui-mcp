@@ -1,6 +1,11 @@
 import json
 
-COMMON_AUTH_SELECTORS = ("auth.login_email_input", "auth.mfa_number_display")
+COMMON_AUTH_SELECTORS = (
+    "auth.login_email_input",
+    "auth.login_next_button",
+    "auth.login_password_input",
+    "auth.login_signin_button",
+)
 
 
 def _contract_set():
@@ -51,7 +56,7 @@ def test_planner_partition_preserves_eight_app_selectors_and_ten_legacy_selector
     assert len(planner_selectors) == 8
     assert len(set(planner_selectors)) == 8
     assert tuple(contract_set.selectors()) == COMMON_AUTH_SELECTORS + planner_selectors
-    assert len(contract_set.selectors()) == 10
+    assert len(contract_set.selectors()) == 12
 
 
 def test_common_auth_fragment_remains_platform_owned() -> None:

@@ -54,6 +54,18 @@ MICROSOFT_AUTH_TARGET_CLASS = "microsoft_auth"
 # widened.
 AUTH_BEGIN_SIGNIN_OPERATION = "auth_begin_signin"
 
+# Worker-local operation name for the operator-only encrypted-store sign-in
+# submit (AUTH-101). It applies ONLY the two memory-only sign-in fields to the
+# already-open Microsoft authentication page; no URL, no generic DOM primitive,
+# no Graph surface, no locator guessing.
+AUTH_OPERATOR_SUBMIT_OPERATION = "auth_operator_submit"
+
+# Worker-local operation name for the operator-only live sign-in observation
+# endpoint. It reads only a bounded slice of visible body text from the single
+# approved Microsoft authentication page and returns a sanitized closed state;
+# no URL, DOM, page text, cookie, token, UPN, tenant id or account identifier.
+AUTH_OBSERVE_OPERATION = "auth_observe"
+
 # Socket peer addresses accepted for the operator-only endpoint. IPv4-mapped
 # IPv6 loopback is included because dual-stack sockets may report that form.
 _LOOPBACK_PEERS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
@@ -199,6 +211,16 @@ def is_permitted_begin_signin_source(page_urls: tuple[str, ...]) -> bool:
     return classify_begin_signin_source(page_urls) != SourceClassStatus.NON_APPROVED
 
 
+def is_planner_web_surface_url(url: str) -> bool:
+    """Return True only for the exact/suffix host of the Planner Web target.
+
+    Exported closed predicate used by the live observation endpoint to detect
+    the post-sign-in surface transition. The URL value is inspected here and
+    never returned to a caller.
+    """
+    return _is_planner_web_host(_host_of(url))
+
+
 __all__ = [
     "AUTH_BEGIN_SIGNIN_OPERATION",
     "AUTH_BOOTSTRAP_NAVIGATE_OPERATION",
@@ -212,5 +234,6 @@ __all__ = [
     "evaluate_microsoft_auth_target",
     "is_loopback_peer",
     "is_permitted_begin_signin_source",
+    "is_planner_web_surface_url",
     "is_reusable_bootstrap_page",
 ]
