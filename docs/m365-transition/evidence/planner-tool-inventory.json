@@ -66,21 +66,21 @@
       "name": "planner_auth_status", "version": "0.1.0", "domain": "auth",
       "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
       "mutation_class": "READ", "risk_class": "SESSION_OBSERVATION", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
-      "capability_keys": [], "ui_contract_dependencies": ["auth.login_email_input", "auth.mfa_number_display"], "read_back_strategy": "NONE_READ_ONLY",
+      "capability_keys": [], "ui_contract_dependencies": ["auth.login_email_input"], "read_back_strategy": "NONE_READ_ONLY",
       "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
     },
     {
       "name": "planner_auth_start", "version": "0.1.0", "domain": "auth",
       "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
       "mutation_class": "READ", "risk_class": "SESSION_INTERACTION", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
-      "capability_keys": [], "ui_contract_dependencies": ["auth.login_email_input", "auth.mfa_number_display"], "read_back_strategy": "AUTH_STATE_RE_READ",
+      "capability_keys": [], "ui_contract_dependencies": ["auth.login_email_input", "auth.login_password_input"], "read_back_strategy": "AUTH_STATE_RE_READ",
       "idempotency_semantics": "key_required", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
     },
     {
       "name": "planner_auth_resume", "version": "0.1.0", "domain": "auth",
       "input_schema": {"$ref": "#/$defs/empty_input"}, "output_schema": {"$ref": "#/$defs/common_read_envelope"},
       "mutation_class": "READ", "risk_class": "SESSION_INTERACTION", "implementation_state": "IMPLEMENTED_MOCK_ONLY",
-      "capability_keys": [], "ui_contract_dependencies": ["auth.mfa_number_display"], "read_back_strategy": "AUTH_STATE_RE_READ",
+      "capability_keys": [], "ui_contract_dependencies": ["auth.login_password_input"], "read_back_strategy": "AUTH_STATE_RE_READ",
       "idempotency_semantics": "naturally_idempotent", "approval_requirement": "none", "compatibility_requirement": "PRESERVE"
     },
     {

@@ -31,8 +31,16 @@ from pathlib import Path
 import httpx
 import pytest
 
+from m365_browser_worker.locators import LocatorPlan
 from m365_browser_worker.operator_signin import (
+    EMAIL_SELECTOR_NAME,
+    NEXT_SELECTOR_NAME,
+    PASSWORD_SELECTOR_NAME,
+    PROGRESSION_SELECTOR_KEYS,
+    SIGNIN_SELECTOR_NAME,
     OperatorSignInInput,
+    common_auth_locator_plan,
+    ui_contract_selector_value,
     validate_signin_input,
 )
 from planner_browser_worker.app import create_app
@@ -222,6 +230,61 @@ def test_validate_signin_input_accepts_closed_contract() -> None:
     signin = validate_signin_input({"email": "a@b.com", "password": "x"})
     assert isinstance(signin, OperatorSignInInput)
     assert signin.field_names() == ("email", "password")
+
+
+# --------------------------------------------------------------------------
+# common.auth locator plan discovery (fail-closed, value-independent)
+# --------------------------------------------------------------------------
+
+
+def test_progression_selector_keys_are_exactly_four() -> None:
+    assert PROGRESSION_SELECTOR_KEYS == (
+        EMAIL_SELECTOR_NAME,
+        NEXT_SELECTOR_NAME,
+        PASSWORD_SELECTOR_NAME,
+        SIGNIN_SELECTOR_NAME,
+    )
+    assert len(PROGRESSION_SELECTOR_KEYS) == 4
+    assert PASSWORD_SELECTOR_NAME == "auth.login_password_input"  # noqa: S105 - selector name
+    assert EMAIL_SELECTOR_NAME == "auth.login_email_input"
+    assert NEXT_SELECTOR_NAME == "auth.login_next_button"
+    assert SIGNIN_SELECTOR_NAME == "auth.login_signin_button"
+
+
+def test_four_plans_load_from_shipped_fragment() -> None:
+    for key in PROGRESSION_SELECTOR_KEYS:
+        plan = common_auth_locator_plan(key)
+        assert plan is not None
+        assert isinstance(plan, LocatorPlan)
+        assert plan.selector_key == key
+        assert plan.candidates
+
+
+def test_unknown_key_fails_closed() -> None:
+    with pytest.raises(ValueError):
+        common_auth_locator_plan("auth.login_unknown_button")
+    with pytest.raises(ValueError):
+        common_auth_locator_plan("http://evil.example.com")
+    with pytest.raises(ValueError):
+        common_auth_locator_plan("")
+
+
+def test_values_may_be_null_while_plans_exist() -> None:
+    # Shipped common.auth is UNVERIFIED_LIVE: scalar values are null, but the
+    # structured plans must still load (bootstrap discovery needs them).
+    for key in PROGRESSION_SELECTOR_KEYS:
+        assert ui_contract_selector_value(key) is None
+        plan = common_auth_locator_plan(key)
+        assert plan is not None
+        assert plan.candidates
+
+
+def test_plan_ignores_scalar_value_and_uses_locators_metadata() -> None:
+    plan = common_auth_locator_plan(PASSWORD_SELECTOR_NAME)
+    assert plan is not None
+    strategies = {candidate.strategy.value for candidate in plan.candidates}
+    # The plan is built from the structured locators, not from a scalar string.
+    assert "role" in strategies
 
 
 async def test_unknown_key_never_reaches_browser(live_env) -> None:

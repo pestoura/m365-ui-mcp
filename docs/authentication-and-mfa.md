@@ -175,6 +175,13 @@ worker extracts the displayed number through a UIContract-declared read probe, v
 short integer, and publishes it in `mfa_number`. If the number cannot be extracted with confidence
 it is published as `null` with description `mfa_approval_pending`; a number is never guessed.
 
+**AUTH-103 — MFA number extraction is a bounded live observation, not a `common.auth` selector.** The
+displayed MFA number is read exclusively through the bounded live observation primitive described
+under `AUTH-042`/`AUTH-100`. It is intentionally NOT a `common.auth` selector placeholder
+(`auth.mfa_number_display` was removed during the contract redesign): the value is volatile, live-only
+and must never be frozen into the source-controlled selector contract. No sign-in progression selector
+carries MFA state.
+
 **AUTH-043 — Notification is one-way.** The sanitized event may be delivered to the operator via
 Hermes/Telegram so the human knows which number to select. That channel carries no approval
 capability, accepts no reply that affects the flow, and is never on the critical path
@@ -405,8 +412,21 @@ the worker never prints, logs, env-stores or state-stores the values. The intera
 **GUI handoff** (`docs/operator-gui-handoff.md`) remains a supported **fallback
 only**. Preserved invariants from AUTH-002 / ADR-004: no plaintext persistence, no
 environment variable, no argv, no ChatGPT, and no Telegram credentials are ever
-involved. MFA approval is still Microsoft Authenticator-only, and `common.auth` must
-be attested before any sign-in field is applied (fail closed otherwise).
+involved. The operator submit route clicks the Microsoft "Next" control to advance
+from the email step and the Microsoft form "Sign in" control to finalize credential
+submission; neither carries credentials and neither is an MFA control. MFA approval
+is still Microsoft Authenticator-only, and `common.auth` must be attested before any
+sign-in field is applied (fail closed otherwise).
+
+**AUTH-104 — Source-controlled sign-in progression selectors.** The `common.auth` contract declares
+four sign-in progression selectors: `auth.login_email_input`, `auth.login_next_button`,
+`auth.login_password_input` and `auth.login_signin_button`. All four remain `UNVERIFIED_LIVE` value-null
+placeholders. `auth.login_next_button` and `auth.login_signin_button` are progression-only selectors
+(the "Next" and "Sign in"/"Iniciar sessão" controls); neither carries credentials. The operator submit
+route applies `auth.login_email_input` and `auth.login_password_input` and additionally clicks
+`auth.login_next_button` and `auth.login_signin_button` to drive the standard Microsoft Entra ID
+progression; none of the four is an MFA control (`AUTH-101`, `ADR-009`). These are contract/metadata
+declarations only; this step introduces no runtime browser behavior beyond the click sequence above.
 
 ---
 

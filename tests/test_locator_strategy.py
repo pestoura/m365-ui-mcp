@@ -95,10 +95,33 @@ def test_structured_metadata_is_deterministic_and_worker_uses_same_model() -> No
     assert worker_locators.LocatorStrategy is locators.LocatorStrategy
 
 
+def _selector_locators_are_unverified_candidates(metadata: dict[str, object]) -> bool:
+    """Return True iff any declared ``locators`` plan is a lawful UNVERIFIED candidate.
+
+    Lawful candidates use only accessible strategies (role/label/placeholder) with no
+    evidence digest and no scalar runtime value. Fallback strategies (test_id/css) without
+    a sha256 evidence digest, or any locator attached to an ATTESTED selector, are forbidden
+    in the shipped contract.
+    """
+    if "locators" not in metadata:
+        return True
+    if metadata.get("status") == "ATTESTED":
+        return False
+    for item in metadata["locators"]:  # type: ignore[union-attr]
+        if item.get("evidence_digest") is not None:
+            return False
+        if item.get("strategy") in ("test_id", "css"):
+            return False
+    return True
+
+
 def test_shipped_contract_does_not_invent_live_locators() -> None:
     contract_set = ui_contract_store.load_ui_contract_set()
+    # Shipped contracts may carry UNVERIFIED, evidence-free, accessible-only candidate
+    # locator plans (contract redesign), but must never assert live locators or ship
+    # fallback locators without attested evidence.
     assert all(
-        "locators" not in metadata
+        _selector_locators_are_unverified_candidates(metadata)
         for fragment in contract_set.fragments
         for metadata in fragment.selectors.values()
     )

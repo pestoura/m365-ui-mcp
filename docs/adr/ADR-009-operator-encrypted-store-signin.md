@@ -31,8 +31,11 @@ credential-flow or MFA-automation primitive.
    or state-stored.
 4. `common.auth` MUST be attested before any sign-in field is applied; otherwise the
    worker fails closed and types nothing (no guessed selectors).
-5. MFA approval stays Microsoft Authenticator-only. There is no submit click: the
-   human completes MFA and the browser observes the resulting state.
+5. MFA approval stays Microsoft Authenticator-only. The operator submit route clicks
+   the Microsoft "Next" control to advance from the email step and the Microsoft
+   form "Sign in" control to finalize credential submission; neither carries
+   credentials and neither is an MFA control. MFA approval remains exclusively
+   human in Microsoft Authenticator and Telegram is notification-only.
 6. Preserved invariants: no plaintext persistence, no environment variable, no argv,
    no ChatGPT, no Telegram credentials, and no public MCP exposure of the route (it
    is socket-loopback admitted only).
@@ -51,5 +54,5 @@ credential-flow or MFA-automation primitive.
 ## Related
 
 ADR-004; [`authentication-and-mfa.md`](../authentication-and-mfa.md) (AUTH-099,
-AUTH-100, AUTH-101); [`hermes-integration.md`](../hermes-integration.md);
+AUTH-100, AUTH-101, AUTH-103, AUTH-104); [`hermes-integration.md`](../hermes-integration.md);
 `scripts/operator_auth_login.py`; `src/m365_browser_worker/operator_signin.py`.

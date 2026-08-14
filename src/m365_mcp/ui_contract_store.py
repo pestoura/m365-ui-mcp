@@ -107,13 +107,24 @@ class UIContractSet:
     fragments: tuple[UIContractFragment, ...]
 
     def selectors(self) -> dict[str, Any]:
-        """Return the validated selector union in manifest order."""
+        """Return the validated selector union in manifest order.
+
+        Only the scalar contract fields (value, status) are projected. Structured
+        ``locators`` plans remain source-controlled in the fragment documents under
+        ``contracts/ui_fragments`` and are intentionally not surfaced into the flat
+        legacy-equivalent selector view, keeping public tool schemas and the legacy
+        contract compatibility projection unchanged.
+        """
         merged: dict[str, Any] = {}
         for fragment in self.fragments:
             for name, metadata in fragment.selectors.items():
                 if name in merged:
                     raise ValueError(f"duplicate UIContract selector: {name}")
-                merged[name] = metadata
+                merged[name] = {
+                    key: value
+                    for key, value in metadata.items()
+                    if key in ("value", "status")
+                }
         return merged
 
     def canonical_payload(self) -> dict[str, object]:

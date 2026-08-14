@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_status
 from m365_browser_worker.bootstrap_navigation import (
@@ -29,11 +29,17 @@ from m365_browser_worker.bootstrap_navigation import (
     is_reusable_bootstrap_page,
 )
 from m365_browser_worker.egress import enforce_route_egress
+from m365_browser_worker.locator_runtime import (
+    LocatorRuntimeError,
+    resolve_visible_locator,
+)
 from m365_browser_worker.operator_signin import (
     EMAIL_SELECTOR_NAME,
+    NEXT_SELECTOR_NAME,
     PASSWORD_SELECTOR_NAME,
+    SIGNIN_SELECTOR_NAME,
     OperatorSignInInput,
-    ui_contract_selector_value,
+    common_auth_locator_plan,
 )
 from m365_mcp.config import browser_runtime_settings
 from planner_mcp.errors import (
@@ -72,6 +78,11 @@ CONDITIONAL_ACCESS_MARKERS = (
     "company portal",
 )
 
+# Bounded per-stage timeout for each sequential sign-in progression locator
+# resolution. Each email/next/password/sign-in stage waits at most this long for
+# a unique visible match before failing closed. Keeps the operator submit path
+# from hanging against a live Microsoft sign-in page.
+OPERATOR_SIGNIN_STAGE_TIMEOUT_MS = 5_000
 
 def detect_conditional_access_block(page_text: str) -> bool:
     """Detect a Conditional Access managed-device wall from page text."""
@@ -263,24 +274,41 @@ class PersistentBrowser:
         await page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)
 
     async def submit_operator_signin(self, signin: OperatorSignInInput) -> None:
-        """Apply the operator-sign-in fields to the Microsoft sign-in page.
+        """Apply the operator-sign-in fields to the Microsoft sign-in page in sequence.
 
         This is the ONLY credential-application primitive. It receives a
         memory-only ``OperatorSignInInput`` (built by the operator-local
-        encrypted-store helper) and fills exactly the two ``common.auth`` sign-in
-        fields (``auth.login_email_input``, ``auth.login_password_input``) on the
-        current Microsoft authentication page. It is fail-closed:
+        encrypted-store helper) and drives the standard Microsoft Entra ID
+        sign-in progression on the already-open authentication page:
+
+        1. resolve ``auth.login_email_input`` and fill ``signin.email``;
+        2. resolve ``auth.login_next_button`` and click it (the Microsoft
+           "Next"/"Avançar" control advances email to the password step);
+        3. re-assert the page is still on an approved Microsoft authentication
+           origin (the Next navigation must not have escaped the auth surface);
+        4. resolve and wait for ``auth.login_password_input`` and fill
+           ``signin.password``;
+        5. resolve ``auth.login_signin_button`` and click it (the Microsoft
+           form "Sign in"/"Iniciar sessão" finalizes the credential submission).
+
+        It is fail-closed:
 
         * the destination is never supplied — the values are applied only to the
           already-open page on an approved Microsoft authentication origin;
+        * all four locators are loaded as structured plans via
+          ``common_auth_locator_plan`` and resolved through the fail-closed
+          ``locator_runtime``; if any plan is missing, the call raises
+          ``PolicyDenied`` with no selector value or DOM surfaced;
+        * a ``LocatorRuntimeError`` (ambiguous match, no visible match within
+          the bounded stage timeout, negative timeout) is converted to
+          ``PolicyDenied`` carrying only the ``selector_key`` and a sanitized
+          ``reason`` — never a candidate value or DOM text;
         * the password value is used for exactly one ``fill`` call and is not
           stored, logged, or returned;
-        * if ``common.auth`` is not attested, both sign-in locators are
-          UNVERIFIED_LIVE with no guessed value, so the call raises and types
-          nothing (no locator guessing, no fallback to non-declared fields);
-        * there is no submit click: automation never satisfies MFA or finalizes
-          an interactive challenge. The human completes MFA in Microsoft
-          Authenticator and the browser observes the resulting state.
+        * no MFA control is clicked and no MFA state is polled here — the human
+          completes MFA in Microsoft Authenticator and the browser observes the
+          resulting state. The Next and Microsoft form Sign-in clicks are
+          permitted; MFA approval remains exclusively human.
         """
         if not self.started:
             raise WorkerUnavailable(
@@ -299,32 +327,100 @@ class PersistentBrowser:
                 operation=AUTH_OPERATOR_SUBMIT_OPERATION,
             )
         if not common_auth_attested():
-            # Locators are UNVERIFIED_LIVE with no guessed value: fail closed and
-            # type nothing rather than guessing selectors against the live page.
             raise PolicyDenied(
                 "operator sign-in requires the common.auth UIContract fragment to "
                 "be attested before any sign-in field may be applied",
                 operation=AUTH_OPERATOR_SUBMIT_OPERATION,
             )
-        # Locator values are NEVER read from code. They are resolved only through
-        # the attested UIContract store, which supplies evidence-gated selectors.
-        # Until attestation lands real values, this guard above already fails
-        # closed; the resolved locators below MUST come from the store, never a
-        # hardcoded string.
-        email_locator = ui_contract_selector_value(EMAIL_SELECTOR_NAME)
-        password_locator = ui_contract_selector_value(PASSWORD_SELECTOR_NAME)
-        if email_locator is None or password_locator is None:
+
+        # Structured progression plans are loaded only from the attested
+        # common.auth fragment. If any of the four declared selectors is absent
+        # the flow cannot proceed; fail closed with no selector value leaked.
+        email_plan = common_auth_locator_plan(EMAIL_SELECTOR_NAME)
+        next_plan = common_auth_locator_plan(NEXT_SELECTOR_NAME)
+        password_plan = common_auth_locator_plan(PASSWORD_SELECTOR_NAME)
+        signin_plan = common_auth_locator_plan(SIGNIN_SELECTOR_NAME)
+        if email_plan is None or next_plan is None or password_plan is None or signin_plan is None:
             raise PolicyDenied(
-                "operator sign-in sign-in locators are not attested; refusing to "
-                "guess selectors",
+                "operator sign-in progression selectors are incomplete; refusing to "
+                "guess locators",
                 operation=AUTH_OPERATOR_SUBMIT_OPERATION,
             )
 
         page = self._require_single_auth_page()
+        timeout_ms = OPERATOR_SIGNIN_STAGE_TIMEOUT_MS
+
+        # Stage 1 — resolve and fill the email field.
+        try:
+            email_locator = await resolve_visible_locator(
+                cast("Any", page), email_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "operator sign-in could not resolve the email field",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
+        # Memory-only: the email is consumed for exactly one fill and then
+        # dropped. It is never written to state, logs, argv, env or responses.
+        await cast("Any", email_locator.locator).fill(signin.email)
+
+        # Stage 2 — resolve and click the Next control to advance to password.
+        try:
+            next_locator = await resolve_visible_locator(
+                cast("Any", page), next_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "operator sign-in could not resolve the next control",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
+        await cast("Any", next_locator.locator).click()
+
+        # Stage 3 — re-assert the auth origin after the Next navigation. The
+        # click must not have escaped the approved Microsoft authentication
+        # surface; otherwise stop before typing the password.
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "operator sign-in lost the approved Microsoft authentication origin "
+                "after the next control",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+
+        # Stage 4 — resolve (waiting) and fill the password field.
+        try:
+            password_locator = await resolve_visible_locator(
+                cast("Any", page), password_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "operator sign-in could not resolve the password field",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
         # Memory-only: the password is consumed for exactly one fill and then
         # dropped. It is never written to state, logs, argv, env or responses.
-        await page.fill(email_locator, signin.email)
-        await page.fill(password_locator, signin.password)
+        await cast("Any", password_locator.locator).fill(signin.password)
+
+        # Stage 5 — resolve and click the Microsoft form Sign-in control. MFA
+        # approval stays exclusively human in Microsoft Authenticator and the
+        # Telegram notification channel.
+        try:
+            signin_locator = await resolve_visible_locator(
+                cast("Any", page), signin_plan, timeout_ms=timeout_ms
+            )
+        except LocatorRuntimeError as exc:
+            raise PolicyDenied(
+                "operator sign-in could not resolve the sign-in control",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+                selector_key=exc.selector_key,
+                reason=exc.reason,
+            ) from None
+        await cast("Any", signin_locator.locator).click()
 
     def _require_single_auth_page(self) -> Any:
         """Return the single open Microsoft auth page, or fail closed."""

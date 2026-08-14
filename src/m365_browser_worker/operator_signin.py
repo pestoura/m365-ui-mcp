@@ -13,6 +13,11 @@ Fail-closed invariants:
   (``auth.login_email_input``, ``auth.login_password_input``) may be applied, and
   only when those locators are attested. Until then the worker fails closed and
   types nothing.
+* Progression selector plans (email -> next -> password -> sign in) are loaded
+  from the shipped ``common.auth`` fragment WITHOUT requiring attestation, so
+  bootstrap discovery can enumerate them for an UNVERIFIED_LIVE flow. Loading is
+  fail-closed: only the four declared progression keys are accepted, and the
+  caller remains responsible for the attestation gate before any fill.
 
 Requirement IDs: AUTH-099 (notification), AUTH-100 (fail-closed MFA), AUTH-101
 (encrypted-store operator sign-in automation, superseding "human types password").
@@ -21,6 +26,8 @@ Requirement IDs: AUTH-099 (notification), AUTH-100 (fail-closed MFA), AUTH-101
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from m365_browser_worker.locators import LocatorPlan, locator_plan_from_metadata
 
 # The ONLY sign-in fields the worker is permitted to apply. Both must be declared
 # by the ``common.auth`` UIContract fragment. No submit/locator/Graph field is
@@ -31,15 +38,27 @@ ALLOWED_SIGNIN_FIELDS = ("email", "password")
 EMAIL_SELECTOR_NAME = "auth.login_email_input"
 PASSWORD_SELECTOR_NAME = "auth.login_password_input"  # noqa: S105 - selector name, not a secret
 
+# Progression selectors of the Microsoft Entra ID sign-in flow. All four are
+# declared by the ``common.auth`` fragment; only these may be loaded as plans.
+NEXT_SELECTOR_NAME = "auth.login_next_button"
+SIGNIN_SELECTOR_NAME = "auth.login_signin_button"
+
+# Exactly the four progression selector keys, in flow order.
+PROGRESSION_SELECTOR_KEYS = (
+    EMAIL_SELECTOR_NAME,
+    NEXT_SELECTOR_NAME,
+    PASSWORD_SELECTOR_NAME,
+    SIGNIN_SELECTOR_NAME,
+)
+
 
 def ui_contract_selector_value(selector_name: str) -> str | None:
-    """Return the attested locator for a ``common.auth`` sign-in selector.
+    """LEGACY: return the attested scalar locator for a ``common.auth`` selector.
 
-    Fail-closed: returns ``None`` unless the selector exists in the ``common.auth``
-    fragment AND carries an attested, non-null value. Before attestation every
-    selector value is ``None`` (``UNVERIFIED_LIVE``), so the worker refuses to
-    guess or hardcode a locator. This intentionally never invents a CSS/XPath
-    string.
+    Kept only because browser.py still consumes it for the attested fill path.
+    New code MUST NOT use this: it depends on the scalar ``value`` field, which
+    is ``None`` until attestation, and it invents no locators by design. Prefer
+    ``common_auth_locator_plan`` for structured, value-independent discovery.
     """
     from m365_mcp.ui_contract_store import load_ui_contract_set
 
@@ -51,6 +70,37 @@ def ui_contract_selector_value(selector_name: str) -> str | None:
         if isinstance(value, str) and value:
             return value
         return None
+    return None
+
+
+def common_auth_locator_plan(selector_name: str) -> LocatorPlan | None:
+    """Load a progression selector plan from the shipped ``common.auth`` fragment.
+
+    Fail-closed: only the four declared progression selector keys are permitted.
+    Any other key raises ``ValueError`` so the caller cannot reach an arbitrary or
+    hardcoded locator. The plan is derived solely from the structured ``locators``
+    metadata; the scalar ``value`` is ignored. This deliberately works for
+    ``UNVERIFIED_LIVE`` plans (null ``value``) because bootstrap discovery must
+    enumerate them before attestation.
+
+    The attestation gate is NOT enforced here: the caller remains responsible for
+    refusing unattested plans before any fill.
+    """
+    if selector_name not in PROGRESSION_SELECTOR_KEYS:
+        raise ValueError(
+            f"common.auth progression selector required; got {selector_name!r}"
+        )
+
+    from m365_mcp.ui_contract_store import load_ui_contract_set
+
+    source = load_ui_contract_set()
+    for fragment in source.fragments:
+        if fragment.fragment_id != "common.auth":
+            continue
+        metadata = fragment.selectors.get(selector_name)
+        if metadata is None:
+            return None
+        return locator_plan_from_metadata(selector_name, metadata)
     return None
 
 
