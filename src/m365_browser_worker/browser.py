@@ -142,6 +142,26 @@ class PersistentBrowser:
         expected_profile_dir, _headless, _mode = browser_runtime_settings()
         return self.started and self.config.profile_dir == expected_profile_dir
 
+    def planner_web_surface_present(self) -> bool:
+        """Return True when the dedicated profile sits on the fixed Planner Web surface.
+
+        The ONLY positive proof that a professional session is authenticated is
+        the post-MFA landing surface (the fixed Planner Web target). The raw
+        page URL is reduced to the closed ``is_planner_web_surface_url``
+        classification and never returned, so no URL, DOM text, cookie, token,
+        UPN or tenant id leaves this method. Neutral placeholders, intermediate
+        auth interstitials and unrecognized pages are reported as False (the
+        absence of a login form is NOT treated as authenticated).
+        """
+        if not self.started:
+            return False
+        pages = [p for p in self._context.pages if str(p.url)]
+        if len(pages) != 1:
+            # Exactly one open page is required: an ambiguous multi-page
+            # topology must never be accepted as the authenticated surface.
+            return False
+        return is_planner_web_surface_url(str(pages[0].url))
+
     def auth_origin_approved(self) -> bool:
         """Return whether the live context may begin/continue auth bootstrap.
 
