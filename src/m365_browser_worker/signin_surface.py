@@ -454,8 +454,99 @@ async def resolve_signin_surface_to_email_entry(
     )
 
 
+# ---------------------------------------------------------------------------
+# AUTH-114 — deterministic post-password "Stay signed in?" (KMSI) resolution.
+#
+# The KMSI interstitial is a credential-free, MFA-free deterministic surface that
+# Microsoft can present AFTER a successful password submit. It blocks the
+# post-sign-in progression while carrying no identity choice. The ONLY action
+# permitted here is a single click on ONE fixed control matched from a CLOSED set
+# of exact Microsoft labels, and ONLY when that control is STRICTLY UNIQUE.
+# ---------------------------------------------------------------------------
+
+AUTH_KMSI_OPERATION = "auth_resolve_kmsi_surface"
+
+# CLOSED set of exact Microsoft labels for the KMSI decline/dismiss control.
+# No regex, no wildcard, no partial match. The decline ("No") path is preferred
+# so no persistent-session preference is silently established.
+KMSI_DECLINE_LABELS: tuple[str, ...] = (
+    "No",
+    "Não",
+)
+
+_KMSI_STAGE_TIMEOUT_MS = 5_000
+
+
+async def click_kmsi_decline(page: Any) -> bool:
+    """Click the fixed KMSI decline control at most once, strictly uniquely.
+
+    Iterates the CLOSED label set; for each label tries the accessible ``button``
+    then ``checkbox``-free ``link`` role and clicks ONLY when the control counts
+    to EXACTLY ONE candidate. A count of zero (absent) or more than one
+    (ambiguous) is never clicked — the caller fails closed. It never fills, never
+    navigates, never selects an identity, and never clicks Sign in. Any
+    interaction error is swallowed and treated as "not found".
+    """
+    for label in KMSI_DECLINE_LABELS:
+        for role in ("button", "link"):
+            try:
+                locator = page.get_by_role(role, name=label)
+                if await locator.count() != 1:
+                    continue
+                await locator.first.click(timeout=_KMSI_STAGE_TIMEOUT_MS)
+                return True
+            except Exception:  # noqa: BLE001, S112 - fail closed, never echo
+                continue
+    return False
+
+
+async def resolve_stay_signed_in_surface(
+    page: Any, read_text: Any
+) -> SigninSurfaceResolution:
+    """Dismiss the deterministic KMSI surface, or fail closed untouched.
+
+    ``read_text`` is a zero-argument awaitable returning bounded visible body
+    text (already guard-gated). Flow:
+
+    1. classify the current surface (text only, value-free);
+    2. if it is NOT ``STAY_SIGNED_IN`` -> return a fail-closed sentinel and take
+       NO action whatsoever (never guess, never click);
+    3. otherwise perform the fixed decline action once. If the strictly unique
+       fixed control is absent -> fail closed without acting;
+    4. re-read and re-classify; report the sanitized closed terminal surface.
+
+    Returns only sanitized closed enums; never text, URL, or identity.
+    """
+    text = await read_text()
+    classification = classify_signin_surface(text)
+    if classification.kind is not SigninSurfaceKind.STAY_SIGNED_IN:
+        return SigninSurfaceResolution(
+            SigninSurfaceKind.AMBIGUOUS,
+            advanced=False,
+            terminal_surface=classification.kind,
+        )
+
+    clicked = await click_kmsi_decline(page)
+    if not clicked:
+        return SigninSurfaceResolution(
+            SigninSurfaceKind.AMBIGUOUS,
+            advanced=False,
+            terminal_surface=SigninSurfaceKind.STAY_SIGNED_IN,
+        )
+
+    text2 = await read_text()
+    classification2 = classify_signin_surface(text2)
+    return SigninSurfaceResolution(
+        classification2.kind, advanced=True, terminal_surface=classification2.kind
+    )
+
+
 __all__ = [
+    "AUTH_KMSI_OPERATION",
     "AUTH_RESOLVE_OPERATION",
+    "KMSI_DECLINE_LABELS",
+    "click_kmsi_decline",
+    "resolve_stay_signed_in_surface",
     "SigninSurfaceKind",
     "SurfaceClassification",
     "SigninSurfaceResolution",

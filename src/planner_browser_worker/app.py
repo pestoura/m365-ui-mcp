@@ -58,6 +58,7 @@ from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readi
 from m365_browser_worker.session_broker import SessionCapabilityBroker
 from m365_browser_worker.signin_surface import (
     AUTH_DIAGNOSE_OPERATION,
+    AUTH_KMSI_OPERATION,
     AUTH_RESOLVE_OPERATION,
     SigninSurfaceKind,
 )
@@ -707,6 +708,59 @@ def create_app(
             "auth_state": AuthState.UNKNOWN.value,
             "surface": SigninSurfaceKind.EMAIL_ENTRY.value,
         }
+
+    @app.post("/auth/bootstrap/resolve-kmsi-surface")
+    async def auth_bootstrap_resolve_kmsi_surface(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback deterministic KMSI surface resolver (AUTH-114).
+
+        Dismisses the credential-free, MFA-free post-password Microsoft
+        ``Stay signed in?`` (KMSI) interstitial that can block the post-sign-in
+        progression. Security shape (identical family to AUTH-109):
+
+        * NOT an MCP tool; absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client;
+        * SOCKET-level loopback admission only (``127.0.0.1``/``::1``); proxy
+          headers are never consulted; a Docker-network peer gets ``404``;
+        * POST only with NO body and NO parameters; any body or query string is
+          rejected with ``400`` and never reaches the browser;
+        * the browser applies ONLY the fixed KMSI decline control, matched from a
+          CLOSED exact-label set and ONLY when strictly unique. It never types a
+          credential, never selects a cached identity, never clicks Sign in, and
+          never navigates by URL/selector;
+        * fails closed with ``503 POLICY_DENIED`` on any non-KMSI surface or an
+          absent/ambiguous control, carrying only the sanitized closed
+          terminal-surface enum;
+        * returns only ``{ok, surface}``. No URL, DOM, page text, cookie, token,
+          UPN, tenant id, account identifier or browser handle is ever returned.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+        if await request.body():
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No request body is accepted"},
+            )
+
+        resolve_surface_guard(AUTH_KMSI_OPERATION)
+
+        if _is_mock():
+            return {"ok": True, "surface": SigninSurfaceKind.UNKNOWN.value}
+
+        try:
+            surface = await worker_browser.resolve_kmsi_surface()
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        return {"ok": True, "surface": surface.value}
 
     @app.get("/auth/bootstrap/diagnose-signin-surface")
     async def auth_bootstrap_diagnose_signin_surface(request: Request) -> dict[str, Any]:

@@ -534,6 +534,8 @@ introduced.
 
 **AUTH-113 — Begin-signin navigation landing verification (fail-closed).** `POST /auth/bootstrap/begin-signin` MUST return success only when the page object that was actually navigated has established an approved Microsoft authentication origin (per the closed `auth_origin_status` allowlist) OR a deterministic already-authenticated approved Planner surface; a page still on `about:blank` / a neutral placeholder / a non-approved origin (aborted or blocked redirect, offline target, or a stale dedicated page) MUST fail closed and MUST NOT be reported as `target_class: microsoft_auth`. The verification reads the URL from the SAME page that was navigated (never a stale reference) and reduces it to a closed classification — no URL/DOM/cookie/token/UPN/tenant id leaves the worker. AUTH-113 never weakens the attestation/evaluator/loopback/credential/MFA controls and fixes the navigation/lifecycle correctness defect where the endpoint reported success while the dedicated persistent page remained `about:blank`.
 
+**AUTH-114 — Operator-only deterministic KMSI ("Stay signed in?") surface resolution.** After a successful `operator-submit` (AUTH-101) Microsoft may present the credential-free, MFA-free `Stay signed in?` (KMSI) interstitial, which blocks the post-sign-in progression while `observe` (AUTH-103) legitimately reads `AUTH_REQUIRED` with `mfa_number: null` and `mfa_ambiguous: false`. `POST /auth/bootstrap/resolve-kmsi-surface` dismisses ONLY that surface: it is operator-only, SOCKET-level loopback-admitted, POST-only, zero-parameter and zero-body, absent from every MCP tool/capability/agent-card catalog, the typed `/operations` dispatcher and the control-plane worker client. It acts ONLY when the closed classification is `STAY_SIGNED_IN`, and its ONLY action is a single click on ONE fixed decline control matched from a CLOSED set of exact Microsoft labels and ONLY when that control is STRICTLY UNIQUE (count == 1); zero or multiple candidates are never clicked. It NEVER types a credential, never selects a cached identity, never clicks Sign in, never navigates by URL/selector, and never returns URL/DOM/page text/cookie/token/UPN/tenant id/account identifier — only `{ok, surface}` with the sanitized closed `SigninSurfaceKind`. Any other surface, or an absent/ambiguous control, fails closed with `503 POLICY_DENIED` carrying only the closed terminal-surface enum. The AUTH-111 conductor may attempt it AT MOST ONCE per run, and only after the READ-ONLY `diagnose-signin-surface` (AUTH-109-diagnose) confirms `STAY_SIGNED_IN`; otherwise the prior fail-closed STOP is unchanged. AUTH-114 never weakens the attestation, evaluator, surface-latch, loopback, credential or MFA controls, and human Microsoft Authenticator approval remains the only MFA path.
+
 ---
 
 ## 10. Traceability
@@ -561,6 +563,7 @@ introduced.
 | AUTH-111 | Operator-only deterministic canonical sign-in run orchestration |
 | AUTH-112 | Operator-only submit surface-latch gate |
 | AUTH-113 | Begin-signin navigation landing verification (fail-closed) |
+| AUTH-114 | Operator-only deterministic KMSI ("Stay signed in?") surface resolution |
 
 
 
