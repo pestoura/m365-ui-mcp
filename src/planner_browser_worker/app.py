@@ -60,6 +60,7 @@ from m365_browser_worker.signin_surface import (
     AUTH_DIAGNOSE_OPERATION,
     AUTH_KMSI_OPERATION,
     AUTH_RESOLVE_OPERATION,
+    AUTH_STRUCTURE_OPERATION,
     SigninSurfaceKind,
 )
 from m365_browser_worker.worker_errors import project_worker_error
@@ -820,6 +821,59 @@ def create_app(
             "surface": classification.kind.value,
             "email_entry_present": classification.email_entry_present,
         }
+
+    @app.get("/auth/bootstrap/diagnose-post-auth-surface")
+    async def auth_bootstrap_diagnose_post_auth_surface(
+        request: Request,
+    ) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback READ-ONLY structural census (AUTH-115).
+
+        Root-cause probe for the post-KMSI ``AMBIGUOUS`` surface. It is the
+        value-free twin of ``diagnose-signin-surface``: it runs the SAME guard chain
+        (started live browser, dedicated persistent professional profile, approved
+        Microsoft authentication origin, exactly one open auth page) but returns ONLY
+        a closed structural census (role counts, frame-origin classes, fixed Microsoft
+        label presence booleans, document ready-state, email-entry control presence).
+        It NEVER clicks, types, navigates, or reads any page text / URL / DOM value /
+        cookie / token / UPN / tenant id / account identifier.
+
+        Security shape (mirrors the diagnose route, value-free):
+
+        * NOT an MCP tool; absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client;
+        * SOCKET-level loopback admission only (``127.0.0.1``/``::1``); proxy
+          headers are never consulted; a Docker-network peer gets ``404``;
+        * GET only with NO body and NO parameters; any query string is rejected
+          with ``400`` and never reaches the browser;
+        * the same guard chain as the resolver — any failure fails closed with
+          ``503`` and never reads the page;
+        * returns only ``{ok, structure}`` where ``structure`` is a CLOSED census of
+          ints/bools/closed-enum values. No URL, DOM, page text, cookie, token, UPN,
+          tenant id or account identifier is ever returned.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+
+        resolve_surface_guard(AUTH_STRUCTURE_OPERATION)
+
+        if _is_mock():
+            return {"ok": True, "structure": {}}
+
+        try:
+            structure = await worker_browser.diagnose_post_auth_surface()
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        return {"ok": True, "structure": structure.__dict__}
 
     @app.post("/auth/bootstrap/operator-submit")
     async def auth_bootstrap_operator_submit(request: Request) -> dict[str, Any]:

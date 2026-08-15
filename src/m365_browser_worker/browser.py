@@ -46,9 +46,12 @@ from m365_browser_worker.signin_surface import (
     AUTH_DIAGNOSE_OPERATION,
     AUTH_KMSI_OPERATION,
     AUTH_RESOLVE_OPERATION,
+    AUTH_STRUCTURE_OPERATION,
     SigninSurfaceKind,
+    SigninSurfaceStructure,
     SurfaceClassification,
     classify_signin_surface,
+    collect_post_auth_structure,
     resolve_signin_surface_to_email_entry,
     resolve_stay_signed_in_surface,
 )
@@ -655,6 +658,46 @@ class PersistentBrowser:
         # Bounded, read-only text read; never logs or returns the text.
         text = await self.read_visible_body_bounded(max_chars=2000)
         return classify_signin_surface(text)
+
+    async def diagnose_post_auth_surface(self) -> SigninSurfaceStructure:
+        """READ-ONLY value-free structural census of the live sign-in surface (AUTH-115).
+
+        Operator-only deterministic root-cause probe for the post-KMSI
+        ``AMBIGUOUS`` surface. Runs the SAME guard chain as ``diagnose_signin_surface``
+        (started live browser, dedicated persistent professional profile, approved
+        Microsoft authentication origin, exactly one open auth page) but returns a
+        value-free structural census (role counts, frame-origin classes, fixed
+        Microsoft label presence booleans, document ready-state, email-entry
+        control presence). It NEVER clicks, types, navigates, or reads any page
+        text / URL / DOM value / cookie / token / UPN / tenant id / account
+        identifier. This lets a run root-cause an unrecognized post-auth surface
+        without guessing and without acting.
+
+        Fail-closed contract (identical safety shape to the resolver, minus the
+        click): any guard failure raises and returns nothing; no URL/DOM/page
+        text/cookie/token/UPN/tenant/account identifier is ever returned.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "post-auth surface diagnosis requires a started live browser",
+                operation=AUTH_STRUCTURE_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "post-auth surface diagnosis requires the dedicated persistent "
+                "professional browser profile",
+                operation=AUTH_STRUCTURE_OPERATION,
+            )
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "post-auth surface diagnosis requires the page to be on an "
+                "approved Microsoft authentication origin",
+                operation=AUTH_STRUCTURE_OPERATION,
+            )
+
+        # Enforce exactly one open auth page before the structural read.
+        page = self._require_single_auth_page()
+        return await collect_post_auth_structure(page)
 
     def signin_surface_resolved(self) -> bool:
         """Return whether the pre-email sign-in surface was resolved to EMAIL_ENTRY.
