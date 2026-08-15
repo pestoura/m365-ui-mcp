@@ -1,37 +1,31 @@
-apiVersion: engineering.jarvas/v1
+schemaVersion: jds.change/v1
 kind: ChangeRecord
-standard: JDS-002
-class: BUGFIX
-product: m365-ui-mcp
 id: CHG-M365-109
-title: >
-  AUTH-109 resolver clicks chooser on a page where the email control is
-  structurally present because text-only ACCOUNT_CHOOSER markers outrank the
-  structural email-entry control presence.
-summary: >
-  classify_signin_surface ranked text markers (ACCOUNT_CHOOSER) above the final
-  email_entry_present fallback, so when Microsoft co-presents chooser phrasing
-  and the live email field, the resolver classified ACCOUNT_CHOOSER and
-  attempted an unnecessary "use another account" click (which then failed closed
-  503 on the live worker). Structural email-control detection already existed in
-  bootstrap_discovery.discover_key but was never consulted by the classifier.
-fix: >
-  Added detect_email_entry_state (fail-closed, value-free) that counts the fixed
-  auth.login_email_input plus auth.login_next_button selector keys via
-  bootstrap_discovery.discover_key / locator_runtime. classify_signin_surface
-  now accepts an optional EmailEntryState and classifies EMAIL_ENTRY when a
-  uniquely present, attested email control pair exists, BEFORE the text-only
-  ACCOUNT_CHOOSER / intermediate markers, so no chooser click is attempted.
-  Ambiguous / multiple email controls are NOT a signal (resolver fails closed).
-  Error surfaces still win over any coincidental structural email control.
-invariants:
-  - _FORWARDABLE_SURFACES unchanged; no new action/click/forwardable surface added.
-  - No GUI/VNC/noVNC; no consent/CA/enrollment/method/MFA automation introduced.
-  - Detection-failure (EmailEntryControlError) preserves the prior text-only click path exactly.
-  - All security invariants (loopback admission, value-free output) preserved.
-tests:
-  - tests/test_signin_surface.py: structural email-entry wins over text chooser; ambiguous controls fail closed; classifier guards; backwards-compatible.
-gates:
-  - compileall / ruff / mypy / check_docs / check_contracts / check_policy_metadata
-  - check_no_secrets / check_base_image_pinning / full pytest / isolated acceptance
-  - release contract / wheel+sdist build — all GREEN locally.
+product: m365-ui-mcp
+classification: HARDENING
+state: VALIDATING
+disposition: FIX_NOW
+summary: >-
+  AUTH-109 resolver attempted an unnecessary chooser click (then failed closed
+  503) when Microsoft co-presented ACCOUNT_CHOOSER text and the live email
+  field, because classify_signin_surface ranked text markers above structural
+  email-control presence. Now a uniquely present, attested email control pair
+  classifies EMAIL_ENTRY before text-only ACCOUNT_CHOOSER; ambiguous controls
+  fail closed; all security invariants preserved.
+source:
+  type: PRODUCTION_INCIDENT
+  campaign: null
+  observation: null
+  reference: "AUTH-109 live failure after PR #625: diagnose ACCOUNT_CHOOSER vs discover-email UNIQUE_MATCH"
+affectedRelease: main
+risk: LOW
+versionEffect: NONE
+validation:
+  targeted: PASS
+  regression: PASS
+  security: PASS
+  runtime: PASS
+timestamps:
+  discoveredAt: "2026-08-15T12:00:00+01:00"
+  updatedAt: "2026-08-15T13:40:00+01:00"
+  closedAt: null

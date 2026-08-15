@@ -514,7 +514,7 @@ identity, tenant, selector, cookie, token or credential. This is observability-o
 set, does not relax fail-closed, and the diagnostic `diagnose-signin-surface` route (AUTH-109-diagnose) remains the
 READ-ONLY twin for the same closed-enum reporting without any click.
 
-**AUTH-109 structural email-control priority (hardening).** The classifier prefers a *uniquely present, attested
+**Structural email-control priority (AUTH-109 hardening).** The classifier prefers a *uniquely present, attested
 email-entry control pair* (the fixed `auth.login_email_input` + `auth.login_next_button` selector keys, counted
 fail-closed via `bootstrap_discovery.discover_key` / `locator_runtime`) over a text-only `ACCOUNT_CHOOSER` marker.
 When Microsoft shows both chooser phrasing **and** the live email field, the resolver classifies `EMAIL_ENTRY` and
