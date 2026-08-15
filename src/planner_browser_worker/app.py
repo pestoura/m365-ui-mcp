@@ -44,6 +44,12 @@ from m365_browser_worker.collect_observation import (
 )
 from m365_browser_worker.executor import ProfileSerializedExecutor
 from m365_browser_worker.lifecycle import browser_lifespan
+from m365_browser_worker.live_attestation_probe import (
+    PLANNER_SURFACE_FRAGMENT_IDS,
+    PROBE_PLANNER_SURFACE_OPERATION,
+    LiveProbeError,
+    probe_all_live_surface_fragments,
+)
 from m365_browser_worker.operator_signin import (
     validate_email_stage_input,
     validate_signin_input,
@@ -1203,6 +1209,101 @@ def create_app(
         return {
             "ok": True,
             "observations": observations,
+        }
+
+    @app.get("/auth/bootstrap/probe-planner-surface")
+    async def auth_bootstrap_probe_planner_surface(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback read-only live UI-attestation probe (UI-AUTH-001).
+
+        Minimal primitive that reuses the ALREADY-RUNNING dedicated professional
+        browser context to collect sanitized UI-attestation evidence for the
+        ``planner.plan-surface`` and ``planner.task-surface`` UIContract fragments
+        WITHOUT opening a second persistent Chromium context and WITHOUT
+        destroying the already-authenticated Microsoft session.
+
+        Security shape (mirrors ``/auth/bootstrap/collect-observation``):
+
+        * NOT an MCP tool, absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client;
+        * SOCKET-level loopback admission only (``127.0.0.1``/``::1``); proxy
+          headers are never consulted, so a Docker-network peer gets ``404``;
+        * GET only: takes NO parameters. Any query string is rejected and no
+          request body is processed. The fixed fragment scope
+          (``planner.plan-surface`` + ``planner.task-surface``) is the ONLY thing
+          probed — no caller-supplied selector/stage/url/js;
+        * reuses ``live_attestation_probe`` which counts declared candidates via
+          ``locator_runtime.build_locator`` against the single live page only —
+          NO wait, NO fill, NO click, NO navigate, NO ``page.evaluate``, and no
+          DOM/URL/value/credential is ever read or returned;
+        * enforces a positive-broker precondition BEFORE any probe: the dedicated
+          persistent professional profile must be positioned on the fixed Planner
+          Web surface (the post-MFA landing surface) AND the live auth state must
+          be AUTHENTICATED with a VERIFIED account context. Any failure fails
+          closed with a sanitized 503 (no exception text). A fragment selector
+          with no declared ``locators`` plan is reported as ``NO_LOCATOR`` — never
+          fabricated (CORE-019);
+        * it NEVER weakens the fail-closed evaluator or the attestation gate: it
+          only COLLECTS sanitized evidence (IDs, digests, counts,
+          UNIQUE_MATCH/NO_MATCH/AMBIGUOUS/NO_LOCATOR). It promotes nothing and
+          writes no contract JSON;
+        * fails closed (503, no exception text) when the running context is
+          unusable, the surface is ambiguous (multiple pages), or any selector
+          cannot be deterministically counted.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+
+        if _is_mock():
+            # Mock mode has no live context to observe; report the fixed closed
+            # scope without performing or fabricating any observation.
+            return {
+                "ok": True,
+                "mode": "mock",
+                "fragment_ids": list(PLANNER_SURFACE_FRAGMENT_IDS),
+            }
+
+        # Positive-broker precondition: the live professional session must be
+        # AUTHENTICATED on the VERIFIED dedicated profile sitting on the Planner
+        # Web surface. These are exactly the conditions proven by the post-MFA
+        # broker promotion (AUTH-115); they are the minimum that makes observing
+        # the Planner board legitimate. Fail closed otherwise.
+        if not (
+            worker_browser.started
+            and worker_browser.is_dedicated_persistent_profile()
+            and worker_browser.planner_web_surface_present()
+            and live_auth_state() is AuthState.AUTHENTICATED
+            and live_account_context(worker_browser).valid
+        ):
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "PROBE_NOT_ALLOWED",
+                    "message": "live planner-surface probe requires an authenticated, "
+                    "verified session on the Planner Web surface",
+                },
+            )
+
+        try:
+            fragments = await probe_all_live_surface_fragments(worker_browser)
+        except LiveProbeError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "PROBE_FAILED", "message": exc.reason},
+            ) from None
+
+        return {
+            "ok": True,
+            "operation": PROBE_PLANNER_SURFACE_OPERATION,
+            "fragments": fragments,
         }
 
     @app.get("/auth/session")
