@@ -57,6 +57,7 @@ from m365_browser_worker.protocol_negotiation import (
 from m365_browser_worker.readiness import WorkerReadiness, evaluate_worker_readiness
 from m365_browser_worker.session_broker import SessionCapabilityBroker
 from m365_browser_worker.signin_surface import (
+    AUTH_DIAGNOSE_OPERATION,
     AUTH_RESOLVE_OPERATION,
     SigninSurfaceKind,
 )
@@ -705,6 +706,65 @@ def create_app(
             "ok": True,
             "auth_state": AuthState.UNKNOWN.value,
             "surface": SigninSurfaceKind.EMAIL_ENTRY.value,
+        }
+
+    @app.get("/auth/bootstrap/diagnose-signin-surface")
+    async def auth_bootstrap_diagnose_signin_surface(request: Request) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback READ-ONLY pre-email surface classifier (AUTH-109-diagnose).
+
+        Deterministic, non-mutating twin of ``/auth/bootstrap/resolve-signin-surface``.
+        It reads the bounded visible body text exactly once and returns ONLY the
+        closed surface classification (``surface`` + ``email_entry_present``). It
+        NEVER clicks, selects an identity, types, navigates, or otherwise changes
+        the page. It exists so an operator run can report the exact closed surface
+        kind when the mutating resolver would fail closed — without guessing and
+        without acting. Security shape:
+
+        * NOT an MCP tool; absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client;
+        * SOCKET-level loopback admission only (``127.0.0.1``/``::1``); proxy
+          headers are never consulted; a Docker-network peer gets ``404``;
+        * GET only with NO body and NO parameters; any query string is rejected
+          with ``400`` and never reaches the browser;
+        * the same guard chain as the resolver (started live browser, dedicated
+          persistent professional profile, approved Microsoft authentication
+          origin, exactly one open auth page) — any failure fails closed with
+          ``503`` and never reads the page;
+        * returns only ``{ok, surface, email_entry_present}`` where ``surface`` is
+          one of the closed ``SigninSurfaceKind`` values. No URL, DOM, page text,
+          cookie, token, UPN, tenant id, account identifier or browser handle is
+          ever returned; the resolver's fixed-action transition is NOT exposed.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+
+        resolve_surface_guard(AUTH_DIAGNOSE_OPERATION)
+
+        if _is_mock():
+            return {
+                "ok": True,
+                "surface": SigninSurfaceKind.UNKNOWN.value,
+                "email_entry_present": False,
+            }
+
+        try:
+            classification = await worker_browser.diagnose_signin_surface()
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        return {
+            "ok": True,
+            "surface": classification.kind.value,
+            "email_entry_present": classification.email_entry_present,
         }
 
     @app.post("/auth/bootstrap/operator-submit")

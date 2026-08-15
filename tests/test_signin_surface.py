@@ -22,6 +22,7 @@ from m365_browser_worker.signin_surface import (
     SigninSurfaceKind,
     classify_signin_surface,
     click_use_another_account,
+    diagnose_signin_surface,
     resolve_signin_surface_to_email_entry,
 )
 
@@ -188,3 +189,44 @@ async def test_resolver_error_fails_closed() -> None:
     res = await resolve_signin_surface_to_email_entry(page, page.read_text)
     assert res.kind is SigninSurfaceKind.AMBIGUOUS
     assert res.advanced is False
+
+
+class _ReadOnlyPage:
+    """A fake page that records whether any click was attempted."""
+
+    def __init__(self, text: str) -> None:
+        self._text = text
+        self.clicks = 0
+
+    def get_by_role(self, role: str, name: str) -> _FakeLabelLocator:
+        # Any locator access would indicate a mutation attempt; surface it.
+        raise AssertionError("diagnose must not query controls")
+
+    async def read_text(self) -> str:
+        return self._text
+
+
+async def test_diagnose_is_read_only_and_returns_kind() -> None:
+    page = _ReadOnlyPage("Pick an account\nUse another account")
+    classification = await diagnose_signin_surface(page, page.read_text)
+    assert classification.kind in (
+        SigninSurfaceKind.USE_ANOTHER_ACCOUNT_PROMPT,
+        SigninSurfaceKind.ACCOUNT_CHOOSER,
+    )
+    assert classification.email_entry_present is False
+    # No control was queried/clicked; diagnosis is purely a bounded read.
+    assert page.clicks == 0
+
+
+async def test_diagnose_email_entry_reports_terminal_surface() -> None:
+    page = _ReadOnlyPage("Sign in\nEmail or phone")
+    classification = await diagnose_signin_surface(page, page.read_text)
+    assert classification.kind is SigninSurfaceKind.EMAIL_ENTRY
+    assert classification.email_entry_present is True
+
+
+async def test_diagnose_unknown_on_empty_reading() -> None:
+    page = _ReadOnlyPage("")
+    classification = await diagnose_signin_surface(page, page.read_text)
+    assert classification.kind is SigninSurfaceKind.UNKNOWN
+    assert classification.email_entry_present is False
