@@ -9,48 +9,31 @@ The sequence is exactly:
 
     navigate -> begin-signin -> resolve-signin-surface
         -> require surface EMAIL_ENTRY / discover-email UNIQUE_MATCH
-        -> operator-submit
+        -> operator-submit -> observe MFA -> Hermes/Telegram -> human approval
+        -> AUTHENTICATED
 
-Every step is an OPERATOR-ONLY, socket-loopback-admitted worker route. This
-script is the host-side conductor only: it never decrypts credentials of its
-own, never types anything, and never selects an identity. It:
-
-1. Runs each step ONCE in the exact order above. Re-running navigate/begin-signin
-   would open a second auth page and 503 the discover/submit guards, so the
-   sequence is a single ordered pipeline (a fresh run starts from a
-   browser-worker restart, an operator action outside this script).
-2. Enforces the surface gate after resolve-signin-surface: the email-entry
-   surface MUST be present (deterministic) before operator-submit is allowed.
-   The email-entry presence is probed via the GET-only discover-email route
-   (POST is rejected 405, so the conductor uses GET), a bounded number of times
-   with a short sleep (page-load timing can yield NO_MATCH on the first
-   immediate probe; that is NOT the fail-closed STOP). Only TWO UNIQUE_MATCH
-   results advance.
-3. Refuses operator-submit on any other surface (account chooser still showing,
-   device enrolment / CA / unsupported method, ambiguous, unknown): it never
-   guesses, never clicks an identity, never proceeds.
-4. Uses the VERIFIED in-container loopback transport for operator-submit (host
-   `urllib` to the published 127.0.0.1:8090 port arrives via the Docker bridge
-   gateway and is rejected 404 by socket-peer admission; the credentials are
-   decrypted on the host and handed to an in-container client over docker exec
-   **stdin**, which POSTs from the container's own loopback). This mirrors
-   scripts/operator_auth_begin_email.py and the verified AUTH-101 plumbing.
-5. Reports ONLY sanitized, value-free status. No URL, DOM, cookie, token, UPN,
-   tenant id, account identifier, or credential value is ever printed.
+Every browser step is an OPERATOR-ONLY, socket-loopback-admitted worker route.
+The post-submit relay consumes only the worker's sanitized observation contract
+(`state`, optional 2-digit `mfa_number`, `mfa_ambiguous`). A unique Microsoft
+Authenticator number is sent through the already-configured ``hermes send`` CLI
+to the Telegram home channel. The Telegram token/chat configuration remains
+owned by Hermes; this script never reads or stores it.
 
 Hard invariants (never weaken):
 
-* Fixed container name, fixed endpoints, fixed credential file names. Nothing is
-  configurable via argv or environment, so no caller can redirect the
-  destination or the credential decryption.
-* The two decrypted credential values are memory-only: consumed exactly once by
-  the in-container loopback client over stdin, never placed in argv/env/state,
-  never logged, never echoed.
-* The resolver step (AUTH-109) is the ONLY surface-mutating operator action this
-  orchestrator adds; it clicks ONLY the fixed "use another account" control and
-  never selects a cached identity.
-* No real authentication is asserted: the human still completes MFA in Microsoft
-  Authenticator. This script returns only a sanitized success/state code.
+* Fixed container name, fixed worker endpoints and fixed credential file names.
+* Username/password are decrypted memory-only and handed to the in-container
+  loopback submit client over stdin; never argv/env/log/state.
+* No URL/DOM/cookie/token/UPN/tenant/account identifier leaves the worker.
+* MFA is NEVER approved by automation. The runner only observes a uniquely
+  resolved number, relays it, and waits for the human Microsoft Authenticator
+  approval to make the live surface become AUTHENTICATED.
+* Ambiguous/invalid MFA, observation failure, unsupported post-submit state,
+  notification failure or timeout all fail closed.
+* The same challenge number is sent at most once per run; a genuinely new
+  unique challenge may be relayed once.
+* Hermes receives the notification body over stdin (`hermes send --file -`),
+  so the challenge number is not placed in process argv.
 
 This run never reads the real credential store or performs a real login unless
 invoked by the operator against the live worker.
@@ -70,6 +53,7 @@ from pathlib import Path
 _CREDSTORE_DIR = Path(os.path.expanduser("~")) / ".local" / "lib" / "credstore.encrypted"
 _SYSTEMD_CREDS = "/usr/bin/systemd-creds"  # absolute path avoids bare-binary lint
 _DOCKER = "/usr/bin/docker"  # absolute path avoids bare-binary lint
+_ENV = "/usr/bin/env"  # resolves the already-installed Hermes CLI without shell execution
 
 # The two provisioned credential file names. Values stay memory-only.
 _USERNAME_CRED = "m365-ui-mcp.username.cred"
@@ -84,10 +68,17 @@ _BEGIN_SIGNIN = "http://127.0.0.1:8090/auth/bootstrap/begin-signin"
 _RESOLVE_SURFACE = "http://127.0.0.1:8090/auth/bootstrap/resolve-signin-surface"
 _OPERATOR_SUBMIT = "http://127.0.0.1:8090/auth/bootstrap/operator-submit"
 _DISCOVER_EMAIL = "http://127.0.0.1:8090/auth/bootstrap/discover-email"
+_OBSERVE = "http://127.0.0.1:8090/auth/bootstrap/observe"
 
 # Bounded discover-email re-probe (page-load timing guard, not a retry loop).
 _DISCOVER_PROBES = 6
 _DISCOVER_INTERVAL_S = 3.0
+
+# Human-MFA observation window: 120 * 2s = 4 minutes maximum. The interval and
+# count are constants, not caller-controlled knobs, to keep the operator flow
+# deterministic and bounded.
+_MFA_MAX_POLLS = 120
+_MFA_POLL_INTERVAL_S = 2.0
 
 # In-container client for operator-submit. Reads ONE JSON object from stdin and
 # POSTs it unchanged to the fixed loopback endpoint. The credentials never
@@ -131,14 +122,19 @@ class RunStatus:
 
     OK = 0
     USAGE = 2
-    NAVIGATE_FAILED = 10
-    BEGIN_SIGNIN_FAILED = 11
-    RESOLVE_FAILED = 12
-    SURFACE_GATE_FAILED = 13
     DECRYPT_FAILED = 3
     SUBMIT_REJECTED = 4
     SUBMIT_UNREACHABLE = 5
     BAD_RESPONSE = 6
+    NAVIGATE_FAILED = 10
+    BEGIN_SIGNIN_FAILED = 11
+    RESOLVE_FAILED = 12
+    SURFACE_GATE_FAILED = 13
+    OBSERVE_FAILED = 14
+    MFA_AMBIGUOUS = 15
+    MFA_NOTIFY_FAILED = 16
+    MFA_TIMEOUT = 17
+    MFA_BLOCKED = 18
 
 
 class _StepFailed(Exception):
@@ -146,14 +142,7 @@ class _StepFailed(Exception):
 
 
 def _docker_exec_post(endpoint: str) -> tuple[int, str]:
-    """POST an empty body to a loopback endpoint from inside the container.
-
-    Returns (exit_code, sanitized_status_line). Used for the zero-body operator
-    routes (navigate / begin-signin / resolve-signin-surface / operator-submit).
-    A non-loopback caller (host curl) is rejected 404 by socket-peer admission;
-    docker exec runs inside the container's own loopback namespace, which is
-    admitted.
-    """
+    """POST an empty body to a loopback endpoint from inside the container."""
     proc = subprocess.run(  # noqa: S603 - fixed binary, fixed container, no shell
         [
             _DOCKER,
@@ -164,7 +153,7 @@ def _docker_exec_post(endpoint: str) -> tuple[int, str]:
             "-o",
             "-",
             "-w",
-            "\\n",
+            "\n",
             "-X",
             "POST",
             "-H",
@@ -180,12 +169,7 @@ def _docker_exec_post(endpoint: str) -> tuple[int, str]:
 
 
 def _docker_exec_get(endpoint: str) -> tuple[int, str]:
-    """GET a loopback endpoint from inside the container (read-only routes).
-
-    Used for the GET-only discovery routes (discover-email / discover-password),
-    which reject POST with 405. Mirrors ``_docker_exec_post``'s loopback
-    admission: docker exec runs inside the container's own loopback namespace.
-    """
+    """GET a loopback endpoint from inside the container (read-only routes)."""
     proc = subprocess.run(  # noqa: S603 - fixed binary, fixed container, no shell
         [
             _DOCKER,
@@ -196,7 +180,7 @@ def _docker_exec_get(endpoint: str) -> tuple[int, str]:
             "-o",
             "-",
             "-w",
-            "\\n",
+            "\n",
             "-X",
             "GET",
             "--fail-with-body",
@@ -210,14 +194,7 @@ def _docker_exec_get(endpoint: str) -> tuple[int, str]:
 
 
 def _require_endpoint_ok(label: str, endpoint: str, retries: int = 1) -> None:
-    """Run a zero-body operator route; fail closed on nonzero exit.
-
-    ``retries`` applies a bounded re-probe with a short sleep to absorb
-    page-load timing (the first immediate probe after a navigation can return a
-    transient non-OK on the live worker). The route is idempotent and
-    operator-only, so exactly one successful call is the goal; a persistent
-    failure fails closed.
-    """
+    """Run a zero-body operator route; fail closed on persistent nonzero exit."""
     code = 1
     for attempt in range(retries):
         code, _body = _docker_exec_post(endpoint)
@@ -225,8 +202,6 @@ def _require_endpoint_ok(label: str, endpoint: str, retries: int = 1) -> None:
             return
         if attempt + 1 < retries:
             time.sleep(_DISCOVER_INTERVAL_S)
-    # Sanitized: no body, no URL, no selector. The endpoint constant is a
-    # fixed local route, not user input.
     sys.stderr.write(
         f"ERROR: operator step '{label}' failed (exit={code}); "
         "browser-worker rejected or unreachable.\n"
@@ -235,26 +210,14 @@ def _require_endpoint_ok(label: str, endpoint: str, retries: int = 1) -> None:
 
 
 def _discover_email_probe() -> tuple[int, str]:
-    """Probe discover-email once from inside the container (default probe).
-
-    The route is GET-only (POST is rejected 405), so this uses the GET helper.
-    """
+    """Probe discover-email once from inside the container (GET-only route)."""
     return _docker_exec_get(_DISCOVER_EMAIL)
 
 
 def _discover_email_gate(
     probe: Callable[[], tuple[int, str]] | None = None,
 ) -> bool:
-    """Probe discover-email a bounded number of times; require 2x UNIQUE_MATCH.
-
-    Returns True when both email keys report UNIQUE_MATCH (the deterministic
-    email-entry surface is present). Returns False on any NO_MATCH / AMBIGUOUS /
-    non-OK reading after the bounded probe window — the caller then fails
-    closed (STOP, never proceeds to submit). The probe is injectable for
-    tests; the default probes the live worker via the container loopback. The
-    probe is resolved at call time (not bound as a default argument) so an
-    operator may monkeypatch the module-level probe and have it honored.
-    """
+    """Probe discover-email a bounded number of times; require 2x UNIQUE_MATCH."""
     if probe is None:
         probe = _discover_email_probe
     for _ in range(_DISCOVER_PROBES):
@@ -272,8 +235,6 @@ def _discover_email_gate(
             isinstance(k, dict) and k.get("result") == "UNIQUE_MATCH" for k in keys
         ):
             return True
-        # Page-load timing can yield NO_MATCH on the first immediate probe; this
-        # is NOT the fail-closed STOP. Sleep once and re-probe within the bound.
         time.sleep(_DISCOVER_INTERVAL_S)
     return False
 
@@ -301,11 +262,7 @@ def _decrypt_credential(cred_name: str) -> str:
 
 
 def _run_in_container_submit(payload: str) -> tuple[int, str]:
-    """Hand the JSON payload to the in-container loopback submit client.
-
-    The two memory-only fields travel in the payload over docker exec **stdin**;
-    they never appear in argv or the environment of either process.
-    """
+    """Hand the JSON payload to the in-container loopback submit client."""
     proc = subprocess.run(  # noqa: S603 - fixed binary, fixed container, no shell
         [
             _DOCKER,
@@ -325,7 +282,7 @@ def _run_in_container_submit(payload: str) -> tuple[int, str]:
 
 
 def _submit_loopback(email: str, password: str) -> dict[str, object]:
-    """Decrypt-free submit of the two memory-only fields via in-container client."""
+    """Submit the two memory-only fields via the in-container loopback client."""
     payload = json.dumps({"email": email, "password": password})
     code, body = _run_in_container_submit(payload)
     if code == RunStatus.SUBMIT_REJECTED:
@@ -343,6 +300,104 @@ def _submit_loopback(email: str, password: str) -> dict[str, object]:
     return parsed
 
 
+def _observe_probe() -> tuple[int, str]:
+    """Read one sanitized post-submit auth observation from container loopback."""
+    return _docker_exec_get(_OBSERVE)
+
+
+def _notify_mfa_via_hermes(number: str) -> bool:
+    """Relay one already-sanitized MFA number through Hermes to Telegram.
+
+    Hermes owns the platform token and Telegram home-channel configuration. The
+    number travels in stdin, never argv. stdout/stderr are captured and ignored
+    so platform/config details cannot accidentally become M365 operator output.
+    """
+    message = (
+        "M365 — Aprova o início de sessão no Microsoft Authenticator "
+        f"com o número: {number}\n"
+    )
+    try:
+        proc = subprocess.run(  # noqa: S603 - fixed env command and fixed Hermes action
+            [
+                _ENV,
+                "hermes",
+                "send",
+                "--to",
+                "telegram",
+                "--quiet",
+                "--file",
+                "-",
+            ],
+            input=message,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
+def _await_mfa_and_authenticate(
+    probe: Callable[[], tuple[int, str]] | None = None,
+    notify: Callable[[str], bool] | None = None,
+) -> int:
+    """Poll sanitized auth state, relay unique MFA challenges, await human approval."""
+    if probe is None:
+        probe = _observe_probe
+    if notify is None:
+        notify = _notify_mfa_via_hermes
+
+    notified_numbers: set[str] = set()
+
+    for poll_index in range(_MFA_MAX_POLLS):
+        code, body = probe()
+        if code != 0:
+            return RunStatus.OBSERVE_FAILED
+        try:
+            data = json.loads(body)
+        except Exception:
+            return RunStatus.OBSERVE_FAILED
+        if not isinstance(data, dict):
+            return RunStatus.OBSERVE_FAILED
+
+        state = data.get("state")
+        number = data.get("mfa_number")
+        ambiguous = data.get("mfa_ambiguous")
+        if not isinstance(state, str) or not isinstance(ambiguous, bool):
+            return RunStatus.OBSERVE_FAILED
+        if number is not None and not isinstance(number, str):
+            return RunStatus.OBSERVE_FAILED
+
+        # Any ambiguity is terminal. Never guess or relay a candidate.
+        if ambiguous:
+            return RunStatus.MFA_AMBIGUOUS
+
+        if state == "AUTHENTICATED":
+            return RunStatus.OK
+
+        if state == "MFA_REQUIRED":
+            if number is None or len(number) != 2 or not number.isascii() or not number.isdigit():
+                return RunStatus.MFA_AMBIGUOUS
+            if number not in notified_numbers:
+                if not notify(number):
+                    return RunStatus.MFA_NOTIFY_FAILED
+                notified_numbers.add(number)
+        elif state in {"UNKNOWN", "WAITING_FOR_MFA"}:
+            # UNKNOWN can be a short-lived post-submit surface transition.
+            # WAITING_FOR_MFA means Microsoft is waiting for the human action.
+            pass
+        else:
+            # SESSION_EXPIRED, AUTH_REQUIRED, Conditional Access/method-selection
+            # projections, or any newly introduced state are not safe to infer.
+            return RunStatus.MFA_BLOCKED
+
+        if poll_index + 1 < _MFA_MAX_POLLS:
+            time.sleep(_MFA_POLL_INTERVAL_S)
+
+    return RunStatus.MFA_TIMEOUT
+
+
 def run_canonical() -> int:
     """Execute the deterministic canonical operator sign-in pipeline."""
     # 1) navigate (fixed Planner Web target)
@@ -358,9 +413,6 @@ def run_canonical() -> int:
         return RunStatus.BEGIN_SIGNIN_FAILED
 
     # 3) resolve-signin-surface (AUTH-109: force EMAIL_ENTRY, fixed action only)
-    #    Bounded re-probe absorbs page-load timing after the preceding
-    #    begin-signin navigation (a first immediate probe can transiently fail
-    #    on the live worker); a persistent failure fails closed.
     try:
         _require_endpoint_ok("resolve-signin-surface", _RESOLVE_SURFACE, retries=3)
     except _StepFailed:
@@ -406,8 +458,31 @@ def run_canonical() -> int:
         return RunStatus.BAD_RESPONSE
 
     auth_state = result.get("auth_state", "UNKNOWN")
-    sys.stdout.write(f"ok=true auth_state={auth_state}\n")
-    return RunStatus.OK
+    if not isinstance(auth_state, str):
+        return RunStatus.BAD_RESPONSE
+
+    # A pre-existing authenticated session requires no MFA relay. Otherwise the
+    # runner owns the bounded observe -> notify -> human approval -> authenticated
+    # lifecycle and does not return success merely because credential submit ran.
+    if auth_state == "AUTHENTICATED":
+        sys.stdout.write("ok=true auth_state=AUTHENTICATED\n")
+        return RunStatus.OK
+
+    final_status = _await_mfa_and_authenticate()
+    if final_status == RunStatus.OK:
+        sys.stdout.write("ok=true auth_state=AUTHENTICATED\n")
+        return RunStatus.OK
+    if final_status == RunStatus.OBSERVE_FAILED:
+        sys.stderr.write("ERROR: sanitized MFA observation failed; authentication stopped.\n")
+    elif final_status == RunStatus.MFA_AMBIGUOUS:
+        sys.stderr.write("ERROR: MFA challenge was ambiguous or invalid; nothing was relayed.\n")
+    elif final_status == RunStatus.MFA_NOTIFY_FAILED:
+        sys.stderr.write("ERROR: Hermes Telegram MFA notification failed; authentication stopped.\n")
+    elif final_status == RunStatus.MFA_TIMEOUT:
+        sys.stderr.write("ERROR: MFA approval window expired before authentication completed.\n")
+    else:
+        sys.stderr.write("ERROR: unsupported post-submit authentication state; stopped fail-closed.\n")
+    return final_status
 
 
 def main(argv: list[str]) -> int:
