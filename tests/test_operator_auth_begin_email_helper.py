@@ -182,6 +182,6 @@ def test_fixed_targets_are_not_configurable(helper: Any) -> None:
     # No environment-driven override of store, route or container.
     assert "os.getenv" not in source
     assert "os.environ" not in source
-    assert helper._WORKER_CONTAINER == "m365-ui-mcp-browser-worker-1"
+    assert helper._WORKER_CONTAINER == "planner-mcp-browser-worker-1"
     assert helper._WORKER_ENDPOINT.startswith("http://127.0.0.1:8090/")
     assert subprocess is not None

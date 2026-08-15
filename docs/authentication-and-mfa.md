@@ -331,7 +331,7 @@ exactly one narrowly-scoped mechanism for that, and it is operator-only:
   only. No URL, DOM, page text, cookie, token, UPN, tenant id, Planner/mailbox data or browser handle.
 * Invocation: the operator wrapper `scripts/operator_auth_bootstrap_navigate.sh`, which accepts no
   arguments and reaches the endpoint through
-  `docker exec m365-ui-mcp-browser-worker-1 curl -X POST http://127.0.0.1:8090/auth/bootstrap/navigate`.
+  `docker exec planner-mcp-browser-worker-1 curl -X POST http://127.0.0.1:8090/auth/bootstrap/navigate`.
 
 **AUTH-096 — Fixed-target begin-signin (two-step operator flow).** The dedicated
 persistent professional profile begins an interactive Microsoft sign-in in exactly

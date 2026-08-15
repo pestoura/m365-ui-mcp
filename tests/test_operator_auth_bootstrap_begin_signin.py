@@ -575,7 +575,7 @@ def test_operator_wrapper_shape() -> None:
     assert os.access(script, os.X_OK)
     text = script.read_text(encoding="utf-8")
     assert "docker exec" in text
-    assert "m365-ui-mcp-browser-worker-1" in text
+    assert "planner-mcp-browser-worker-1" in text
     assert "127.0.0.1:8090/auth/bootstrap/begin-signin" in text
     # No URL/host/path argument may be accepted from the operator.
     assert '"$1"' not in text
@@ -601,7 +601,7 @@ def test_runbook_documents_begin_signin_invocation() -> None:
     text = (ROOT / "docs" / "authentication-and-mfa.md").read_text(encoding="utf-8")
     assert "AUTH-096" in text
     assert "scripts/operator_auth_bootstrap_begin_signin.sh" in text
-    assert "docker exec m365-ui-mcp-browser-worker-1" in text
+    assert "docker exec planner-mcp-browser-worker-1" in text
     assert "127.0.0.1:8090/auth/bootstrap/begin-signin" in text
 
 

@@ -23,7 +23,7 @@
 #   scripts/operator_auth_bootstrap_begin_signin.sh
 set -euo pipefail
 
-CONTAINER="m365-ui-mcp-browser-worker-1"
+CONTAINER="planner-mcp-browser-worker-1"
 ENDPOINT="http://127.0.0.1:8090/auth/bootstrap/begin-signin"
 
 if [ "$#" -ne 0 ]; then
