@@ -43,8 +43,11 @@ from m365_browser_worker.operator_signin import (
     common_auth_locator_plan,
 )
 from m365_browser_worker.signin_surface import (
+    AUTH_DIAGNOSE_OPERATION,
     AUTH_RESOLVE_OPERATION,
     SigninSurfaceKind,
+    SurfaceClassification,
+    classify_signin_surface,
     resolve_signin_surface_to_email_entry,
 )
 from m365_mcp.config import browser_runtime_settings
@@ -554,6 +557,45 @@ class PersistentBrowser:
             "manual operator intervention required",
             operation=AUTH_RESOLVE_OPERATION,
         )
+
+    async def diagnose_signin_surface(self) -> SurfaceClassification:
+        """READ-ONLY closed classification of the current sign-in surface.
+
+        Operator-only deterministic diagnosis twin of ``resolve_signin_surface``.
+        It runs the SAME guard chain (started live browser, dedicated persistent
+        professional profile, approved Microsoft authentication origin, exactly
+        one open auth page) but performs NO click — it reads the bounded visible
+        body text once and returns only the closed ``SurfaceClassification``.
+        This lets a run report the exact closed surface kind when the mutating
+        resolver would fail closed, without guessing and without acting.
+
+        Fail-closed contract (identical safety shape to the resolver, minus the
+        click): any guard failure raises and returns nothing; no URL/DOM/page
+        text/cookie/token/UPN/tenant/account identifier is ever returned.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "sign-in surface diagnosis requires a started live browser",
+                operation=AUTH_DIAGNOSE_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "sign-in surface diagnosis requires the dedicated persistent "
+                "professional browser profile",
+                operation=AUTH_DIAGNOSE_OPERATION,
+            )
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "sign-in surface diagnosis requires the page to be on an "
+                "approved Microsoft authentication origin",
+                operation=AUTH_DIAGNOSE_OPERATION,
+            )
+
+        # Enforce exactly one open auth page before the bounded read.
+        self._require_single_auth_page()
+        # Bounded, read-only text read; never logs or returns the text.
+        text = await self.read_visible_body_bounded(max_chars=2000)
+        return classify_signin_surface(text)
 
     def signin_surface_resolved(self) -> bool:
         """Return whether the pre-email sign-in surface was resolved to EMAIL_ENTRY.

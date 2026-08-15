@@ -41,6 +41,7 @@ from planner_mcp.worker_client import WorkerClient
 
 ROOT = Path(__file__).resolve().parent.parent
 RESOLVE_PATH = "/auth/bootstrap/resolve-signin-surface"
+DIAGNOSE_PATH = "/auth/bootstrap/diagnose-signin-surface"
 
 
 # --------------------------------------------------------------------------
@@ -291,3 +292,150 @@ def test_worker_client_has_no_resolve_proxy() -> None:
     assert not [a for a in attributes if "resolve_signin_surface" in a]
     source = (ROOT / "src" / "planner_mcp" / "worker_client.py").read_text(encoding="utf-8")
     assert RESOLVE_PATH not in source
+
+
+# --------------------------------------------------------------------------
+# READ-ONLY diagnose route (AUTH-109-diagnose): classify-only, never click
+# --------------------------------------------------------------------------
+
+
+class _DiagnoseBrowser:
+    """Duck-typed PersistentBrowser exposing the AUTH-109-diagnose surface."""
+
+    def __init__(
+        self,
+        *,
+        started: bool = True,
+        dedicated: bool = True,
+        origin_approved: bool = True,
+        pages: list[_FakePage] | None = None,
+        classification: SigninSurfaceKind | None = None,
+        raises: type[Exception] | None = None,
+    ) -> None:
+        self._started = started
+        self._dedicated = dedicated
+        self._origin_approved = origin_approved
+        self._classification = classification or SigninSurfaceKind.EMAIL_ENTRY
+        self._raises = raises
+        self.diagnose_calls = 0
+
+    @property
+    def started(self) -> bool:
+        return self._started
+
+    def is_dedicated_persistent_profile(self) -> bool:
+        return self._dedicated
+
+    def auth_origin_approved(self) -> bool:
+        return self._origin_approved
+
+    def ensure_live_allowed(self, operation: str) -> None:  # pragma: no cover
+        raise AssertionError("AUTH-109-diagnose must not invoke the full live guard")
+
+    async def diagnose_signin_surface(self):
+        if self._raises is not None:
+            raise self._raises("diagnose blocked", operation="auth_diagnose_signin_surface")
+        self.diagnose_calls += 1
+        # Minimal stub: the real method returns a SurfaceClassification; the
+        # route only reads `.kind.value` and `.email_entry_present`.
+        from m365_browser_worker.signin_surface import SurfaceClassification
+
+        return SurfaceClassification(self._classification, email_entry_present=True)
+
+
+async def test_diagnose_loopback_peer_accepted(live_env) -> None:
+    browser = _DiagnoseBrowser(pages=[_FakePage("https://login.microsoftonline.com/")])
+    app = create_app(browser=browser)
+    async with _client(app) as client:
+        response = await client.get(DIAGNOSE_PATH)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["surface"] == SigninSurfaceKind.EMAIL_ENTRY.value
+    assert body["email_entry_present"] is True
+    assert browser.diagnose_calls == 1
+
+
+async def test_diagnose_docker_network_peer_denied(live_env) -> None:
+    browser = _DiagnoseBrowser(pages=[_FakePage("https://login.microsoftonline.com/")])
+    app = create_app(browser=browser)
+    async with _client(app, peer=("172.18.0.5", 5555)) as client:
+        response = await client.get(DIAGNOSE_PATH)
+    assert response.status_code == 404
+    assert browser.diagnose_calls == 0
+
+
+async def test_diagnose_query_string_rejected(live_env) -> None:
+    browser = _DiagnoseBrowser(pages=[_FakePage("https://login.microsoftonline.com/")])
+    app = create_app(browser=browser)
+    async with _client(app) as client:
+        response = await client.get(f"{DIAGNOSE_PATH}?x=1")
+    assert response.status_code == 400
+    assert browser.diagnose_calls == 0
+
+
+async def test_diagnose_body_rejected(live_env) -> None:
+    browser = _DiagnoseBrowser(pages=[_FakePage("https://login.microsoftonline.com/")])
+    app = create_app(browser=browser)
+    async with _client(app) as client:
+        response = await client.request("POST", DIAGNOSE_PATH)
+    # GET-only: a POST is rejected by the framework before reaching the handler.
+    assert response.status_code in (404, 405)
+    assert browser.diagnose_calls == 0
+
+
+async def test_diagnose_not_started_fails_closed(live_env) -> None:
+    browser = _DiagnoseBrowser(started=False)
+    app = create_app(browser=browser)
+    async with _client(app) as client:
+        response = await client.get(DIAGNOSE_PATH)
+    assert response.status_code == 503
+    assert browser.diagnose_calls == 0
+
+
+async def test_diagnose_wrong_profile_fails_closed(live_env) -> None:
+    browser = _DiagnoseBrowser(dedicated=False)
+    app = create_app(browser=browser)
+    async with _client(app) as client:
+        response = await client.get(DIAGNOSE_PATH)
+    assert response.status_code == 503
+    assert browser.diagnose_calls == 0
+
+
+async def test_diagnose_response_leaks_no_secret_or_url(live_env) -> None:
+    browser = _DiagnoseBrowser(pages=[_FakePage("https://login.microsoftonline.com/")])
+    app = create_app(browser=browser)
+
+    async def _run() -> str:
+        async with _client(app) as client:
+            response = await client.get(DIAGNOSE_PATH)
+        return response.text.lower()
+
+    body = await _run()
+    for forbidden in (
+        "login.microsoftonline.com",
+        "http",
+        "cookie",
+        "token",
+        "upn",
+        "tenant",
+        "bearer",
+        "password",
+        "use another account",
+        "<html",
+    ):
+        assert forbidden not in body
+
+
+def test_diagnose_endpoint_absent_from_mcp_tool_catalog() -> None:
+    from m365_mcp.tool_registry import default_tool_registry
+
+    names = set(default_tool_registry().names())
+    assert not [n for n in names if "diagnose" in n and "signin" in n]
+
+
+def test_worker_client_has_no_diagnose_proxy() -> None:
+    attributes = dir(WorkerClient)
+    assert not [a for a in attributes if "diagnose_signin_surface" in a]
+    source = (ROOT / "src" / "planner_mcp" / "worker_client.py").read_text(encoding="utf-8")
+    assert DIAGNOSE_PATH not in source

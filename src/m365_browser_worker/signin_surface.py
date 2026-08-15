@@ -31,9 +31,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-# Worker-local operation name for the operator-only resolver endpoint. Used only
-# for sanitized fail-closed detail/observability.
+# Worker-local operation names for the operator-only sign-in surface endpoints.
+# Used only for sanitized fail-closed detail/observability. The diagnose
+# operation is the READ-ONLY twin of the resolve operation: same admission and
+# guard chain, no click.
 AUTH_RESOLVE_OPERATION = "auth_resolve_signin_surface"
+AUTH_DIAGNOSE_OPERATION = "auth_diagnose_signin_surface"
 
 
 class SigninSurfaceKind(StrEnum):
@@ -212,6 +215,31 @@ async def click_use_another_account(page: Any) -> bool:
     return False
 
 
+async def diagnose_signin_surface(
+    page: Any, read_text: Any
+) -> SurfaceClassification:
+    """READ-ONLY closed classification of the live pre-email sign-in surface.
+
+    This is the deterministic, non-mutating twin of
+    ``resolve_signin_surface_to_email_entry``: it reads the bounded visible body
+    text exactly once and returns ONLY the closed ``SurfaceClassification``
+    (``kind`` + ``email_entry_present``). It NEVER clicks, selects, types,
+    navigates, or otherwise changes the page. It is the operator-only diagnosis
+    primitive that lets a run report the exact closed surface kind when the
+    mutating resolver would fail closed — without guessing and without acting.
+
+    Security shape (mirrors the resolver, minus the click):
+
+    * classification is bounded and value-free; it never returns URLs, DOM,
+      page text, account identifiers, UPNs or tenant ids;
+    * no action is taken; the only possible side effect is the bounded internal
+      text read already guarded by ``read_visible_body_bounded``;
+    * it fails closed on an empty reading (``UNKNOWN``) like the resolver.
+    """
+    text = await read_text()
+    return classify_signin_surface(text)
+
+
 async def resolve_signin_surface_to_email_entry(
     page: Any, read_text: Any
 ) -> SigninSurfaceResolution:
@@ -259,5 +287,6 @@ __all__ = [
     "USE_ANOTHER_ACCOUNT_LABELS",
     "classify_signin_surface",
     "click_use_another_account",
+    "diagnose_signin_surface",
     "resolve_signin_surface_to_email_entry",
 ]
