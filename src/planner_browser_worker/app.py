@@ -417,6 +417,12 @@ def create_app(
           target and existing auth-origin approval for that target. There is no
           URL input, so Graph/API/non-HTTPS targets are impossible;
         * navigates exactly once, no retry. No DOM/content exposure;
+        * AUTH-113 landing gate: returns success ONLY after the navigated page
+          has actually established an approved Microsoft authentication origin.
+          A page still on ``about:blank`` / a neutral placeholder / a
+          non-approved origin (aborted or blocked redirect, offline target, or a
+          stale dedicated page) fails closed with ``503 POLICY_DENIED``
+          and is NEVER reported as ``target_class:microsoft_auth``;
         * returns only ``{ok:true, target_class:"microsoft_auth", auth_state}``.
           No URL, DOM, page text, cookie, token, UPN, tenant id, Planner/mailbox
           data or browser handle.
@@ -724,6 +730,12 @@ def create_app(
           ``common.auth`` sign-in selectors, resolved from the attested UIContract
           store (no locator guessing). A non-attested ``common.auth`` fails closed
           and types nothing.
+        * AUTH-112 surface gate: the pre-email sign-in surface MUST have been
+          deterministically resolved to ``EMAIL_ENTRY`` via the operator-only
+          ``POST /auth/bootstrap/resolve-signin-surface`` route immediately before
+          this one. A direct submit after ``begin-signin`` (which can recreate the
+          account chooser) is refused with ``503 SIGNIN_SURFACE_NOT_RESOLVED`` and
+          types nothing — this is the canonical fix for the email NO_MATCH bug.
         * There is no submit click: automation never satisfies MFA. The human
           completes MFA in Microsoft Authenticator; the browser observes the state.
         * Returns only ``{ok, auth_state}``. No value, URL, DOM, cookie, token,
@@ -765,6 +777,22 @@ def create_app(
                 detail={
                     "error": "NOT_ATTESTED",
                     "message": "common.auth UIContract not attested; operator submit refused",
+                },
+            )
+
+        if not _is_mock() and not worker_browser.signin_surface_resolved():
+            # AUTH-112: the pre-email sign-in surface MUST have been
+            # deterministically resolved to EMAIL_ENTRY before credentials are
+            # applied. This is the server-side enforcement of the conductor's
+            # resolve->submit ordering; it fails closed on ANY other surface so
+            # a direct operator-submit after begin-signin (account-chooser
+            # recreation) cannot cause an email NO_MATCH. (Route docstring.)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "SIGNIN_SURFACE_NOT_RESOLVED",
+                    "message": "pre-email sign-in surface not resolved to EMAIL_ENTRY;"
+                    " run resolve-signin-surface first",
                 },
             )
 

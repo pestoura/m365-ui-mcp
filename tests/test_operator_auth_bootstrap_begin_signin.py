@@ -62,13 +62,18 @@ BEGIN_SIGNIN_PATH = "/auth/bootstrap/begin-signin"
 
 
 class _FakePage:
-    def __init__(self, url: str = "about:blank") -> None:
+    def __init__(self, url: str = "about:blank", landing_url: str | None = None) -> None:
         self.url = url
+        # When set, ``goto`` leaves the page on ``landing_url`` instead of the
+        # target — used to simulate a navigation that does not commit (the
+        # AUTH-113 about:blank / stale-page defect). None means a normal
+        # successful navigation to the target.
+        self.landing_url = landing_url
         self.goto_calls: list[str] = []
 
     async def goto(self, url: str) -> None:
         self.goto_calls.append(url)
-        self.url = url
+        self.url = self.landing_url if self.landing_url is not None else url
 
 
 class _FakeContext:
@@ -691,3 +696,150 @@ def test_begin_signin_introduces_no_credential_fill_click_type() -> None:
         assert forbidden not in source
     # The only browser action permitted is a single closed-target navigation.
     assert "page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)" in source
+
+
+# --------------------------------------------------------------------------
+# AUTH-113: begin-signin landing verification (fail-closed on about:blank / stale)
+# --------------------------------------------------------------------------
+
+
+def test_landing_on_approved_auth_origin_succeeds() -> None:
+    # AUTH-113: when the dedicated page actually lands on the approved Microsoft
+    # auth origin, begin-signin returns without raising. Reuse the existing
+    # planner_web page (single-page topology) so the navigated page is pages[0].
+    context = _FakeContext([_FakePage("https://planner.cloud.microsoft/")])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    asyncio.run(browser.begin_auth_signin())
+    assert context.pages[0].goto_calls == [MICROSOFT_AUTH_BOOTSTRAP_URL]
+    assert context.pages[0].url == "https://login.microsoftonline.com/"
+    assert context.new_page_calls == 0
+
+
+def test_landing_still_about_blank_fails_closed() -> None:
+    # AUTH-113 (the reported defect): the page remained about:blank after the
+    # single navigation (aborted/stale dedicated page), so begin-signin MUST NOT
+    # report success. It fails closed even though the source classifier accepted
+    # the neutral placeholder up front.
+    context = _FakeContext([_FakePage("about:blank", landing_url="about:blank")])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+    # The navigation DID happen (Playwright returned the stale page), but the
+    # landing gate refused to report success.
+    assert context.pages[0].goto_calls == [MICROSOFT_AUTH_BOOTSTRAP_URL]
+    assert context.new_page_calls == 0
+
+
+def test_landing_on_neutral_placeholder_fails_closed() -> None:
+    # AUTH-113: a page that navigates to chrome://newtab (still neutral) is NOT
+    # an approved auth origin and must fail closed.
+    context = _FakeContext([_FakePage("about:blank", landing_url="chrome://newtab")])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+
+
+def test_landing_on_non_approved_origin_fails_closed() -> None:
+    # AUTH-113: a blocked/stray redirect to an arbitrary web origin must fail
+    # closed, never reporting target_class=microsoft_auth.
+    context = _FakeContext([_FakePage("about:blank", landing_url="https://example.com/blocked")])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+
+
+def test_landing_gate_uses_navigated_page_not_stale_reference() -> None:
+    # AUTH-113: the gate reads url from the SAME page object that was navigated.
+    # If the context held a stale about:blank page that was reused, the check is
+    # against its post-goto url, not a cached snapshot.
+    stale = _FakePage("about:blank", landing_url="about:blank")
+    context = _FakeContext([stale])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    # Reused neutral page whose goto leaves it on about:blank -> fails closed.
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+    assert stale.goto_calls == [MICROSOFT_AUTH_BOOTSTRAP_URL]
+
+
+@pytest.mark.parametrize(
+    "landing_url",
+    [
+        "https://login.microsoftonline.com/",
+        "https://login.live.com/",
+        "https://login.microsoft.com/",
+        "https://account.microsoft.com/",
+        "https://entra.microsoft.com/",
+    ],
+)
+def test_approved_auth_landing_hosts_are_accepted(landing_url: str) -> None:
+    # AUTH-113: every host in the closed auth-origin allowlist lands successfully.
+    context = _FakeContext([_FakePage("about:blank", landing_url=landing_url)])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    asyncio.run(browser.begin_auth_signin())
+    assert context.pages[0].goto_calls == [MICROSOFT_AUTH_BOOTSTRAP_URL]
+    assert context.pages[0].url == landing_url
+
+
+async def test_route_reports_success_only_on_approved_landing(live_env) -> None:
+    # AUTH-113 end-to-end at the route: a real browser whose dedicated page
+    # still reports about:blank after begin-signin MUST NOT return 200 /
+    # target_class=microsoft_auth. The route maps PolicyDenied -> 503.
+    class _StaleLandingBrowser:
+        def __init__(self) -> None:
+            profile_dir, _h, _m = browser_runtime_settings()
+            self._inner = _started_production_browser()
+            self._inner._context = _FakeContext(  # noqa: SLF001
+                [_FakePage("about:blank", landing_url="about:blank")]
+            )
+            self._inner.config = BrowserConfig(profile_dir=profile_dir, mode="live")
+
+        @property
+        def started(self) -> bool:
+            return True
+
+        def is_dedicated_persistent_profile(self) -> bool:
+            return True
+
+        def begin_signin_source_permitted(self) -> bool:
+            return True
+
+        def auth_origin_approved(self) -> bool:
+            return True
+
+        def common_auth_attested(self) -> bool:
+            return False
+
+        def full_attested(self) -> bool:
+            return False
+
+        def ensure_live_allowed(self, operation: str) -> None:
+            from planner_mcp.errors import UiContractUnattested
+
+            raise UiContractUnattested(f"blocked {operation}")
+
+        async def begin_auth_signin(self) -> None:
+            # Mirror production source/state checks then drive the REAL
+            # production transition, which now applies the AUTH-113 landing gate.
+            from m365_browser_worker.bootstrap_navigation import (
+                evaluate_microsoft_auth_target,
+            )
+
+            target_decision = evaluate_microsoft_auth_target()
+            if not target_decision.allowed:
+                from planner_mcp.errors import PolicyDenied
+
+                raise PolicyDenied("egress denied", operation="auth_begin_signin")
+            await self._inner.begin_auth_signin()
+
+    app = create_app(browser=_StaleLandingBrowser())  # type: ignore[arg-type]
+    async with _client(app) as client:
+        response = await client.post(BEGIN_SIGNIN_PATH)
+    assert response.status_code == 503
+    assert response.json()["detail"]["error"] == "POLICY_DENIED"
+    assert "microsoft_auth" not in response.text.lower()

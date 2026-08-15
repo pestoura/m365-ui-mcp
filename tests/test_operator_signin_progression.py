@@ -187,6 +187,11 @@ class _Scenario:
         )
         # The dedicated-profile gate is satisfied by the test profile.
         self.browser.is_dedicated_persistent_profile = lambda: True  # type: ignore[method-assign]
+        # AUTH-112: the surface latch must be set for the existing progression
+        # properties to hold (submit applies credentials only after the surface
+        # is resolved to EMAIL_ENTRY). The latch is exercised directly by the
+        # dedicated AUTH-112 tests below.
+        self.browser._signin_surface_resolved = True  # type: ignore[attr-defined]
 
         if origin_after_next_lost:
             state = {"calls": 0}

@@ -115,12 +115,14 @@ class _OperatorSubmitBrowser:
         dedicated: bool = True,
         origin_approved: bool = True,
         auth_attested: bool = True,
+        surface_resolved: bool = True,
         pages: list[_FakePage] | None = None,
     ) -> None:
         self._started = started
         self._dedicated = dedicated
         self._origin_approved = origin_approved
         self._auth_attested = auth_attested
+        self._surface_resolved = surface_resolved
         self.context = _FakeContext(pages)
         self.submit_calls: list[OperatorSignInInput] = []
 
@@ -136,6 +138,11 @@ class _OperatorSubmitBrowser:
 
     def common_auth_attested(self) -> bool:
         return self._auth_attested
+
+    def signin_surface_resolved(self) -> bool:
+        # AUTH-112 surface-latch read accessor (mirrors production). Defaults
+        # True so the pre-gate submit tests still exercise a resolved surface.
+        return self._surface_resolved
 
     def ensure_live_allowed(self, operation: str) -> None:
         """No-op for the test fake; real browser enforces a live guard."""
@@ -232,6 +239,26 @@ async def test_query_string_rejected(live_env) -> None:
             json={"email": "a@b.com", "password": "secret"},
         )
     assert response.status_code == 400
+    assert browser.submit_calls == []
+
+
+async def test_submit_requires_resolved_signin_surface(live_env) -> None:
+    # AUTH-112 surface gate: operator-submit must refuse when the pre-email
+    # sign-in surface has NOT been resolved to EMAIL_ENTRY (a direct submit
+    # after begin-signin, which can recreate the account chooser, must not apply
+    # credentials against a non-email-entry surface). Codes 503 and types
+    # nothing.
+    browser = _OperatorSubmitBrowser(
+        pages=[_FakePage("https://login.microsoftonline.com/")],
+        surface_resolved=False,
+    )
+    app = create_app(browser=browser)
+    async with _client(app) as client:
+        response = await client.post(
+            OPERATOR_SUBMIT_PATH, json={"email": "a@b.com", "password": "secret"}
+        )
+    assert response.status_code == 503
+    assert response.json()["detail"]["error"] == "SIGNIN_SURFACE_NOT_RESOLVED"
     assert browser.submit_calls == []
 
 

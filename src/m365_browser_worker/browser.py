@@ -109,6 +109,16 @@ class PersistentBrowser:
         self.config = config or BrowserConfig.from_env()
         self._playwright: Any = None
         self._context: Any = None
+        # AUTH-112 surface latch. ``operator-submit`` MAY only apply the
+        # credential fields after the pre-email sign-in surface has been
+        # deterministically resolved to ``EMAIL_ENTRY`` via
+        # ``resolve_signin_surface``. ``begin_auth_signin`` resets it because a
+        # post-begin surface (account chooser / "use another account" prompt) is
+        # NOT the email-entry field, and submitting against it causes an
+        # email NO_MATCH. The latch is monotonically conservative: it is set
+        # only by a successful resolve and cleared by any begin-signin that may
+        # recreate an intermediate surface. It never carries identity/DOM/URL.
+        self._signin_surface_resolved: bool = False
 
     @property
     def started(self) -> bool:
@@ -323,6 +333,50 @@ class PersistentBrowser:
         # Exactly one navigation per operator call; no retry loop.
         await page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)
 
+        # AUTH-112: a (re)navigation to the Microsoft auth target may recreate a
+        # pre-email intermediate surface (account chooser / "use another
+        # account" prompt) rather than the email-entry field. Reset the
+        # surface latch so a later ``operator-submit`` cannot apply credentials
+        # against a non-email-entry surface (which previously caused an email
+        # NO_MATCH). The latch is only re-set by a successful
+        # ``resolve_signin_surface``.
+        self._signin_surface_resolved = False
+
+        # AUTH-113: the single navigation may have resolved WITHOUT the page
+        # actually establishing an approved Microsoft auth origin — an aborted /
+        # blocked redirect, an offline target, or a stale dedicated page left on
+        # ``about:blank``. Reporting success in that case is the navigation /
+        # lifecycle correctness defect: the endpoint must NOT return
+        # target_class=microsoft_auth while the actual page is still
+        # about:blank / a neutral placeholder / a non-approved origin. Verify
+        # the REAL landing origin on the exact page object that was navigated
+        # (no stale reference) using the closed auth-origin policy. The URL is
+        # reduced to a closed classification and never returned to a caller.
+        await self._require_landed_on_approved_auth_origin(page)
+
+    async def _require_landed_on_approved_auth_origin(self, page: Any) -> None:
+        """Fail closed unless ``page`` now sits on an approved Microsoft auth origin.
+
+        AUTH-113: called immediately after the single ``page.goto`` in
+        ``begin_auth_signin``. The URL is read from the SAME page object that was
+        navigated (never a stale reference), so a page that is still on
+        ``about:blank`` / a neutral placeholder, or that landed on any
+        non-allowlisted / non-approved web origin, cannot be reported as a
+        successful Microsoft auth sign-in transition. The page URL is reduced to
+        the closed ``auth_origin_status`` classification and is never returned to
+        a caller, so no URL, DOM, cookie, token, UPN or tenant id leaves this
+        method. The navigation itself has already been awaited by the caller, so
+        this is a pure post-landing assertion against live page state.
+        """
+        raw = str(getattr(page, "url", "") or "")
+        status = auth_origin_status((raw,))
+        if status is not AuthOriginStatus.APPROVED_AUTH_ORIGIN:
+            raise PolicyDenied(
+                "begin sign-in navigation did not establish an approved "
+                "Microsoft authentication origin; refusing to report success",
+                operation=AUTH_BEGIN_SIGNIN_OPERATION,
+            )
+
     async def begin_email_stage(self, email: str) -> None:
         """Pre-attestation operator email stage: fill email, click Next only.
 
@@ -476,18 +530,41 @@ class PersistentBrowser:
             return await self.read_visible_body_bounded(max_chars=2000)
 
         resolution = await resolve_signin_surface_to_email_entry(page, _read)
-        if resolution.kind not in (
-            SigninSurfaceKind.EMAIL_ENTRY,
+        if resolution.kind is SigninSurfaceKind.EMAIL_ENTRY:
+            # AUTH-112: the email-entry surface is deterministically present, so
+            # a subsequent ``operator-submit`` may apply the credential fields.
+            # The latch is set ONLY here; ``begin_auth_signin`` clears it and a
+            # non-email-entry resolution leaves it cleared (fail closed).
+            self._signin_surface_resolved = True
+            return
+        if resolution.kind in (
             SigninSurfaceKind.ACCOUNT_CHOOSER,
             SigninSurfaceKind.USE_ANOTHER_ACCOUNT_PROMPT,
         ):
-            # Not a deterministic forwardable surface; fail closed without
-            # selecting any cached identity or guessing a control.
-            raise PolicyDenied(
-                "sign-in surface is not a deterministic pre-email stage; "
-                "manual operator intervention required",
-                operation=AUTH_RESOLVE_OPERATION,
-            )
+            # The forwarded intermediate surface is still NOT the email-entry
+            # field; keep the latch cleared so submit fails closed until the
+            # surface is actually EMAIL_ENTRY.
+            self._signin_surface_resolved = False
+            return
+        # Not a deterministic forwardable surface; fail closed without
+        # selecting any cached identity or guessing a control.
+        self._signin_surface_resolved = False
+        raise PolicyDenied(
+            "sign-in surface is not a deterministic pre-email stage; "
+            "manual operator intervention required",
+            operation=AUTH_RESOLVE_OPERATION,
+        )
+
+    def signin_surface_resolved(self) -> bool:
+        """Return whether the pre-email sign-in surface was resolved to EMAIL_ENTRY.
+
+        AUTH-112 surface-latch read accessor. ``True`` only after a successful
+        ``resolve_signin_surface`` (EMAIL_ENTRY); ``False`` by default and after
+        any ``begin_auth_signin`` (which may recreate an intermediate surface).
+        This is the gate ``operator-submit`` consults before applying the two
+        memory-only credential fields. It never exposes identity/DOM/URL.
+        """
+        return self._signin_surface_resolved
 
     async def submit_operator_signin(self, signin: OperatorSignInInput) -> None:
         """Apply the operator-sign-in fields to the Microsoft sign-in page in sequence.
@@ -547,6 +624,24 @@ class PersistentBrowser:
                 "operator sign-in requires the common.auth UIContract fragments "
                 "(common.auth.email and common.auth.password) to be attested "
                 "before any sign-in field may be applied",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+
+        # AUTH-112: the email-entry surface MUST have been deterministically
+        # resolved BEFORE any credential field is applied. This is the minimal
+        # canonical fix for the bug where a rerun reached ``operator-submit``
+        # directly after ``begin-signin`` (which can recreate the account
+        # chooser) and submitted against a non-email-entry surface, causing an
+        # email NO_MATCH. The latch is set ONLY by a successful
+        # ``resolve_signin_surface`` (EMAIL_ENTRY) and cleared by any
+        # ``begin_auth_signin`` (which may recreate an intermediate surface).
+        # Fail closed on any other surface — never guess, never skip the
+        # resolver.
+        if not self._signin_surface_resolved:
+            raise PolicyDenied(
+                "operator sign-in requires the pre-email sign-in surface to be "
+                "resolved to EMAIL_ENTRY via resolve-signin-surface before any "
+                "credential is applied",
                 operation=AUTH_OPERATOR_SUBMIT_OPERATION,
             )
 
