@@ -47,7 +47,7 @@ def _load_compose_config() -> dict:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
     # Fall back to raw YAML parse (compose short/long syntax is valid YAML).
-    with open(COMPOSE_FILE, "r", encoding="utf-8") as fh:
+    with open(COMPOSE_FILE, encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
 
@@ -118,7 +118,7 @@ def test_overlay_preserves_canonical_worker_dns():
     overlay = REPO_ROOT / "compose.live.yml"
     if not overlay.exists():
         pytest.skip("no compose.live.yml overlay present")
-    with open(overlay, "r", encoding="utf-8") as fh:
+    with open(overlay, encoding="utf-8") as fh:
         overlay_cfg = yaml.safe_load(fh)
     cp_env = overlay_cfg.get("services", {}).get("control-plane", {}).get(
         "environment", {}
