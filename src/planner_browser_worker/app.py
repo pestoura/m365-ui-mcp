@@ -11,7 +11,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from m365_browser_worker.account_context import AccountContext, unverified_account_context
+from m365_browser_worker.account_context import (
+    AccountContext,
+    live_account_context,
+    unverified_account_context,
+)
 from m365_browser_worker.apps.planner import PlannerWorkerAdapter
 from m365_browser_worker.auth_bootstrap import AuthBootstrapGuard
 from m365_browser_worker.bootstrap_discovery import (
@@ -113,8 +117,8 @@ def create_app(
     session_broker = broker or SessionCapabilityBroker(
         browser=worker_browser,
         registry=default_capability_registry(),
-        auth_state_provider=current_auth_state,
-        account_context_provider=current_account_context,
+        auth_state_provider=lambda: live_auth_state(),
+        account_context_provider=lambda: live_account_context(worker_browser),
     )
     broker_viable = broker_viability_provider or (lambda: session_broker.viable)
     protocol_compatible = protocol_compatibility_provider or (lambda: worker_protocol.compatible)

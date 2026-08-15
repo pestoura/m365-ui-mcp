@@ -63,6 +63,15 @@ class _FakeBrowser:
     def common_auth_attested(self) -> bool:
         return self._auth_attested
 
+    def planner_web_surface_present(self) -> bool:
+        # The matrix tests exercise the auth-state/UIContract gates, not the
+        # post-MFA surface promotion; the positive Planner Web surface signal
+        # is intentionally not modeled here (the account context is injected
+        # explicitly via account_context_provider in _make_live_app). Returning
+        # False keeps live_account_context fail-closed to UNVERIFIED unless a
+        # test injects its own provider.
+        return False
+
     def ensure_live_allowed(self, operation: str) -> None:
         if not self._full_attested:
             raise UiContractUnattested(f"blocked {operation}")
