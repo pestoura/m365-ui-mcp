@@ -36,6 +36,8 @@ _WORKER_CONTAINER = "planner-mcp-browser-worker-1"
 _NAVIGATE = "http://127.0.0.1:8090/auth/bootstrap/navigate"
 _BEGIN_SIGNIN = "http://127.0.0.1:8090/auth/bootstrap/begin-signin"
 _RESOLVE_SURFACE = "http://127.0.0.1:8090/auth/bootstrap/resolve-signin-surface"
+_RESOLVE_KMSI = "http://127.0.0.1:8090/auth/bootstrap/resolve-kmsi-surface"
+_DIAGNOSE_SURFACE = "http://127.0.0.1:8090/auth/bootstrap/diagnose-signin-surface"
 _OPERATOR_SUBMIT = "http://127.0.0.1:8090/auth/bootstrap/operator-submit"
 _DISCOVER_EMAIL = "http://127.0.0.1:8090/auth/bootstrap/discover-email"
 _OBSERVE = "http://127.0.0.1:8090/auth/bootstrap/observe"
@@ -306,6 +308,7 @@ def _await_mfa_and_authenticate(
         notify = _notify_mfa_via_hermes
 
     notified_numbers: set[str] = set()
+    kmsi_attempted = False
     for poll_index in range(_MFA_MAX_POLLS):
         code, body = probe()
         if code != 0:
@@ -343,6 +346,25 @@ def _await_mfa_and_authenticate(
                     return RunStatus.MFA_NOTIFY_FAILED
                 notified_numbers.add(number)
         elif state not in {"UNKNOWN", "WAITING_FOR_MFA"}:
+            # AUTH-114: a post-password AUTH_REQUIRED reading can mean the
+            # deterministic credential-free KMSI ("Stay signed in?") interstitial
+            # is showing rather than a genuine blocker. Attempt the fixed,
+            # fail-closed KMSI resolution EXACTLY ONCE and only when the
+            # READ-ONLY diagnose confirms the closed STAY_SIGNED_IN surface.
+            if state == "AUTH_REQUIRED" and not kmsi_attempted:
+                kmsi_attempted = True
+                dcode, dbody = _docker_exec_get(_DIAGNOSE_SURFACE)
+                surface = None
+                if dcode == 0:
+                    try:
+                        surface = (json.loads(dbody) or {}).get("surface")
+                    except Exception:
+                        surface = None
+                if surface == "STAY_SIGNED_IN":
+                    rcode, _rbody = _docker_exec_post(_RESOLVE_KMSI)
+                    if rcode == 0:
+                        time.sleep(_MFA_POLL_INTERVAL_S)
+                        continue
             return RunStatus.MFA_BLOCKED
 
         if poll_index + 1 < _MFA_MAX_POLLS:

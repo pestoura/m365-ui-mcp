@@ -57,6 +57,7 @@ async def test_no_unapproved_mutating_routes() -> None:
         "/auth/bootstrap/begin-signin",
         "/auth/bootstrap/begin-email",
         "/auth/bootstrap/resolve-signin-surface",
+        "/auth/bootstrap/resolve-kmsi-surface",
         "/auth/bootstrap/operator-submit",
     }
     for route in app.routes:

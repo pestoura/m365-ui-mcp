@@ -44,11 +44,13 @@ from m365_browser_worker.operator_signin import (
 )
 from m365_browser_worker.signin_surface import (
     AUTH_DIAGNOSE_OPERATION,
+    AUTH_KMSI_OPERATION,
     AUTH_RESOLVE_OPERATION,
     SigninSurfaceKind,
     SurfaceClassification,
     classify_signin_surface,
     resolve_signin_surface_to_email_entry,
+    resolve_stay_signed_in_surface,
 )
 from m365_mcp.config import browser_runtime_settings
 from planner_mcp.errors import (
@@ -560,6 +562,60 @@ class PersistentBrowser:
             # surface the resolver last encountered. No URL/DOM/text/identity.
             terminal_surface=resolution.terminal_surface.value,
         )
+
+    async def resolve_kmsi_surface(self) -> SigninSurfaceKind:
+        """Operator-only deterministic KMSI ("Stay signed in?") resolution (AUTH-114).
+
+        Dismisses the credential-free, MFA-free post-password KMSI interstitial by
+        clicking ONLY the fixed decline control, and ONLY when that control is
+        strictly unique on a surface that classifies as ``STAY_SIGNED_IN``.
+
+        Fail-closed contract:
+
+        * guard chain identical to ``resolve_signin_surface`` (started live
+          browser, dedicated persistent professional profile, approved Microsoft
+          authentication origin, exactly one open auth page);
+        * NO credential is typed, NO cached identity is selected, NO Sign in is
+          clicked, NO URL/locator navigation is performed;
+        * any non-``STAY_SIGNED_IN`` surface, or an absent/ambiguous fixed
+          control, raises ``PolicyDenied`` with only the sanitized closed
+          terminal-surface enum;
+        * bounded visible body text is read internally and never logged/returned.
+
+        Returns the sanitized closed post-dismissal ``SigninSurfaceKind``.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "KMSI surface resolution requires a started live browser",
+                operation=AUTH_KMSI_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "KMSI surface resolution requires the dedicated persistent "
+                "professional browser profile",
+                operation=AUTH_KMSI_OPERATION,
+            )
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "KMSI surface resolution requires the page to be on an approved "
+                "Microsoft authentication origin",
+                operation=AUTH_KMSI_OPERATION,
+            )
+
+        page = self._require_single_auth_page()
+
+        async def _read() -> str:
+            return await self.read_visible_body_bounded(max_chars=2000)
+
+        resolution = await resolve_stay_signed_in_surface(page, _read)
+        if not resolution.advanced:
+            raise PolicyDenied(
+                "sign-in surface is not a deterministic KMSI stage; "
+                "manual operator intervention required",
+                operation=AUTH_KMSI_OPERATION,
+                terminal_surface=resolution.terminal_surface.value,
+            )
+        return resolution.terminal_surface
 
     async def diagnose_signin_surface(self) -> SurfaceClassification:
         """READ-ONLY closed classification of the current sign-in surface.
