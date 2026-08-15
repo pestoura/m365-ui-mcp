@@ -182,6 +182,9 @@ async def test_resolver_non_deterministic_fails_closed() -> None:
     # Non-forwardable surface: fail closed without clicking anything.
     assert res.kind is SigninSurfaceKind.AMBIGUOUS
     assert res.advanced is False
+    # Observability-only: terminal surface reports the sanitized closed enum of
+    # the non-forwardable kind actually encountered (no click, no identity).
+    assert res.terminal_surface is SigninSurfaceKind.STAY_SIGNED_IN
 
 
 async def test_resolver_error_fails_closed() -> None:
@@ -189,6 +192,36 @@ async def test_resolver_error_fails_closed() -> None:
     res = await resolve_signin_surface_to_email_entry(page, page.read_text)
     assert res.kind is SigninSurfaceKind.AMBIGUOUS
     assert res.advanced is False
+    assert res.terminal_surface is SigninSurfaceKind.ERROR
+
+
+async def test_resolver_forwardable_then_non_email_terminal_surface() -> None:
+    # Click is allowed (CLOSED transition) but the post-forward surface is NOT
+    # email-entry (e.g. consent), so the external kind stays AMBIGUOUS (fail
+    # closed) while terminal_surface reports the sanitized post-forward enum.
+    page = _RecordingPage(
+        [
+            "Pick an account\nUse another account",
+            "Accept\nPermissions requested by this app",
+        ]
+    )
+    res = await resolve_signin_surface_to_email_entry(page, page.read_text)
+    assert res.kind is SigninSurfaceKind.AMBIGUOUS
+    assert res.advanced is True
+    assert res.terminal_surface is SigninSurfaceKind.CONSENT
+
+
+async def test_resolver_forwardable_control_absent_terminal_surface() -> None:
+    page = _RecordingPage(["Pick an account\nUse another account"], fixed_control=False)
+    res = await resolve_signin_surface_to_email_entry(page, page.read_text)
+    # No fixed control found -> fail-closed to AMBIGUOUS, never guess.
+    assert res.kind is SigninSurfaceKind.AMBIGUOUS
+    assert res.advanced is False
+    # Terminal surface is still the initial forwardable intermediate.
+    assert res.terminal_surface in (
+        SigninSurfaceKind.ACCOUNT_CHOOSER,
+        SigninSurfaceKind.USE_ANOTHER_ACCOUNT_PROMPT,
+    )
 
 
 class _ReadOnlyPage:

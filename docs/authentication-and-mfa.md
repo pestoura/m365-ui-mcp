@@ -506,7 +506,13 @@ attested (intentional, so the email surface can be reached for attestation) and 
 `submit_operator_signin` path. All fail-closed invariants from AUTH-094/096/101/106 apply; the response carries
 only `{ok, auth_state, surface}` (closed `EMAIL_ENTRY` / `ACCOUNT_CHOOSER` / `USE_ANOTHER_ACCOUNT_PROMPT`
 classification) — no URL, DOM, cookie, token, UPN, tenant id or account identifier. AUTH-109 never weakens the
-attestation/evaluator/fail-closed semantics and is not a generic browser primitive.
+attestation/evaluator/fail-closed semantics and is not a generic browser primitive. When the resolver fails closed
+on a non-forwardable terminal surface, the `503 POLICY_DENIED` body carries ONLY the sanitized CLOSED
+`SigninSurfaceKind` enum of the terminal surface last encountered (`terminal_surface` in the error `context`) —
+e.g. `STAY_SIGNED_IN`, `CONSENT`, `METHOD_SELECTION`, `ERROR`, `AMBIGUOUS`, `UNKNOWN` — never raw text, URL, DOM,
+identity, tenant, selector, cookie, token or credential. This is observability-only: it does not widen the action
+set, does not relax fail-closed, and the diagnostic `diagnose-signin-surface` route (AUTH-109-diagnose) remains the
+READ-ONLY twin for the same closed-enum reporting without any click.
 
 **AUTH-110 — Deterministic, phrase-bound Authenticator number-match extraction.** The post-password MFA number-match value is extracted ONLY when the page carries the fixed explicit number-matching semantic context (e.g. "enter the number", "number matching", "the number shown on your") immediately preceding a 2-digit code, within a bounded no-newline-nearby window. A date, countdown, request id or other generic 2-digit value elsewhere on the page is NEVER a candidate, so a stray year/timestamp can never be mis-extracted. Extraction is fail-closed: exactly one phrase-bound candidate yields the number; zero candidates (no number-match prompt) or more than one distinct candidate (ambiguous surface) yields `None` and the state machine never guesses or synthesizes a challenge value. This is the determinism guarantee for the `AUTH-103` observe path: when `observe` returns a unique `mfa_number`, that sanitized value is the single authorized out-of-band notification payload (Hermes → Telegram; no approval capability). When `mfa_number` is `null`/`mfa_ambiguous:true`, the runner STOPs for human Authenticator approval and emits NO challenge value.
 

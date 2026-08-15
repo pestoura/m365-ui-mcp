@@ -275,6 +275,97 @@ async def test_response_leaks_no_secret_or_url(live_env) -> None:
         assert forbidden not in body
 
 
+# -------------------------------------------------------------------------
+# Fail-closed observability: 503 carries ONLY the sanitized terminal surface enum
+# -------------------------------------------------------------------------
+
+
+class _FailClosedTerminalBrowser:
+    """Duck-typed PersistentBrowser that rails to a non-forwardable surface."""
+
+    def __init__(
+        self,
+        *,
+        started: bool = True,
+        dedicated: bool = True,
+        origin_approved: bool = True,
+        pages: list[_FakePage] | None = None,
+        terminal_kind: SigninSurfaceKind = SigninSurfaceKind.STAY_SIGNED_IN,
+    ) -> None:
+        self._started = started
+        self._dedicated = dedicated
+        self._origin_approved = origin_approved
+        self._terminal_kind = terminal_kind
+        self._pages = pages if pages is not None else []
+        self.resolve_calls = 0
+
+    @property
+    def started(self) -> bool:
+        return self._started
+
+    def is_dedicated_persistent_profile(self) -> bool:
+        return self._dedicated
+
+    def auth_origin_approved(self) -> bool:
+        return self._origin_approved
+
+    def ensure_live_allowed(self, operation: str) -> None:  # pragma: no cover
+        raise AssertionError("AUTH-109 must not invoke the full live guard")
+
+    async def resolve_signin_surface(self) -> None:
+        if not self._started:
+            raise WorkerUnavailable("no browser", operation=AUTH_RESOLVE_OPERATION)
+        if not self._dedicated:
+            raise PolicyDenied("not dedicated", operation=AUTH_RESOLVE_OPERATION)
+        if not self._origin_approved:
+            raise PolicyDenied("origin not approved", operation=AUTH_RESOLVE_OPERATION)
+        self.resolve_calls += 1
+        # Fail-closed: propagate the sanitized terminal surface enum only.
+        raise PolicyDenied(
+            "sign-in surface is not a deterministic pre-email stage",
+            operation=AUTH_RESOLVE_OPERATION,
+            terminal_surface=self._terminal_kind.value,
+        )
+
+
+async def test_fail_closed_503_carries_sanitized_terminal_surface(live_env) -> None:
+    browser = _FailClosedTerminalBrowser(
+        pages=[_FakePage("https://login.microsoftonline.com/")],
+        terminal_kind=SigninSurfaceKind.CONSENT,
+    )
+    app = create_app(browser=browser)
+    async with _client(app) as client:
+        response = await client.post(RESOLVE_PATH)
+    assert response.status_code == 503
+    assert browser.resolve_calls == 1
+    body = response.json()
+    # FastAPI wraps the raised HTTPException detail under "detail".
+    detail = body["detail"]
+    assert detail["error"] == "POLICY_DENIED"
+    # The sanitized closed enum is present and is a known SigninSurfaceKind value.
+    context = detail.get("context", {})
+    assert context.get("terminal_surface") == SigninSurfaceKind.CONSENT.value
+    assert context["terminal_surface"] in {k.value for k in SigninSurfaceKind}
+    # Still no leak of raw text/URL/identity (the enum value CONSENT is expected
+    # and is the only sanctioned surface token; forbidden tokens below would
+    # indicate a real leak of URL/DOM/credential/material).
+    low = response.text.lower()
+    for forbidden in (
+        "login.microsoftonline.com",
+        "http",
+        "cookie",
+        "token",
+        "upn",
+        "tenant",
+        "bearer",
+        "password",
+        "use another account",
+        "permissions requested by this app",
+        "<html",
+    ):
+        assert forbidden not in low
+
+
 # --------------------------------------------------------------------------
 # Catalog absence (must not become an MCP tool)
 # --------------------------------------------------------------------------
