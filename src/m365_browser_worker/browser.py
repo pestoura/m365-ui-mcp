@@ -556,6 +556,9 @@ class PersistentBrowser:
             "sign-in surface is not a deterministic pre-email stage; "
             "manual operator intervention required",
             operation=AUTH_RESOLVE_OPERATION,
+            # Observability-only: the sanitized CLOSED enum of the terminal
+            # surface the resolver last encountered. No URL/DOM/text/identity.
+            terminal_surface=resolution.terminal_surface.value,
         )
 
     async def diagnose_signin_surface(self) -> SurfaceClassification:

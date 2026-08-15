@@ -156,10 +156,22 @@ class SurfaceClassification:
 
 @dataclass(frozen=True)
 class SigninSurfaceResolution:
-    """Sanitized resolver outcome. No text or identity."""
+    """Sanitized resolver outcome. No text or identity.
+
+    ``terminal_surface`` is the closed ``SigninSurfaceKind`` of the LAST surface
+    the resolver actually encountered — the initial classification, or the
+    post-forward classification after the single permitted ``CLOSED`` transition.
+    It is observability-only: the resolver never acts on it, never widens any
+    action set, and it carries no URL/DOM/text/identity. The external ``kind``
+    sentinel is unchanged (still ``AMBIGUOUS`` on fail-closed), so callers keep
+    the same fail-closed contract; ``terminal_surface`` merely reports the
+    sanitized closed enum the operator would otherwise have to re-derive from a
+    fresh READ-ONLY diagnose call.
+    """
 
     kind: SigninSurfaceKind
     advanced: bool
+    terminal_surface: SigninSurfaceKind = SigninSurfaceKind.UNKNOWN
 
 
 def classify_signin_surface(page_text: str) -> SurfaceClassification:
@@ -265,18 +277,41 @@ async def resolve_signin_surface_to_email_entry(
     text = await read_text()
     classification = classify_signin_surface(text)
     if classification.kind is SigninSurfaceKind.EMAIL_ENTRY:
-        return SigninSurfaceResolution(classification.kind, advanced=False)
+        return SigninSurfaceResolution(
+            classification.kind, advanced=False, terminal_surface=classification.kind
+        )
     if classification.kind in _FORWARDABLE_SURFACES:
         clicked = await click_use_another_account(page)
         if not clicked:
             # The expected fixed control was absent: do NOT guess or fall back
-            # to selecting a cached identity. Signal fail-closed.
-            return SigninSurfaceResolution(SigninSurfaceKind.AMBIGUOUS, advanced=False)
+            # to selecting a cached identity. Signal fail-closed. The terminal
+            # surface observed is still the initial forwardable intermediate.
+            return SigninSurfaceResolution(
+                SigninSurfaceKind.AMBIGUOUS,
+                advanced=False,
+                terminal_surface=classification.kind,
+            )
         text2 = await read_text()
         classification2 = classify_signin_surface(text2)
-        return SigninSurfaceResolution(classification2.kind, advanced=True)
-    # Not a deterministic forwardable surface: caller fails closed.
-    return SigninSurfaceResolution(SigninSurfaceKind.AMBIGUOUS, advanced=False)
+        # Post-forward classification: the LAST surface encountered. It is
+        # observability-only and deliberately neutralized to AMBIGUOUS for the
+        # external `kind` sentinel when it is not the email-entry field, so the
+        # fail-closed contract (and surface-latch) is unchanged.
+        external_kind = (
+            classification2.kind
+            if classification2.kind is SigninSurfaceKind.EMAIL_ENTRY
+            else SigninSurfaceKind.AMBIGUOUS
+        )
+        return SigninSurfaceResolution(
+            external_kind, advanced=True, terminal_surface=classification2.kind
+        )
+    # Not a deterministic forwardable surface: caller fails closed. The terminal
+    # surface observed is the non-forwardable kind (sanitized closed enum only).
+    return SigninSurfaceResolution(
+        SigninSurfaceKind.AMBIGUOUS,
+        advanced=False,
+        terminal_surface=classification.kind,
+    )
 
 
 __all__ = [
