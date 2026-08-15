@@ -232,6 +232,13 @@ class TestOrderedPipeline:
         monkeypatch.setattr(
             operator_auth_run, "_run_in_container_submit", _run_container
         )
+        # AUTH-114 owns completion after submit. This AUTH-111 regression test
+        # verifies the pre-MFA orchestration only, so stub the new lifecycle.
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_await_mfa_and_authenticate",
+            lambda: operator_auth_run.RunStatus.OK,
+        )
 
         rc = operator_auth_run.run_canonical()
         assert rc == operator_auth_run.RunStatus.OK
@@ -364,7 +371,14 @@ class TestResolveReProbe:
             "_run_in_container_submit",
             lambda p: (0, '{"ok":true,"auth_state":"UNKNOWN"}'),
         )
+        # AUTH-114 now owns the post-submit completion lifecycle. Keep this test
+        # focused on the AUTH-111 resolve re-probe behavior.
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_await_mfa_and_authenticate",
+            lambda: operator_auth_run.RunStatus.OK,
+        )
         rc = operator_auth_run.run_canonical()
-        # The transient resolve failure was absorbed; the pipeline completed.
+        # The transient resolve failure was absorbed; the pre-MFA pipeline completed.
         assert rc == operator_auth_run.RunStatus.OK
         assert calls.count("resolve-signin-surface") >= 1
