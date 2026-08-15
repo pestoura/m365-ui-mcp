@@ -1,0 +1,34 @@
+{
+  "campaign_id": "sha256:2834510ef74fecd2a984ef27b66e9ac9e48fd9496591869abbc7977df1b02c2b",
+  "contract_set_digest": "sha256:561568bc66fab9e78496c41442e492a6058fdf2b3dcabf27793afda634df0903",
+  "fragment_ids": [
+    "common.auth.email"
+  ],
+  "steps": [
+    {
+      "contract_status": "ATTESTED",
+      "discovery_required": false,
+      "fragment_id": "common.auth.email",
+      "locator_strategies": [
+        "role",
+        "role",
+        "label",
+        "label",
+        "placeholder",
+        "placeholder"
+      ],
+      "selector_key": "auth.login_email_input"
+    },
+    {
+      "contract_status": "ATTESTED",
+      "discovery_required": false,
+      "fragment_id": "common.auth.email",
+      "locator_strategies": [
+        "role",
+        "role"
+      ],
+      "selector_key": "auth.login_next_button"
+    }
+  ],
+  "target_level": "UI"
+}

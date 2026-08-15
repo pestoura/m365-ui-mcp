@@ -25,10 +25,15 @@ Hard invariants (no weakening of the fail-closed model):
   live support.
 
 Supported fragments (phase order):
-    common.auth                (first; requires the authenticated session)
+    common.auth.email         (first; requires the authenticated session)
+    common.auth.password      (after email -> Next; requires the authenticated session)
     planner.plan-surface
     planner.task-surface
     planner.account            (later; requires the authenticated session)
+
+The two atomic ``common.auth.*`` fragments replace the legacy single
+``common.auth`` fragment (AUTH-107). Every entry MUST resolve to a real fragment
+id in the current UIContract set; see ``test_collect_live_attestation_async.py``.
 """
 
 from __future__ import annotations
@@ -50,7 +55,8 @@ from m365_mcp.config import browser_runtime_settings
 from m365_mcp.locators import locator_plan_from_metadata
 
 SUPPORTED_FRAGMENTS = (
-    "common.auth",
+    "common.auth.email",
+    "common.auth.password",
     "planner.plan-surface",
     "planner.task-surface",
     "planner.account",
