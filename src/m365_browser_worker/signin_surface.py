@@ -125,8 +125,89 @@ _EMAIL_ENTRY_MARKERS = (
     "username",
 )
 
-# Fixed, CLOSED set of exact Microsoft labels for the "use another account"
-# control. No regex, no wildcard — only these precise accessible names are ever
+# ---------------------------------------------------------------------------
+# Structural email-entry control presence (fail closed).
+#
+# Derived ONLY from the two fixed ``bootstrap_discovery`` selector keys, counted
+# via the fail-closed ``locator_runtime`` — never from page text. This lets the
+# classifier prefer a uniquely present, attested email-entry control over a
+# text-only ``ACCOUNT_CHOOSER`` marker (AUTH-109 hardening).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class EmailEntryState:
+    """Closed structural presence of the fixed email-entry controls.
+
+    ``email_input_present`` / ``next_button_present`` are True only when the
+    respective fixed selector key counts to exactly one candidate.
+    ``ambiguous`` is True when either key counts to more than one candidate (an
+    unexpected multi-control page); callers must fail closed rather than assume
+    the email-entry surface.
+    """
+
+    email_input_present: bool
+    next_button_present: bool
+    ambiguous: bool = False
+
+
+class EmailEntryControlError(Exception):
+    """Structural email-entry detection could not be resolved deterministically.
+
+    Carries only a sanitized ``reason`` category — no locator value, DOM text,
+    or count leaks. Callers map this to the fail-closed ``AMBIGUOUS`` path.
+    """
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(f"email-entry control detection failed: {reason}")
+
+
+async def detect_email_entry_state(page: Any) -> EmailEntryState:
+    """Structural presence of the email-entry control pair (fail closed).
+
+    Reuses the operator-only ``bootstrap_discovery.discover_key`` primitive to
+    count the CLOSED ``auth.login_email_input`` / ``auth.login_next_button``
+    selector keys exactly once each. It performs NO text read, NO click, NO
+    fill, NO navigation, and returns only the sanitized presence booleans.
+
+    Returns an ``EmailEntryState`` with both controls present iff BOTH keys
+    report ``UNIQUE_MATCH``. A ``NO_MATCH`` on either yields the corresponding
+    flag False. Any ``AMBIGUOUS`` count (more than one candidate) sets
+    ``ambiguous=True`` — the caller must fail closed, never assume the
+    email-entry surface. Any detection precondition failure raises
+    ``EmailEntryControlError`` (fail closed).
+    """
+    from m365_browser_worker.bootstrap_discovery import (
+        DiscoveryResultKind,
+        discover_key,
+    )
+
+    try:
+        email = await discover_key(page, "auth.login_email_input")
+        nxt = await discover_key(page, "auth.login_next_button")
+    except Exception as exc:  # noqa: BLE001 - fail closed on any detection failure
+        raise EmailEntryControlError("detection failed") from exc
+
+    def _present(key_discovery: object) -> tuple[bool, bool]:
+        kind = getattr(key_discovery, "result", None)
+        if kind is DiscoveryResultKind.UNIQUE_MATCH:
+            return True, False
+        if kind is DiscoveryResultKind.AMBIGUOUS:
+            return False, True
+        return False, False
+
+    email_present, email_ambiguous = _present(email)
+    next_present, next_ambiguous = _present(nxt)
+    return EmailEntryState(
+        email_input_present=email_present,
+        next_button_present=next_present,
+        ambiguous=email_ambiguous or next_ambiguous,
+    )
+
+
+# Fixed, CLOSED set of exact Microsoft labels for the "use another account" control.
+# No regex, no wildcard — only these precise accessible names are ever
 # matched, so the resolver can never click an arbitrary or cached-identity
 # (account-tile) control. This is the ONLY action the resolver may take.
 USE_ANOTHER_ACCOUNT_LABELS: tuple[str, ...] = (
@@ -174,7 +255,9 @@ class SigninSurfaceResolution:
     terminal_surface: SigninSurfaceKind = SigninSurfaceKind.UNKNOWN
 
 
-def classify_signin_surface(page_text: str) -> SurfaceClassification:
+def classify_signin_surface(
+    page_text: str, email_entry_state: EmailEntryState | None = None
+) -> SurfaceClassification:
     """Classify a bounded page-text reading into a closed surface kind.
 
     Never receives or returns identity. Returns ``EMAIL_ENTRY`` when an email/
@@ -182,6 +265,15 @@ def classify_signin_surface(page_text: str) -> SurfaceClassification:
     first matching known intermediate/error kind; otherwise ``AMBIGUOUS`` (looks
     like a Microsoft surface but no fixed marker matched) or ``UNKNOWN`` (empty
     reading).
+
+    When ``email_entry_state`` is supplied (the structural presence of the fixed
+    email-entry control pair, derived from the ``bootstrap_discovery`` selector
+    counts — never from text), a uniquely present, attested email-entry control
+    pair classifies as ``EMAIL_ENTRY`` BEFORE the text-only ``ACCOUNT_CHOOSER`` /
+    intermediate markers, so no unnecessary chooser click is attempted. Ambiguous
+    / multiple email controls are NOT a signal (callers fail closed). Text
+    markers still win on ``ERROR`` surfaces (an error page is not the email
+    surface regardless of a coincidentally present field).
     """
     low = (page_text or "").lower()
     if not low.strip():
@@ -189,10 +281,25 @@ def classify_signin_surface(page_text: str) -> SurfaceClassification:
 
     email_entry_present = any(m in low for m in _EMAIL_ENTRY_MARKERS)
 
-    # Error surfaces take precedence over intermediate prompts.
+    # Error surfaces take precedence over intermediate prompts AND over any
+    # coincidental structural email control (an error page is not the surface).
     if any(m in low for m in _SURFACE_MARKERS[SigninSurfaceKind.ERROR]):
         return SurfaceClassification(
             SigninSurfaceKind.ERROR, email_entry_present=email_entry_present
+        )
+
+    # Structural email-entry control presence WINS over text-only intermediate
+    # markers (e.g. ``ACCOUNT_CHOOSER`` phrasing that co-exists with the live
+    # email field). Only a uniquely present, attested control pair qualifies; an
+    # ambiguous/multiple result is NOT used as a signal (callers fail closed).
+    if (
+        email_entry_state is not None
+        and not email_entry_state.ambiguous
+        and email_entry_state.email_input_present
+        and email_entry_state.next_button_present
+    ):
+        return SurfaceClassification(
+            SigninSurfaceKind.EMAIL_ENTRY, email_entry_present=True
         )
 
     for kind, markers in _SURFACE_MARKERS.items():
@@ -249,7 +356,11 @@ async def diagnose_signin_surface(
     * it fails closed on an empty reading (``UNKNOWN``) like the resolver.
     """
     text = await read_text()
-    return classify_signin_surface(text)
+    try:
+        state = await detect_email_entry_state(page)
+    except EmailEntryControlError:
+        state = None
+    return classify_signin_surface(text, email_entry_state=state)
 
 
 async def resolve_signin_surface_to_email_entry(
@@ -275,7 +386,36 @@ async def resolve_signin_surface_to_email_entry(
     Returns a sanitized resolution. Never returns text or identity.
     """
     text = await read_text()
-    classification = classify_signin_surface(text)
+    # Structural email-entry control presence (fail closed). Three outcomes:
+    # * detection unavailable (error) -> fall back to the original text-only
+    #   logic so the prior deterministic click path is preserved exactly;
+    # * ambiguous/multiple email controls -> fail closed, never click, never
+    #   guess (cannot assume the email-entry surface);
+    # * uniquely present control pair -> classify as EMAIL_ENTRY (no click).
+    structural_email = False
+    try:
+        state = await detect_email_entry_state(page)
+    except EmailEntryControlError:
+        state = None
+    else:
+        if state is not None and state.ambiguous:
+            # Multiple/ambiguous email controls: cannot assume the surface.
+            # Fail closed without guessing or clicking; report the text
+            # classification as the observability-only terminal surface.
+            text_classification = classify_signin_surface(text)
+            return SigninSurfaceResolution(
+                SigninSurfaceKind.AMBIGUOUS,
+                advanced=False,
+                terminal_surface=text_classification.kind,
+            )
+        structural_email = bool(
+            state is not None
+            and state.email_input_present
+            and state.next_button_present
+        )
+    classification = classify_signin_surface(
+        text, email_entry_state=state if structural_email else None
+    )
     if classification.kind is SigninSurfaceKind.EMAIL_ENTRY:
         return SigninSurfaceResolution(
             classification.kind, advanced=False, terminal_surface=classification.kind
@@ -324,4 +464,7 @@ __all__ = [
     "click_use_another_account",
     "diagnose_signin_surface",
     "resolve_signin_surface_to_email_entry",
+    "EmailEntryState",
+    "EmailEntryControlError",
+    "detect_email_entry_state",
 ]

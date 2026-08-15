@@ -17,6 +17,7 @@ Covers, explicitly:
 
 from __future__ import annotations
 
+from m365_browser_worker.bootstrap_discovery import DiscoveryResultKind
 from m365_browser_worker.signin_surface import (
     USE_ANOTHER_ACCOUNT_LABELS,
     SigninSurfaceKind,
@@ -263,3 +264,153 @@ async def test_diagnose_unknown_on_empty_reading() -> None:
     classification = await diagnose_signin_surface(page, page.read_text)
     assert classification.kind is SigninSurfaceKind.UNKNOWN
     assert classification.email_entry_present is False
+
+
+# -------------------------------------------------------------------------
+# AUTH-109 hardening: structural email-entry control presence WINS over a
+# text-only ACCOUNT_CHOOSER marker, so no unnecessary chooser click is attempted.
+# Ambiguous/multiple controls and detection failures fail closed (no click).
+# -------------------------------------------------------------------------
+
+
+class _FakeKeyDiscovery:
+    def __init__(self, result: DiscoveryResultKind) -> None:
+        self.result = result
+
+
+class _StatePage:
+    """A fake page for ``detect_email_entry_state`` whose locator counts are
+    injected directly (no real UI contract fragment required)."""
+
+    def __init__(self, *, email: str = "NO_MATCH", nxt: str = "NO_MATCH") -> None:
+        self._email = email
+        self._nxt = nxt
+        self.queries = 0
+
+    def get_by_role(self, role: str, name: str):  # pragma: no cover
+        raise AssertionError("detect_email_entry_state must not use get_by_role")
+
+    async def read_text(self) -> str:  # pragma: no cover
+        raise AssertionError("detect_email_entry_state must not read text")
+
+
+async def _install_state_double(monkeypatch, email: str, nxt: str) -> None:
+    """Patch the worker-local discovery primitives so ``detect_email_entry_state``
+    returns a controlled outcome without real UI contract fragments."""
+    from m365_browser_worker.bootstrap_discovery import DiscoveryResultKind
+
+    _map = {
+        "UNIQUE_MATCH": DiscoveryResultKind.UNIQUE_MATCH,
+        "NO_MATCH": DiscoveryResultKind.NO_MATCH,
+        "AMBIGUOUS": DiscoveryResultKind.AMBIGUOUS,
+    }
+
+    async def _fake_discover_key(page, selector_key: str):
+        if selector_key == "auth.login_email_input":
+            return _FakeKeyDiscovery(_map[email])
+        if selector_key == "auth.login_next_button":
+            return _FakeKeyDiscovery(_map[nxt])
+        raise AssertionError(f"unexpected selector key: {selector_key}")
+
+    # ``build_locator`` is imported inside discover_key; stub it so no real
+    # locator plan resolution is required.
+    class _FakeLocator:
+        async def count(self) -> int:
+            return 0
+
+    def _fake_build_locator(page, candidate):  # noqa: ANN001
+        return _FakeLocator()
+
+    import m365_browser_worker.bootstrap_discovery as bd
+
+    monkeypatch.setattr(bd, "discover_key", _fake_discover_key)
+    monkeypatch.setattr(bd, "build_locator", _fake_build_locator)
+
+
+async def test_structural_email_entry_wins_over_text_account_chooser(
+    monkeypatch,
+) -> None:
+    # Page text says ACCOUNT_CHOOSER but the email control pair is uniquely
+    # present structurally -> EMAIL_ENTRY, no chooser click.
+    page = _StatePage(email="UNIQUE_MATCH", nxt="UNIQUE_MATCH")
+    await _install_state_double(monkeypatch, "UNIQUE_MATCH", "UNIQUE_MATCH")
+    classification = await diagnose_signin_surface(
+        page, lambda: _coro("work or school\nUse another account")
+    )
+    assert classification.kind is SigninSurfaceKind.EMAIL_ENTRY
+
+
+async def test_structural_email_entry_not_present_still_chooser(
+    monkeypatch,
+) -> None:
+    # No structural email control: text ACCOUNT_CHOOSER still classifies as the
+    # forwardable intermediate (controls the click path unchanged).
+    page = _StatePage(email="NO_MATCH", nxt="NO_MATCH")
+    await _install_state_double(monkeypatch, "NO_MATCH", "NO_MATCH")
+    classification = await diagnose_signin_surface(
+        page, lambda: _coro("work or school\nUse another account")
+    )
+    assert classification.kind is SigninSurfaceKind.ACCOUNT_CHOOSER
+
+
+async def test_structural_ambiguous_email_fails_closed(monkeypatch) -> None:
+    # Multiple email controls detected: NOT a signal; resolver must fail closed.
+    page = _StatePage(email="AMBIGUOUS", nxt="UNIQUE_MATCH")
+    await _install_state_double(monkeypatch, "AMBIGUOUS", "UNIQUE_MATCH")
+    resolution = await resolve_signin_surface_to_email_entry(
+        page, lambda: _coro("work or school\nUse another account")
+    )
+    assert resolution.kind is SigninSurfaceKind.AMBIGUOUS
+    assert resolution.advanced is False
+
+
+async def test_classifier_prefers_structural_state_arg() -> None:
+    from m365_browser_worker.signin_surface import EmailEntryState
+
+    c = classify_signin_surface(
+        "work or school\nUse another account",
+        email_entry_state=EmailEntryState(
+            email_input_present=True, next_button_present=True
+        ),
+    )
+    assert c.kind is SigninSurfaceKind.EMAIL_ENTRY
+    assert c.email_entry_present is True
+
+
+async def test_classifier_structural_state_ambiguity_not_a_signal() -> None:
+    from m365_browser_worker.signin_surface import EmailEntryState
+
+    c = classify_signin_surface(
+        "work or school\nUse another account",
+        email_entry_state=EmailEntryState(
+            email_input_present=True, next_button_present=True, ambiguous=True
+        ),
+    )
+    # Ambiguous structural result must NOT force EMAIL_ENTRY.
+    assert c.kind is SigninSurfaceKind.ACCOUNT_CHOOSER
+
+
+async def test_classifier_error_still_wins_over_structural_email() -> None:
+    from m365_browser_worker.signin_surface import EmailEntryState
+
+    c = classify_signin_surface(
+        "Something went wrong\nWe couldn't find your account",
+        email_entry_state=EmailEntryState(
+            email_input_present=True, next_button_present=True
+        ),
+    )
+    assert c.kind is SigninSurfaceKind.ERROR
+
+
+async def test_classifier_structural_state_none_is_text_only() -> None:
+    # Backwards-compatible call without the structural argument.
+    assert classify_signin_surface("work or school").kind is (
+        SigninSurfaceKind.ACCOUNT_CHOOSER
+    )
+
+
+def _coro(value: str):  # type: ignore[no-untyped-def]
+    async def _inner() -> str:
+        return value
+
+    return _inner()
