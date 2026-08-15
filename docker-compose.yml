@@ -10,7 +10,21 @@ services:
       PLANNER_MODE: ${PLANNER_MODE:-mock}
       PLANNER_WORKER_HOST: 0.0.0.0
       PLANNER_WORKER_PORT: "8090"
-    networks: [browser-internal, m365-egress]
+    # AUTH-115: register the canonical service DNS alias `browser-worker` on every
+    # network the worker attaches to. Docker's embedded DNS resolves this alias ONLY
+    # for containers that are members of the same compose stack (same project labels).
+    # The control-plane reaches the worker exclusively via `http://browser-worker:8090`
+    # (PLANNER_WORKER_URL / M365_WORKER_URL), so the alias MUST be declared here rather
+    # than relying on the auto-generated container name. A worker started outside the
+    # compose stack (e.g. a manual `docker run`) never registers this alias and causes
+    # the control-plane healthcheck to fail with `worker_health: false` (NXDOMAIN).
+    networks:
+      browser-internal:
+        aliases:
+          - browser-worker
+      m365-egress:
+        aliases:
+          - browser-worker
     # Published ONLY on host loopback 127.0.0.1:8090 — never 0.0.0.0, never public.
     # In-container bind stays 0.0.0.0:8090; the host publishes the loopback address
     # only, so the worker is reachable on the host via 127.0.0.1:8090 while remaining
