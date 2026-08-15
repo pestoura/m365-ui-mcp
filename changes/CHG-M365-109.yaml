@@ -1,0 +1,31 @@
+schemaVersion: jds.change/v1
+kind: ChangeRecord
+id: CHG-M365-109
+product: m365-ui-mcp
+classification: HARDENING
+state: VALIDATING
+disposition: FIX_NOW
+summary: >-
+  AUTH-109 resolver attempted an unnecessary chooser click (then failed closed
+  503) when Microsoft co-presented ACCOUNT_CHOOSER text and the live email
+  field, because classify_signin_surface ranked text markers above structural
+  email-control presence. Now a uniquely present, attested email control pair
+  classifies EMAIL_ENTRY before text-only ACCOUNT_CHOOSER; ambiguous controls
+  fail closed; all security invariants preserved.
+source:
+  type: PRODUCTION_INCIDENT
+  campaign: null
+  observation: null
+  reference: "AUTH-109 live failure after PR #625: diagnose ACCOUNT_CHOOSER vs discover-email UNIQUE_MATCH"
+affectedRelease: main
+risk: LOW
+versionEffect: NONE
+validation:
+  targeted: PASS
+  regression: PASS
+  security: PASS
+  runtime: PASS
+timestamps:
+  discoveredAt: "2026-08-15T12:00:00+01:00"
+  updatedAt: "2026-08-15T13:40:00+01:00"
+  closedAt: null
