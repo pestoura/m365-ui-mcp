@@ -80,7 +80,15 @@ def test_compose_keeps_worker_private_while_adding_dedicated_egress() -> None:
     compose = Path("docker-compose.yml").read_text(encoding="utf-8")
     worker_block, control_plane_block = compose.split("  control-plane:", maxsplit=1)
 
-    assert "networks: [browser-internal, m365-egress]" in worker_block
+    # The worker still attaches to the private internal network and the dedicated
+    # egress network (long-form syntax, so we assert membership rather than the
+    # exact short-form string).
+    assert "browser-internal" in worker_block
+    assert "m365-egress" in worker_block
+    # AUTH-115: the canonical service DNS alias `browser-worker` must be declared on
+    # the worker's networks so the control-plane can resolve it (the auto-generated
+    # container name is not a reliable alias).
+    assert "- browser-worker" in worker_block
     # The worker publishes ONLY the loopback host mapping (never 0.0.0.0/public).
     worker_ports = re.findall(r'^\s*-\s*"([^"]+)"', worker_block, flags=re.MULTILINE)
     assert worker_ports == ["127.0.0.1:8090:8090"], worker_ports  # noqa: S104 - asserting loopback-only bind
