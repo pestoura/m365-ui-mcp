@@ -143,7 +143,7 @@ class TestOrderedPipeline:
     def test_navigate_failure_stops(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls: list[str] = []
 
-        def _require(label: str, endpoint: str) -> None:
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
             calls.append(label)
             if label == "navigate":
                 raise operator_auth_run._StepFailed(label)
@@ -159,7 +159,7 @@ class TestOrderedPipeline:
     def test_begin_signin_failure_stops(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls: list[str] = []
 
-        def _require(label: str, endpoint: str) -> None:
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
             calls.append(label)
             if label == "begin-signin":
                 raise operator_auth_run._StepFailed(label)
@@ -175,7 +175,7 @@ class TestOrderedPipeline:
     def test_resolve_failure_stops(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls: list[str] = []
 
-        def _require(label: str, endpoint: str) -> None:
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
             calls.append(label)
             if label == "resolve-signin-surface":
                 raise operator_auth_run._StepFailed(label)
@@ -191,7 +191,7 @@ class TestOrderedPipeline:
     def test_surface_gate_failure_stops(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls: list[str] = []
 
-        def _require(label: str, endpoint: str) -> None:
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
             calls.append(label)
 
         monkeypatch.setattr(operator_auth_run, "_require_endpoint_ok", _require)
@@ -207,7 +207,7 @@ class TestOrderedPipeline:
     ) -> None:
         steps: list[str] = []
 
-        def _require(label: str, endpoint: str) -> None:
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
             steps.append(label)
 
         monkeypatch.setattr(operator_auth_run, "_require_endpoint_ok", _require)
@@ -274,3 +274,97 @@ class TestNoSecretExposure:
         # It must not echo the payload to stdout/stderr beyond the worker's own
         # sanitized response.
         assert "sys.stdout.write(payload" not in client_src
+
+
+class TestDiscoverUsesGetOnly:
+    """The discover-email route is GET-only; POST is rejected 405."""
+
+    def test_discover_probe_uses_get_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # _discover_email_probe must call the GET transport, NOT the POST one
+        # (POST discover-email returns 405 and would break the canonical run).
+        seen: dict[str, object] = {}
+
+        def _get(endpoint: str) -> tuple[int, str]:
+            seen["method"] = "GET"
+            seen["endpoint"] = endpoint
+            return 0, '{"ok":true,"keys":[]}'
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            return 1, "should-not-use-post"
+
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _get)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+
+        code, _body = operator_auth_run._discover_email_probe()
+        assert seen.get("method") == "GET"
+        assert seen.get("endpoint") == operator_auth_run._DISCOVER_EMAIL
+        assert code == 0
+
+    def test_discover_gate_requires_both_keys_unique_match(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The discover gate advances only on TWO UNIQUE_MATCH email keys. A first
+        # NO_MATCH probe followed by UNIQUE_MATCH within the bounded window must
+        # advance (page-load timing is not the fail-closed STOP); a persistent
+        # NO_MATCH fails closed.
+        probes = iter(
+            [
+                _bad_discover(),
+                _ok_discover("UNIQUE_MATCH"),
+            ]
+        )
+
+        def _probe() -> tuple[int, str]:
+            return next(probes)
+
+        monkeypatch.setattr(operator_auth_run, "_discover_email_probe", _probe)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+        assert operator_auth_run._discover_email_gate() is True
+
+        # Persistent NO_MATCH must fail closed (STOP), never proceed to submit.
+        monkeypatch.setattr(
+            operator_auth_run, "_discover_email_probe", lambda: _bad_discover()
+        )
+        assert operator_auth_run._discover_email_gate() is False
+
+
+class TestResolveReProbe:
+    """resolve-signin-surface must tolerate page-load-timing transients."""
+
+    def test_resolve_retries_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[str] = []
+        # navigate + begin-signin succeed; resolve fails once then succeeds.
+        # resolve is called with retries=3, so provide 3 outcomes.
+        outcomes = {
+            "navigate": (0, ""),
+            "begin-signin": (0, ""),
+            "resolve-signin-surface": iter([(22, "transient"), (0, ""), (0, "")]),
+        }
+
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
+            calls.append(label)
+            out = outcomes[label]
+            if isinstance(out, tuple):
+                code, _b = out
+            else:
+                code, _b = (0, "")
+                for _ in range(retries):
+                    code, _b = next(out)
+                    if code == 0:
+                        break
+            if code != 0:
+                raise operator_auth_run._StepFailed(label)
+
+        monkeypatch.setattr(operator_auth_run, "_require_endpoint_ok", _require)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+        monkeypatch.setattr(operator_auth_run, "_discover_email_gate", lambda: True)
+        monkeypatch.setattr(operator_auth_run, "_decrypt_credential", lambda n: "v")
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_run_in_container_submit",
+            lambda p: (0, '{"ok":true,"auth_state":"UNKNOWN"}'),
+        )
+        rc = operator_auth_run.run_canonical()
+        # The transient resolve failure was absorbed; the pipeline completed.
+        assert rc == operator_auth_run.RunStatus.OK
+        assert calls.count("resolve-signin-surface") >= 1
