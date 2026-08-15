@@ -88,3 +88,33 @@ async def test_sync_live_probe_still_supported() -> None:
     assert observation.source is ObservationSource.LIVE_UI
     for item in observation.selector_observations:
         assert item.result.value == "UNIQUE_MATCH"
+
+
+def test_supported_fragments_resolve_to_real_fragments() -> None:
+    # AUTH-107 regression: the two atomic common.auth.* fragments replaced the
+    # legacy single ``common.auth`` fragment. Every SUPPORTED_FRAGMENTS entry must
+    # resolve to a real fragment id in the current UIContract set; the removed
+    # ``common.auth`` id must NOT be present.
+    module = _load_script_module()
+    contract_set = load_ui_contract_set()
+    known = {fragment.fragment_id for fragment in contract_set.fragments}
+
+    assert "common.auth" not in module.SUPPORTED_FRAGMENTS
+    assert "common.auth.email" in module.SUPPORTED_FRAGMENTS
+    assert "common.auth.password" in module.SUPPORTED_FRAGMENTS
+    for fragment_id in module.SUPPORTED_FRAGMENTS:
+        assert fragment_id in known, f"SUPPORTED_FRAGMENTS has unknown id: {fragment_id}"
+
+
+def test_legacy_common_auth_fragment_is_rejected() -> None:
+    # The legacy ``common.auth`` fragment no longer exists; a campaign built for
+    # it must fail closed rather than silently collecting against a phantom id.
+    contract_set = load_ui_contract_set()
+    import pytest
+
+    from m365_mcp.attestation import build_attestation_campaign
+
+    with pytest.raises(ValueError):
+        build_attestation_campaign(
+            contract_set, AttestationLevel.DISCOVERY, fragment_ids=("common.auth",)
+        )

@@ -31,7 +31,7 @@ _ENV = "/usr/bin/env"
 
 _USERNAME_CRED = "m365-ui-mcp.username.cred"
 _PASSWORD_CRED = "m365-ui-mcp.password.cred"  # noqa: S105 - credential file name only
-_WORKER_CONTAINER = "m365-ui-mcp-browser-worker-1"
+_WORKER_CONTAINER = "planner-mcp-browser-worker-1"
 
 _NAVIGATE = "http://127.0.0.1:8090/auth/bootstrap/navigate"
 _BEGIN_SIGNIN = "http://127.0.0.1:8090/auth/bootstrap/begin-signin"

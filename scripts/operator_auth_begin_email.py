@@ -57,7 +57,7 @@ _USERNAME_CRED = "m365-ui-mcp.username.cred"
 
 # Fixed in-container loopback worker endpoint (operator-only admission).
 _WORKER_ENDPOINT = "http://127.0.0.1:8090/auth/bootstrap/begin-email"
-_WORKER_CONTAINER = "m365-ui-mcp-browser-worker-1"
+_WORKER_CONTAINER = "planner-mcp-browser-worker-1"
 
 # In-container client. Reads ONE JSON object from stdin and POSTs it unchanged.
 # The value never appears in argv or the environment of this program. The endpoint
