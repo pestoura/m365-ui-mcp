@@ -21,9 +21,11 @@ own, never types anything, and never selects an identity. It:
    browser-worker restart, an operator action outside this script).
 2. Enforces the surface gate after resolve-signin-surface: the email-entry
    surface MUST be present (deterministic) before operator-submit is allowed.
-   The gate probes discover-email a bounded number of times with a short sleep
-   (page-load timing can yield NO_MATCH on the first immediate probe; that is
-   NOT the fail-closed STOP). Only TWO UNIQUE_MATCH results advance.
+   The email-entry presence is probed via the GET-only discover-email route
+   (POST is rejected 405, so the conductor uses GET), a bounded number of times
+   with a short sleep (page-load timing can yield NO_MATCH on the first
+   immediate probe; that is NOT the fail-closed STOP). Only TWO UNIQUE_MATCH
+   results advance.
 3. Refuses operator-submit on any other surface (account chooser still showing,
    device enrolment / CA / unsupported method, ambiguous, unknown): it never
    guesses, never clicks an identity, never proceeds.
@@ -147,9 +149,10 @@ def _docker_exec_post(endpoint: str) -> tuple[int, str]:
     """POST an empty body to a loopback endpoint from inside the container.
 
     Returns (exit_code, sanitized_status_line). Used for the zero-body operator
-    routes (navigate / begin-signin / resolve-signin-surface). A non-loopback
-    caller (host curl) is rejected 404 by socket-peer admission; docker exec
-    runs inside the container's own loopback namespace, which is admitted.
+    routes (navigate / begin-signin / resolve-signin-surface / operator-submit).
+    A non-loopback caller (host curl) is rejected 404 by socket-peer admission;
+    docker exec runs inside the container's own loopback namespace, which is
+    admitted.
     """
     proc = subprocess.run(  # noqa: S603 - fixed binary, fixed container, no shell
         [
@@ -176,22 +179,67 @@ def _docker_exec_post(endpoint: str) -> tuple[int, str]:
     return proc.returncode, (proc.stdout or proc.stderr).strip()
 
 
-def _require_endpoint_ok(label: str, endpoint: str) -> None:
-    """Run a zero-body operator route once; fail closed on nonzero exit."""
-    code, _body = _docker_exec_post(endpoint)
-    if code != 0:
-        # Sanitized: no body, no URL, no selector. The endpoint constant is a
-        # fixed local route, not user input.
-        sys.stderr.write(
-            f"ERROR: operator step '{label}' failed (exit={code}); "
-            "browser-worker rejected or unreachable.\n"
-        )
-        raise _StepFailed(label)
+def _docker_exec_get(endpoint: str) -> tuple[int, str]:
+    """GET a loopback endpoint from inside the container (read-only routes).
+
+    Used for the GET-only discovery routes (discover-email / discover-password),
+    which reject POST with 405. Mirrors ``_docker_exec_post``'s loopback
+    admission: docker exec runs inside the container's own loopback namespace.
+    """
+    proc = subprocess.run(  # noqa: S603 - fixed binary, fixed container, no shell
+        [
+            _DOCKER,
+            "exec",
+            _WORKER_CONTAINER,
+            "curl",
+            "-sS",
+            "-o",
+            "-",
+            "-w",
+            "\\n",
+            "-X",
+            "GET",
+            "--fail-with-body",
+            endpoint,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return proc.returncode, (proc.stdout or proc.stderr).strip()
+
+
+def _require_endpoint_ok(label: str, endpoint: str, retries: int = 1) -> None:
+    """Run a zero-body operator route; fail closed on nonzero exit.
+
+    ``retries`` applies a bounded re-probe with a short sleep to absorb
+    page-load timing (the first immediate probe after a navigation can return a
+    transient non-OK on the live worker). The route is idempotent and
+    operator-only, so exactly one successful call is the goal; a persistent
+    failure fails closed.
+    """
+    code = 1
+    for attempt in range(retries):
+        code, _body = _docker_exec_post(endpoint)
+        if code == 0:
+            return
+        if attempt + 1 < retries:
+            time.sleep(_DISCOVER_INTERVAL_S)
+    # Sanitized: no body, no URL, no selector. The endpoint constant is a
+    # fixed local route, not user input.
+    sys.stderr.write(
+        f"ERROR: operator step '{label}' failed (exit={code}); "
+        "browser-worker rejected or unreachable.\n"
+    )
+    raise _StepFailed(label)
 
 
 def _discover_email_probe() -> tuple[int, str]:
-    """Probe discover-email once from inside the container (default probe)."""
-    return _docker_exec_post(_DISCOVER_EMAIL)
+    """Probe discover-email once from inside the container (default probe).
+
+    The route is GET-only (POST is rejected 405), so this uses the GET helper.
+    """
+    return _docker_exec_get(_DISCOVER_EMAIL)
 
 
 def _discover_email_gate(
@@ -310,8 +358,11 @@ def run_canonical() -> int:
         return RunStatus.BEGIN_SIGNIN_FAILED
 
     # 3) resolve-signin-surface (AUTH-109: force EMAIL_ENTRY, fixed action only)
+    #    Bounded re-probe absorbs page-load timing after the preceding
+    #    begin-signin navigation (a first immediate probe can transiently fail
+    #    on the live worker); a persistent failure fails closed.
     try:
-        _require_endpoint_ok("resolve-signin-surface", _RESOLVE_SURFACE)
+        _require_endpoint_ok("resolve-signin-surface", _RESOLVE_SURFACE, retries=3)
     except _StepFailed:
         return RunStatus.RESOLVE_FAILED
 
