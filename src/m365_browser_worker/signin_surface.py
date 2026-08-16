@@ -59,6 +59,191 @@ class SigninSurfaceKind(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+# ---------------------------------------------------------------------------
+# AUTH-115 — value-free structural census of the live post-auth Microsoft surface.
+#
+# Root-cause investigation primitive for the post-KMSI ``AMBIGUOUS`` surface. It
+# returns ONLY closed-set structural facts (role counts, frame-origin classes,
+# fixed Microsoft label presence booleans, document ready-state, email-entry
+# control presence). It reads NO page text, NO URL, NO DOM value, NO cookie,
+# NO token, NO UPN, NO tenant id, NO account identifier. Every emitted field is
+# an int, bool, or a member of a CLOSED enum — never a free string.
+# ---------------------------------------------------------------------------
+
+AUTH_STRUCTURE_OPERATION = "auth_diagnose_post_auth_surface"
+
+# Fixed, CLOSED set of accessible roles to census. No free-text role is read;
+# only the *count* of each known role is returned.
+_STRUCTURE_ROLE_CENSUS = (
+    "button",
+    "link",
+    "textbox",
+    "checkbox",
+    "radio",
+    "heading",
+    "alert",
+    "dialog",
+    "img",
+    "list",
+    "listitem",
+    "tab",
+    "combobox",
+    "main",
+    "navigation",
+    "article",
+    "form",
+    "table",
+)
+
+# CLOSED host-allowlist classes for frame origins. Only the CLASS is returned,
+# never the raw URL. "microsoft" = known Microsoft auth/entra/account host class;
+# "neutral" = same-origin/blank/data/blob; "other" = anything else (counted, not
+# named).
+_STRUCTURE_MICROSOFT_HOST_SUFFIXES = (
+    "login.microsoftonline.com",
+    "login.live.com",
+    "login.microsoft.com",
+    "account.microsoft.com",
+    "entra.microsoft.com",
+    "authenticator.microsoft.com",
+    "msauth.microsoft.com",
+    "microsoft.com",
+)
+
+# CLOSED set of exact Microsoft control labels whose PRESENCE (not value) is
+# reported as a boolean. Used to distinguish post-auth interstitials
+# deterministically without reading any text value. No caller-supplied label.
+_STRUCTURE_MICROSOFT_LABELS: tuple[str, ...] = (
+    "No",
+    "Yes",
+    "Não",
+    "Sim",
+    "Approve",
+    "Aprovar",
+    "Deny",
+    "Recusar",
+    "Send code",
+    "Enviar código",
+    "Call",
+    "Ligar",
+    "Text",
+    "SMS",
+    "Use a different verification option",
+    "More information required",
+    "É necessária mais informação",
+    "Approve sign in request",
+    "Aprovar pedido de início de sessão",
+    "Are you trying to sign in?",
+    "Está a tentar iniciar sessão?",
+    "Verify",
+    "Verificar",
+    "Continue",
+    "Continuar",
+    "Skip",
+    "Ignorar",
+    "Next",
+    "Seguinte",
+    "Avançar",
+    "Finish",
+    "Concluir",
+    "OK",
+    "I agree",
+    "Concordo",
+    "Accept",
+    "Aceitar",
+)
+
+
+@dataclass(frozen=True)
+class SigninSurfaceStructure:
+    """Value-free structural census of the live Microsoft sign-in surface.
+
+    No text, URL, DOM value, cookie, token, UPN, tenant id, or account
+    identifier is ever captured. All fields are ints, bools, or CLOSED-enum
+    members.
+    """
+
+    role_counts: dict[str, int]
+    frame_total: int
+    frame_origin_classes: dict[str, int]  # keys: microsoft/neutral/other
+    microsoft_label_present: dict[str, bool]  # closed label -> present?
+    email_entry_present: bool
+    document_ready_state: str  # CLOSED: complete/loading/interactive/unknown
+    single_page: bool
+
+
+def _classify_frame_origin(frame_url: str) -> str:
+    """Map a frame URL to a CLOSED origin class; never return the raw URL."""
+    url = (frame_url or "").lower().rstrip("/")
+    if not url or url.startswith(("about:", "data:", "blob:")):
+        return "neutral"
+    for suffix in _STRUCTURE_MICROSOFT_HOST_SUFFIXES:
+        if url == suffix or url.endswith(f".{suffix}") or url.endswith(f"/{suffix}"):
+            return "microsoft"
+    return "other"
+
+
+async def collect_post_auth_structure(page: Any) -> SigninSurfaceStructure:
+    """Return a value-free structural census of the live sign-in surface.
+
+    Reads ONLY role counts, frame-origin classes, fixed-label presence, the
+    email-entry control pair, and ``document.readyState`` (a closed enum, never
+    page text). Raises on any Playwright error so callers fail closed and never
+    emit partial or text-bearing data. The ``page`` is the single open auth page
+    already guard-gated by the caller.
+    """
+    try:
+        role_counts: dict[str, int] = {}
+        for role in _STRUCTURE_ROLE_CENSUS:
+            locator = page.get_by_role(role)
+            role_counts[role] = int(await locator.count())
+
+        frames = getattr(page, "frames", []) or []
+        frame_total = len(frames)
+        origin_classes = {"microsoft": 0, "neutral": 0, "other": 0}
+        for frame in frames:
+            origin_classes[_classify_frame_origin(getattr(frame, "url", ""))] += 1
+
+        microsoft_label_present: dict[str, bool] = {}
+        for label in _STRUCTURE_MICROSOFT_LABELS:
+            present = False
+            for role in ("button", "link", "checkbox", "radio"):
+                locator = page.get_by_role(role, name=label)
+                if await locator.count() >= 1:
+                    present = True
+                    break
+            microsoft_label_present[label] = present
+
+        try:
+            state = await detect_email_entry_state(page)
+            email_entry_present = (
+                state.email_input_present and state.next_button_present
+            )
+        except EmailEntryControlError:
+            email_entry_present = False
+
+        try:
+            ready = str(
+                await page.evaluate("document.readyState")  # noqa: S105 - fixed expr
+            ).lower()
+        except Exception:  # noqa: BLE001 - fail closed on any read error
+            ready = "unknown"
+        if ready not in ("complete", "loading", "interactive"):
+            ready = "unknown"
+
+        return SigninSurfaceStructure(
+            role_counts=role_counts,
+            frame_total=frame_total,
+            frame_origin_classes=origin_classes,
+            microsoft_label_present=microsoft_label_present,
+            email_entry_present=email_entry_present,
+            document_ready_state=ready,
+            single_page=True,
+        )
+    except Exception:  # noqa: BLE001 - fail closed; never leak partial/text data
+        raise
+
+
 # Closed, sanitizable surface markers. Substrings only; never matched against
 # account values (UPNs, display names, tenant strings). The language set is
 # fixed (en/pt) and reject-all by default.
@@ -558,4 +743,7 @@ __all__ = [
     "EmailEntryState",
     "EmailEntryControlError",
     "detect_email_entry_state",
+    "AUTH_STRUCTURE_OPERATION",
+    "SigninSurfaceStructure",
+    "collect_post_auth_structure",
 ]
