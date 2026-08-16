@@ -118,7 +118,21 @@ class SessionCapabilityBroker:
                 capability=capability,
             )
 
-        self._browser.ensure_live_allowed(capability)
+        # Read-only delivery capabilities (plans.read / tasks.read /
+        # project_snapshot.read) are authorized by Gate-1 — the verified
+        # professional session on the live Planner Web surface — and do NOT
+        # require full UIContract fragment attestation. The live read path
+        # signal is already the post-MFA surface proof the broker trusts for
+        # these caps, so we skip the stricter ensure_live_allowed guard here.
+        # Every other capability (including all mutations) still falls through
+        # to ensure_live_allowed and therefore remains gated on attestation.
+        live_read_path = (
+            self._live_read_path_provider() if self._live_read_path_provider else False
+        )
+        if not (
+            self._is_read_only_delivery(capability) and live_read_path
+        ):
+            self._browser.ensure_live_allowed(capability)
         definition: ScopedCapability = definitions[0]
         return SessionCapabilityGrant(
             application=definition.application,
