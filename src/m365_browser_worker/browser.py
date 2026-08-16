@@ -21,13 +21,13 @@ from m365_browser_worker.bootstrap_navigation import (
     AUTH_OBSERVE_OPERATION,
     AUTH_OPERATOR_SUBMIT_OPERATION,
     MICROSOFT_AUTH_BOOTSTRAP_URL,
-    PLANNER_WEB_BOOTSTRAP_URL,
     classify_begin_signin_source,
     evaluate_bootstrap_target,
     evaluate_microsoft_auth_target,
     is_permitted_begin_signin_source,
     is_planner_web_surface_url,
     is_reusable_bootstrap_page,
+    resolve_planner_web_bootstrap_url,
 )
 from m365_browser_worker.egress import enforce_route_egress
 from m365_browser_worker.locator_runtime import (
@@ -250,7 +250,7 @@ class PersistentBrowser:
             page = await context.new_page()
 
         # Exactly one navigation per operator call; no retry loop.
-        await page.goto(PLANNER_WEB_BOOTSTRAP_URL)
+        await page.goto(resolve_planner_web_bootstrap_url())
 
     async def begin_auth_signin(self) -> None:
         """Navigate ONCE to the FIXED Microsoft auth bootstrap target.

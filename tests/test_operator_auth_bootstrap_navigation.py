@@ -486,14 +486,19 @@ def test_runbook_documents_operator_invocation() -> None:
     assert "127.0.0.1:8090/auth/bootstrap/navigate" in text
 
 
-def test_production_constant_is_module_level_not_configurable() -> None:
+def test_production_constant_is_safe_default_with_validated_env_override() -> None:
     source = (
         ROOT / "src" / "m365_browser_worker" / "bootstrap_navigation.py"
     ).read_text(encoding="utf-8")
+    # The safe default root constant still exists at module level.
     assert 'PLANNER_WEB_BOOTSTRAP_URL = "https://planner.cloud.microsoft/"' in source
-    # The constant must not be overridable through the environment.
-    assert "os.getenv" not in source
-    assert "environ" not in source
+    # The override is validated through a closed policy, not accepted blindly.
+    assert "validate_planner_web_bootstrap_url" in source
+    assert "resolve_planner_web_bootstrap_url" in source
+    # A raw env read must be gated by the validator (no unvalidated os.getenv in goto).
+    assert "validate_planner_web_bootstrap_url(override).allowed" in source
+    # The marketing root is never used as a bare accepted deep link.
+    assert "/webui/premiumplan/" in source
 
 
 def test_browser_config_unchanged_for_navigation() -> None:

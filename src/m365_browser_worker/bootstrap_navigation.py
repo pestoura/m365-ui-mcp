@@ -24,13 +24,33 @@ Hard invariants (no generic browser primitive is created here):
 
 from __future__ import annotations
 
+import os
 from urllib.parse import urlsplit
 
 from .auth_bootstrap import AuthOriginStatus, auth_origin_status
 from .egress import EgressDecision, evaluate_browser_egress
 
 # FIXED production bootstrap target. Never parameterized, never operator-supplied.
+# This is the safe DEFAULT. It MAY be overridden by the explicit env var
+# PLANNER_WEB_BOOTSTRAP_URL at runtime, but ONLY when that value passes the
+# closed validator ``validate_planner_web_bootstrap_url`` (https only, exact
+# planner.cloud.microsoft host, and an approved Planner Web path). Any
+# disallowed value fails closed to this default. The plan/org GUIDs in the
+# deep-link form are NOT credentials; they are surface identifiers.
 PLANNER_WEB_BOOTSTRAP_URL = "https://planner.cloud.microsoft/"
+
+# Env override key for the acceptance bootstrap target. Operator/overlay may set
+# this to the accepted premium-plan deep link; the default above stays safe.
+PLANNER_WEB_BOOTSTRAP_URL_ENV = "PLANNER_WEB_BOOTSTRAP_URL"
+
+# Approved Planner Web path prefixes for the bootstrap target. The marketing root
+# and the two reviewed board routes are the only permitted destinations; anything
+# else (e.g. /landing, /tasks, arbitrary sub-paths) fails closed.
+_APPROVED_PLANNER_WEB_PATHS = (
+    "/",
+    "/webui/plan/",
+    "/webui/premiumplan/",
+)
 
 # Closed sanitized classification returned to the operator instead of the URL.
 PLANNER_WEB_TARGET_CLASS = "planner_web"
@@ -107,9 +127,51 @@ def is_reusable_bootstrap_page(url: str) -> bool:
     return raw == "chrome://newtab" or raw.startswith("chrome://newtab/")
 
 
+def validate_planner_web_bootstrap_url(url: str) -> EgressDecision:
+    """Fail-closed policy for the Planner Web bootstrap target URL.
+
+    Accepts ONLY an https URL on the exact host ``planner.cloud.microsoft`` whose
+    path is one of the approved Planner Web routes (root, ``/webui/plan/...`` or
+    ``/webui/premiumplan/...``). Every other scheme/host/path is refused. The
+    policy is independent of and stricter than the general egress allowlist: it
+    constrains the bootstrap destination to reviewed Planner Web surfaces and
+    prevents arbitrary sub-paths (e.g. /landing, /tasks) from being used.
+    """
+    parsed = urlsplit(url)
+    if parsed.scheme.lower() != "https":
+        return EgressDecision(False, "NON_HTTPS_BLOCKED")
+    hostname = (parsed.hostname or "").lower().rstrip(".")
+    if hostname != "planner.cloud.microsoft":
+        return EgressDecision(False, "HOST_NOT_PLANNER_CLOUD")
+    path = parsed.path or "/"
+    # The root is an exact match; sub-paths must match an approved prefix.
+    if path == "/":
+        pass
+    elif not any(path.startswith(p) for p in _APPROVED_PLANNER_WEB_PATHS if p != "/"):
+        return EgressDecision(False, "PATH_NOT_APPROVED")
+    # Re-confirm through the closed egress policy for defense in depth.
+    return evaluate_browser_egress(url)
+
+
+def resolve_planner_web_bootstrap_url() -> str:
+    """Return the effective bootstrap target with fail-closed env override.
+
+    The default ``PLANNER_WEB_BOOTSTRAP_URL`` is always safe. An operator/overlay
+    may set ``PLANNER_WEB_BOOTSTRAP_URL_ENV`` to point at an approved Planner Web
+    deep link (e.g. the premium-plan grid). Any value that fails
+    ``validate_planner_web_bootstrap_url`` is ignored and the safe default is
+    returned instead — the browser can never be steered to an unapproved target.
+    """
+    override = os.environ.get(PLANNER_WEB_BOOTSTRAP_URL_ENV)
+    if override:
+        if validate_planner_web_bootstrap_url(override).allowed:
+            return override
+    return PLANNER_WEB_BOOTSTRAP_URL
+
+
 def evaluate_bootstrap_target() -> EgressDecision:
-    """Evaluate the FIXED Planner Web bootstrap target against closed egress."""
-    return evaluate_browser_egress(PLANNER_WEB_BOOTSTRAP_URL)
+    """Evaluate the resolved Planner Web bootstrap target against closed egress."""
+    return evaluate_browser_egress(resolve_planner_web_bootstrap_url())
 
 
 def evaluate_microsoft_auth_target() -> EgressDecision:
@@ -234,6 +296,7 @@ __all__ = [
     "MICROSOFT_AUTH_BOOTSTRAP_URL",
     "MICROSOFT_AUTH_TARGET_CLASS",
     "PLANNER_WEB_BOOTSTRAP_URL",
+    "PLANNER_WEB_BOOTSTRAP_URL_ENV",
     "PLANNER_WEB_TARGET_CLASS",
     "SourceClassStatus",
     "classify_begin_signin_source",
@@ -243,4 +306,6 @@ __all__ = [
     "is_permitted_begin_signin_source",
     "is_planner_web_surface_url",
     "is_reusable_bootstrap_page",
+    "resolve_planner_web_bootstrap_url",
+    "validate_planner_web_bootstrap_url",
 ]

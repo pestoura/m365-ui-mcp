@@ -65,7 +65,9 @@ def _is_plan_like(title: str) -> bool:
     t = title.strip()
     if not t or len(t) > 120:
         return False
-    # Exclude obvious chrome/controls.
+    # Exclude obvious chrome/controls and the Planner marketing landing links that
+    # the SPA renders when the bare root (or an unhydrated surface) is reached
+    # instead of the board hub. A marketing link is NEVER a plan list entry.
     lowered = t.lower()
     chrome = {
         "sign in",
@@ -78,8 +80,16 @@ def _is_plan_like(title: str) -> bool:
         "more",
         "mais",
         "menu",
+        "get planner for android",
+        "get planner for ios",
+        "a simple, visual way to organize teamwork",
     }
-    return lowered not in chrome
+    if lowered in chrome:
+        return False
+    # Substring guards for localized marketing variants.
+    if "get planner for" in lowered:
+        return False
+    return True
 
 
 async def read_surface(page: Any) -> dict[str, Any]:
