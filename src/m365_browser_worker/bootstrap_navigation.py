@@ -40,14 +40,17 @@ from .egress import EgressDecision, evaluate_browser_egress
 PLANNER_WEB_BOOTSTRAP_URL = "https://planner.cloud.microsoft/"
 
 # Env override key for the acceptance bootstrap target. Operator/overlay may set
-# this to the accepted premium-plan deep link; the default above stays safe.
+# this to the accepted Planner My Plans surface or a reviewed plan deep link;
+# the default above stays safe.
 PLANNER_WEB_BOOTSTRAP_URL_ENV = "PLANNER_WEB_BOOTSTRAP_URL"
 
-# Approved Planner Web path prefixes for the bootstrap target. The marketing root
-# and the two reviewed board routes are the only permitted destinations; anything
-# else (e.g. /landing, /tasks, arbitrary sub-paths) fails closed.
+# Approved Planner Web path prefixes for the bootstrap target. The marketing root,
+# account-wide My Plans hub and the two reviewed board routes are the only permitted
+# destinations; anything else (e.g. /landing, /tasks, arbitrary sub-paths) fails
+# closed.
 _APPROVED_PLANNER_WEB_PATHS = (
     "/",
+    "/webui/myplans/",
     "/webui/plan/",
     "/webui/premiumplan/",
 )
@@ -131,11 +134,12 @@ def validate_planner_web_bootstrap_url(url: str) -> EgressDecision:
     """Fail-closed policy for the Planner Web bootstrap target URL.
 
     Accepts ONLY an https URL on the exact host ``planner.cloud.microsoft`` whose
-    path is one of the approved Planner Web routes (root, ``/webui/plan/...`` or
-    ``/webui/premiumplan/...``). Every other scheme/host/path is refused. The
-    policy is independent of and stricter than the general egress allowlist: it
-    constrains the bootstrap destination to reviewed Planner Web surfaces and
-    prevents arbitrary sub-paths (e.g. /landing, /tasks) from being used.
+    path is one of the approved Planner Web routes (root, ``/webui/myplans/``,
+    ``/webui/plan/...`` or ``/webui/premiumplan/...``). Every other scheme/host/
+    path is refused. The policy is independent of and stricter than the general
+    egress allowlist: it constrains the bootstrap destination to reviewed Planner
+    Web surfaces and prevents arbitrary sub-paths (e.g. /landing, /tasks) from
+    being used.
     """
     parsed = urlsplit(url)
     if parsed.scheme.lower() != "https":
@@ -158,7 +162,7 @@ def resolve_planner_web_bootstrap_url() -> str:
 
     The default ``PLANNER_WEB_BOOTSTRAP_URL`` is always safe. An operator/overlay
     may set ``PLANNER_WEB_BOOTSTRAP_URL_ENV`` to point at an approved Planner Web
-    deep link (e.g. the premium-plan grid). Any value that fails
+    surface such as My Plans or a reviewed plan deep link. Any value that fails
     ``validate_planner_web_bootstrap_url`` is ignored and the safe default is
     returned instead — the browser can never be steered to an unapproved target.
     """
