@@ -6,8 +6,9 @@ minimal change to ``bootstrap_navigation``.
 The bootstrap target must be:
 * env-overridable with a safe default, but
 * validated by a closed policy: https only, host exactly ``planner.cloud.microsoft``,
-  and only approved Planner Web paths (``/``, ``/webui/plan/...``,
-  ``/webui/premiumplan/...``); anything else fails closed to the default.
+  and only approved Planner Web paths (``/``, ``/webui/myplans/``,
+  ``/webui/plan/...``, ``/webui/premiumplan/...``); anything else fails closed
+  to the default.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ def test_validate_accepts_root_and_approved_paths(monkeypatch) -> None:
     mod = _reload_with_env(monkeypatch, None)
     for url in (
         "https://planner.cloud.microsoft/",
+        "https://planner.cloud.microsoft/webui/myplans/",
         "https://planner.cloud.microsoft/webui/plan/abc-123",
         "https://planner.cloud.microsoft/webui/premiumplan/50191d3f-5092-44c7-b719-e0efd56532aa/org/c5837053-931c-4251-a5a4-81b512a225e9/view/grid",
     ):
@@ -80,6 +82,12 @@ def test_validate_rejects_non_https(monkeypatch) -> None:
 def test_resolve_falls_back_to_default_when_unset(monkeypatch) -> None:
     mod = _reload_with_env(monkeypatch, None)
     assert mod.resolve_planner_web_bootstrap_url() == PLANNER_WEB_BOOTSTRAP_URL
+
+
+def test_resolve_accepts_approved_myplans_surface(monkeypatch) -> None:
+    my_plans = "https://planner.cloud.microsoft/webui/myplans/"
+    mod = _reload_with_env(monkeypatch, my_plans)
+    assert mod.resolve_planner_web_bootstrap_url() == my_plans
 
 
 def test_resolve_accepts_approved_premiumplan_deeplink(monkeypatch) -> None:
