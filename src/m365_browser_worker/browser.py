@@ -241,12 +241,53 @@ class PersistentBrowser:
             )
 
         context = self._context
-        page = None
+
+        # AUTH-116: deterministic page lifecycle for the dedicated operator
+        # worker. The persistent professional profile RESTORES its Planner Web
+        # tab on launch, so the live context commonly already holds exactly one
+        # ``planner_web`` page (a worker-OWNED, process-owned persistent-profile
+        # tab). Reuse that SAME page for the bootstrap navigation instead of
+        # opening a second one — otherwise the context accumulates two pages and
+        # the later single-page guard (``_require_single_auth_page``) fails with
+        # "requires exactly one open authentication page", blocking
+        # begin-signin / operator-submit / observe. A neutral placeholder page is
+        # likewise reused (unchanged behaviour). Fail closed on an AMBIGUOUS
+        # topology (multiple planner_web or multiple neutral pages) rather than
+        # guessing which page to hijack. An arbitrary/external non-approved page
+        # is NEVER closed, hijacked or selected: the worker opens its own page
+        # and leaves the external page untouched, preserving fail-closed page
+        # ownership. The URL is reduced to the closed host classification and is
+        # never returned to a caller.
+        existing_planner_web: Any = None
+        existing_neutral: Any = None
         for candidate in context.pages:
-            if is_reusable_bootstrap_page(str(candidate.url)):
-                page = candidate
-                break
-        if page is None:
+            raw = str(candidate.url)
+            if is_planner_web_surface_url(raw):
+                if existing_planner_web is not None:
+                    # Multiple distinct planner_web tabs: ambiguous, fail closed.
+                    raise PolicyDenied(
+                        "authentication bootstrap refuses an ambiguous "
+                        "topology with multiple Planner Web pages open",
+                        operation=AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+                    )
+                existing_planner_web = candidate
+            elif is_reusable_bootstrap_page(raw):
+                if existing_neutral is not None:
+                    # Multiple neutral placeholders: ambiguous, fail closed.
+                    raise PolicyDenied(
+                        "authentication bootstrap refuses an ambiguous "
+                        "topology with multiple neutral pages open",
+                        operation=AUTH_BOOTSTRAP_NAVIGATE_OPERATION,
+                    )
+                existing_neutral = candidate
+
+        if existing_planner_web is not None:
+            page = existing_planner_web
+        elif existing_neutral is not None:
+            page = existing_neutral
+        else:
+            # No worker-owned reusable page on an approved source. Open exactly
+            # one new page; an arbitrary/external page (if any) is left untouched.
             page = await context.new_page()
 
         # Exactly one navigation per operator call; no retry loop.
