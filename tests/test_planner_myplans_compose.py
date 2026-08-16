@@ -7,8 +7,9 @@ My Plans so the worker can discover all plans accessible to the professional
 account through the UI.
 """
 
-from pathlib import Path
+from __future__ import annotations
 
+from pathlib import Path
 
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "docker-compose.yml"
 EXPECTED_BOOTSTRAP = (
