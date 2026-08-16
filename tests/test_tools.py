@@ -125,6 +125,11 @@ async def test_reads(tools: PlannerTools) -> None:
 
 
 async def test_capabilities_and_license(tools: PlannerTools) -> None:
+    # Mock worker fixture: /account/context is the unverified default, so the
+    # verified professional read path is NOT available -> every capability stays
+    # fail-closed UNVERIFIED_LIVE. The supported projection is exercised directly
+    # in test_planner_five_reads (with verified evidence) and via build_capabilities
+    # below.
     caps = (await tools.planner_capabilities())["data"]
     assert caps["graph_api_used"] is False
     assert all(row["support_level"] == "UNVERIFIED_LIVE" for row in caps["capabilities"])

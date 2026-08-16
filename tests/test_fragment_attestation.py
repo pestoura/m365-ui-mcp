@@ -32,7 +32,9 @@ def _fragment(
     )
 
 
-def _base_evidence(*, ui_attested: bool, ui_drifted: bool) -> EffectiveCapabilityEvidence:
+def _base_evidence(
+    *, ui_attested: bool, ui_drifted: bool, live_read_path: bool = False
+) -> EffectiveCapabilityEvidence:
     return EffectiveCapabilityEvidence(
         authenticated=True,
         account_context_valid=True,
@@ -42,6 +44,7 @@ def _base_evidence(*, ui_attested: bool, ui_drifted: bool) -> EffectiveCapabilit
         license_available=True,
         live_evidence=True,
         ui_drifted=ui_drifted,
+        live_read_path=live_read_path,
     )
 
 
@@ -67,6 +70,7 @@ def test_one_fragment_drift_only_degrades_dependent_capabilities() -> None:
         name: _base_evidence(
             ui_attested=attestation.attested,
             ui_drifted=attestation.drifted,
+            live_read_path=name in {"plans.read", "tasks.read", "project_snapshot.read"},
         )
         for name, attestation in attestations.items()
     }

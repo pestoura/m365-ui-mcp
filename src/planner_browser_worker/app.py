@@ -103,6 +103,8 @@ def create_app(
     profile_viability_provider: Callable[[], bool] | None = None,
     auth_state_provider: Callable[[], AuthState] | None = None,
     account_context_provider: Callable[[], AccountContext] | None = None,
+    live_reader: Callable[[], Any] | None = None,
+    live_read_path_provider: Callable[[], bool] | None = None,
     broker: SessionCapabilityBroker | None = None,
     executor: ProfileSerializedExecutor | None = None,
     protocol_negotiator: ProtocolNegotiator | None = None,
@@ -125,6 +127,14 @@ def create_app(
         registry=default_capability_registry(),
         auth_state_provider=lambda: live_auth_state(),
         account_context_provider=lambda: live_account_context(worker_browser),
+        live_read_path_provider=live_read_path_provider
+        or (
+            lambda: (
+                worker_browser.started
+                and worker_browser.is_dedicated_persistent_profile()
+                and worker_browser.planner_web_surface_present()
+            )
+        ),
     )
     broker_viable = broker_viability_provider or (lambda: session_broker.viable)
     protocol_compatible = protocol_compatibility_provider or (lambda: worker_protocol.compatible)
@@ -191,10 +201,34 @@ def create_app(
         except PlannerMcpError as exc:
             raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
 
+    def planner_live_reader() -> Any:
+        """Return the authenticated live Planner Web page, or None fail-closed.
+
+        Only the dedicated persistent professional profile positioned on the fixed
+        Planner Web surface is ever returned. No other page (neutral placeholder,
+        auth interstitial, unrelated tab) is accepted, so a read can only ever act
+        on the verified board context.
+        """
+        if live_reader is not None:
+            # Injected read path (e.g. tests or an alternate browser harness):
+            # the caller is responsible for returning a verified page or None.
+            return live_reader()
+        if (
+            not worker_browser.started
+            or not worker_browser.is_dedicated_persistent_profile()
+            or not worker_browser.planner_web_surface_present()
+        ):
+            return None
+        for candidate in worker_browser._context.pages:
+            if str(candidate.url) and worker_browser.planner_web_surface_present():
+                return candidate
+        return None
+
     planner_adapter = PlannerWorkerAdapter(
         is_mock=_is_mock,
         capability_guard=capability_guard,
         data_provider=mock_data,
+        live_reader=planner_live_reader,
     )
     app.state.planner_adapter = planner_adapter
 

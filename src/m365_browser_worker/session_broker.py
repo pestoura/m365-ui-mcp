@@ -49,11 +49,26 @@ class SessionCapabilityBroker:
         registry: CapabilityRegistry,
         auth_state_provider: Callable[[], AuthState],
         account_context_provider: Callable[[], AccountContext] | None = None,
+        live_read_path_provider: Callable[[], bool] | None = None,
     ) -> None:
         self._browser = browser
         self._registry = registry
         self._auth_state_provider = auth_state_provider
         self._account_context_provider = account_context_provider or unverified_account_context
+        # Read-only delivery capabilities (plans.read / tasks.read /
+        # project_snapshot.read) are authorized by the verified professional
+        # session on the live Planner Web surface, NOT by tenant license metadata.
+        # When this provider returns True, the account-context license check is
+        # relaxed for those delivery caps only; every other capability (including
+        # all mutations) still requires a verified account context.
+        self._live_read_path_provider = live_read_path_provider
+
+    _READ_ONLY_DELIVERY_CAPABILITIES = frozenset(
+        {"plans.read", "tasks.read", "project_snapshot.read"}
+    )
+
+    def _is_read_only_delivery(self, capability: str) -> bool:
+        return capability in self._READ_ONLY_DELIVERY_CAPABILITIES
 
     @property
     def viable(self) -> bool:
@@ -73,12 +88,23 @@ class SessionCapabilityBroker:
 
         account_context = self._account_context_provider()
         if not account_context.valid:
-            raise PolicyDenied(
-                "professional account context is not verified",
-                account_context_state=account_context.state.value,
-                professional=account_context.professional,
-                expected_profile=account_context.expected_profile,
+            # Read-only delivery capabilities are authorized by the verified
+            # professional session on the live Planner Web surface, independent of
+            # tenant license / account-context metadata. When the live read path
+            # is verified, the read may proceed against the already-rendered board
+            # without requiring a verified license account context. All other
+            # capabilities (including every mutation) remain gated on the verified
+            # account context, so this does NOT widen the write surface.
+            live_read_path = (
+                self._live_read_path_provider() if self._live_read_path_provider else False
             )
+            if not (self._is_read_only_delivery(capability) and live_read_path):
+                raise PolicyDenied(
+                    "professional account context is not verified",
+                    account_context_state=account_context.state.value,
+                    professional=account_context.professional,
+                    expected_profile=account_context.expected_profile,
+                )
 
         definitions = tuple(
             definition

@@ -128,11 +128,30 @@ def _make_live_app(
 
         return AuthState.AUTHENTICATED if browser.common_auth_attested() else AuthState.UNKNOWN
 
+    class _FakePage:
+        """Read-only page double for the live-read path (no real browser)."""
+
+        async def evaluate(self, _js: str) -> dict[str, object]:
+            # The live-read path performs a single sanitized in-page text read.
+            return {
+                "surface_title": "Planner",
+                "anchor_titles": ["UCS – Segurança Técnica", "Outro Plano", "Sign in"],
+                "row_titles": ["Definir política", "Rever relatório", "Fechar ticket"],
+                "visible_lines": ["UCS – Segurança Técnica", "Definir política"],
+                "has_ucs": True,
+                "has_seguranca": True,
+            }
+
+    def live_reader() -> _FakePage:
+        return _FakePage()
+
     app = create_app(
         browser=browser,
         auth_state_provider=derived_auth_state,
         account_context_provider=account_context_provider or _verified_account_context,
         broker_viability_provider=lambda: broker_viable,
+        live_reader=live_reader,
+        live_read_path_provider=lambda: full_attested,
     )
     return app
 
