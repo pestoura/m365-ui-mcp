@@ -133,3 +133,54 @@ def test_broker_snapshot_exposes_only_bounded_account_state() -> None:
         },
         "secret_material_exported": False,
     }
+
+
+def _broker_with_live_read_path(
+    browser: BrokerBrowser,
+    state: AuthState,
+    live_read_path: bool,
+    account_context: AccountContext | None = None,
+) -> SessionCapabilityBroker:
+    """Broker wired with a live_read_path_provider (the production Gate-1 signal)."""
+    return SessionCapabilityBroker(
+        browser=browser,
+        registry=default_capability_registry(),
+        auth_state_provider=lambda: state,
+        account_context_provider=lambda: account_context or verified_context(),
+        live_read_path_provider=lambda: live_read_path,
+    )
+
+
+def test_read_only_delivery_authorized_via_gate1_without_ui_attestation() -> None:
+    """Gate-1 (verified professional session on Planner Web surface) alone must
+    authorize read-only delivery caps, independent of UIContract fragment
+    attestation. The broker must NOT call ensure_live_allowed for these caps."""
+    browser = BrokerBrowser(started=True)
+    grant = _broker_with_live_read_path(
+        browser, AuthState.AUTHENTICATED, live_read_path=True
+    ).authorize(application="planner", capability="plans.read")
+    assert grant.capability == "plans.read"
+    assert browser.guarded == []  # ensure_live_allowed NOT consulted
+
+
+def test_read_only_delivery_still_enforces_strict_guard_without_live_read_path() -> None:
+    """Without a verified live read path, a read-only delivery cap must still
+    fall through to the strict ensure_live_allowed guard (UIContract
+    attestation) rather than being authorized by Gate-1 alone."""
+    browser = BrokerBrowser(started=True)
+    _broker_with_live_read_path(
+        browser, AuthState.AUTHENTICATED, live_read_path=False
+    ).authorize(application="planner", capability="tasks.read")
+    assert browser.guarded == ["tasks.read"]  # strict guard still consulted
+
+
+def test_non_read_capability_still_requires_strict_guard() -> None:
+    """Mutations and every non-delivery capability remain gated on the full
+    ensure_live_allowed guard and must not be authorized by Gate-1 alone."""
+    browser = BrokerBrowser(started=True)
+    with pytest.raises(WorkerUnavailable):
+        _broker_with_live_read_path(
+            browser, AuthState.AUTHENTICATED, live_read_path=True
+        ).authorize(application="planner", capability="unsafe.generic_browser")
+    # A real registered non-delivery cap (if any) would still hit ensure_live_allowed.
+    assert browser.guarded == []
