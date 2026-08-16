@@ -10,6 +10,7 @@ services:
       PLANNER_MODE: ${PLANNER_MODE:-mock}
       PLANNER_WORKER_HOST: 0.0.0.0
       PLANNER_WORKER_PORT: "8090"
+      PLANNER_WEB_BOOTSTRAP_URL: ${PLANNER_WEB_BOOTSTRAP_URL:-https://planner.cloud.microsoft/webui/myplans/}
     # AUTH-115: register the canonical service DNS alias `browser-worker` on every
     # network the worker attaches to. Docker's embedded DNS resolves this alias ONLY
     # for containers that are members of the same compose stack (same project labels).
