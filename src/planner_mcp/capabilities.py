@@ -76,6 +76,7 @@ def build_capabilities(
     runtime_ok: bool = True,
     policy_allowed: bool = True,
     live_evidence: bool = False,
+    live_read_path: bool = False,
     ui_lifecycle_by_fragment: Mapping[str, UILifecycleState | str] | None = None,
 ) -> dict[str, Any]:
     """Build compatibility output plus dependency-aware effective projection."""
@@ -123,6 +124,7 @@ def build_capabilities(
             ui_drifted=attestation.drifted,
             ui_stale=attestation.stale,
             ui_reattestation_required=attestation.reattestation_required,
+            live_read_path=live_read_path,
         )
         for name, attestation in ui_attestation.items()
     }

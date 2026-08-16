@@ -152,6 +152,18 @@ class PlannerTools:
                 runtime_ok = False
 
             policy_allowed = evaluate("planner_capabilities", self.settings).allowed
+            # The read-only delivery capabilities are authorized by the verified
+            # professional session on the live Planner Web surface, not by UIContract
+            # attestation or license metadata. The worker's account_context.valid is
+            # the positive surface signal (dedicated profile on the Planner Web
+            # surface); combine it with AUTHENTICATED + healthy runtime.
+            auth_state = str(auth_evidence.get("state", AuthState.UNKNOWN.value))
+            account_valid = bool(account_context.get("valid", False))
+            live_read_path = (
+                runtime_ok
+                and auth_state == AuthState.AUTHENTICATED.value
+                and account_valid
+            )
             return build_capabilities(
                 auth_evidence=auth_evidence,
                 account_context=account_context,
@@ -159,6 +171,7 @@ class PlannerTools:
                 runtime_ok=runtime_ok,
                 policy_allowed=policy_allowed,
                 live_evidence=self.settings.is_live,
+                live_read_path=live_read_path,
             )
 
         return await _guarded("planner_capabilities", self.settings, body)

@@ -35,6 +35,12 @@ class EffectiveCapabilityEvidence:
     ui_drifted: bool = False
     ui_stale: bool = False
     ui_reattestation_required: bool = False
+    # Read-only delivery capabilities (plans.read / tasks.read /
+    # project_snapshot.read) are authorized by the verified professional session
+    # on the live Planner Web surface, NOT by UIContract fragment attestation or
+    # license metadata. This dimension is True only when the broker has actually
+    # authorized the read path at runtime.
+    live_read_path: bool = False
 
 
 @dataclass(frozen=True)
@@ -74,8 +80,14 @@ class EffectiveCapability:
                 "ui_drifted": self.evidence.ui_drifted,
                 "ui_stale": self.evidence.ui_stale,
                 "ui_reattestation_required": self.evidence.ui_reattestation_required,
+                "live_read_path": self.evidence.live_read_path,
             },
         }
+
+
+_READ_ONLY_UI_CAPABILITIES = frozenset(
+    {"plans.read", "tasks.read", "project_snapshot.read"}
+)
 
 
 def _evaluate(
@@ -94,6 +106,63 @@ def _evaluate(
             definition,
             EffectiveCapabilityState.BLOCKED,
             ("RUNTIME_UNHEALTHY",),
+            evidence,
+        )
+
+    # Read-only delivery capabilities are authorized by the verified professional
+    # session on the live Planner Web surface (broker Gate-1), independent of
+    # UIContract fragment attestation and tenant license metadata. This is the
+    # deliberate first-delivery gate: the read path performs real Playwright
+    # extraction against the authenticated board, and no UI attestation is
+    # required to read already-rendered non-secret surface text. Mutation
+    # capabilities and every other capability remain gated on UI attestation
+    # below, so this does NOT widen the write surface.
+    if definition.capability in _READ_ONLY_UI_CAPABILITIES:
+        # The read is authorized by the verified professional session on the live
+        # Planner Web surface (broker Gate-1), independent of UIContract fragment
+        # attestation and tenant license metadata. The absence of the auth/account/
+        # live-read path is a hard block (UNVERIFIED_LIVE); it is NOT merely a
+        # degradation, because without the verified live read path there is nothing
+        # to read.
+        read_missing: list[str] = []
+        if not evidence.authenticated:
+            read_missing.append("AUTH_NOT_ATTESTED")
+        if not evidence.account_context_valid:
+            read_missing.append("ACCOUNT_CONTEXT_UNVERIFIED")
+        if not evidence.live_evidence:
+            read_missing.append("LIVE_EVIDENCE_ABSENT")
+        if not evidence.live_read_path:
+            read_missing.append("LIVE_READ_PATH_UNAVAILABLE")
+        if read_missing:
+            return EffectiveCapability(
+                definition,
+                EffectiveCapabilityState.UNVERIFIED_LIVE,
+                tuple(read_missing),
+                evidence,
+            )
+        # The live read path is verified, so the read is supported. However, when a
+        # Planner Web fragment the read depends on has drifted or is stale, the
+        # rendered surface may no longer match the expected layout, so the read is
+        # downgraded to DEGRADED rather than silently trusted. This preserves the
+        # fail-closed UI-lifecycle discipline for the read path.
+        read_lifecycle_reason: str | None = None
+        if evidence.ui_drifted:
+            read_lifecycle_reason = "UI_FRAGMENT_DRIFT"
+        elif evidence.ui_stale:
+            read_lifecycle_reason = "UI_EVIDENCE_STALE"
+        elif evidence.ui_reattestation_required:
+            read_lifecycle_reason = "UI_RE_ATTESTATION_REQUIRED"
+        if read_lifecycle_reason is not None:
+            return EffectiveCapability(
+                definition,
+                EffectiveCapabilityState.DEGRADED,
+                (read_lifecycle_reason,),
+                evidence,
+            )
+        return EffectiveCapability(
+            definition,
+            EffectiveCapabilityState.READ_SUPPORTED,
+            ("LIVE_READ_PATH_VERIFIED",),
             evidence,
         )
 

@@ -21,9 +21,16 @@ def _evidence(**overrides: bool) -> EffectiveCapabilityEvidence:
         "policy_allowed": True,
         "license_available": True,
         "live_evidence": True,
+        # The three read-only delivery capabilities are authorized by the
+        # verified professional session on the live Planner Web surface, so the
+        # default "all evidence present" state has the read path verified.
+        "live_read_path": True,
     }
     values.update(overrides)
     return EffectiveCapabilityEvidence(**values)
+
+
+_READ_ONLY_DELIVERY = {"plans.read", "tasks.read", "project_snapshot.read"}
 
 
 def test_all_required_live_evidence_promotes_read_support() -> None:
@@ -65,10 +72,58 @@ def test_policy_or_runtime_failure_blocks_effective_support() -> None:
     assert all(item.reasons == ("RUNTIME_UNHEALTHY",) for item in runtime)
 
 
-def test_missing_auth_account_ui_or_license_remains_unverified() -> None:
+def test_missing_auth_account_or_read_path_blocks_read_delivery_unverified() -> None:
+    # The three read-only delivery capabilities are authorized by the verified
+    # professional session on the live Planner Web surface. When that session is
+    # degraded they stay UNVERIFIED_LIVE.
+    #
+    # auth / account-context are global gates: their absence blocks EVERY
+    # capability. live_evidence / live_read_path only gate the three delivery
+    # capabilities (all other capabilities remain authorized elsewhere).
+    global_blockers = {
+        "authenticated": "AUTH_NOT_ATTESTED",
+        "account_context_valid": "ACCOUNT_CONTEXT_UNVERIFIED",
+        "live_evidence": "LIVE_EVIDENCE_ABSENT",
+    }
+    read_only_blockers = {
+        "live_read_path": "LIVE_READ_PATH_UNAVAILABLE",
+    }
+    for field, reason in (*global_blockers.items(), *read_only_blockers.items()):
+        projected = project_effective_capabilities(
+            default_capability_registry(),
+            application="planner",
+            evidence=_evidence(**{field: False}),
+        )
+        by_cap = {item.definition.capability: item for item in projected}
+        for name in _READ_ONLY_DELIVERY:
+            assert by_cap[name].state is EffectiveCapabilityState.UNVERIFIED_LIVE, (
+                name,
+                by_cap[name].reasons,
+            )
+            assert reason in by_cap[name].reasons, (name, by_cap[name].reasons)
+        if field in global_blockers:
+            # Auth/account missing blocks everything else too.
+            for name, item in by_cap.items():
+                if name not in _READ_ONLY_DELIVERY:
+                    assert item.state is EffectiveCapabilityState.UNVERIFIED_LIVE, (
+                        name,
+                        item.reasons,
+                    )
+        else:
+            # read-path missing degrades only the delivery capabilities.
+            for name, item in by_cap.items():
+                if name not in _READ_ONLY_DELIVERY:
+                    assert item.state is EffectiveCapabilityState.READ_SUPPORTED, (
+                        name,
+                        item.reasons,
+                    )
+
+
+def test_missing_ui_attestation_or_license_blocks_non_delivery_unverified() -> None:
+    # UI attestation / license metadata gate every capability EXCEPT the three
+    # read-only delivery capabilities (which are authorized by the live read
+    # path instead).
     for field, reason in (
-        ("authenticated", "AUTH_NOT_ATTESTED"),
-        ("account_context_valid", "ACCOUNT_CONTEXT_UNVERIFIED"),
         ("ui_attested", "UI_NOT_ATTESTED"),
         ("license_available", "LICENSE_UNVERIFIED"),
     ):
@@ -77,8 +132,19 @@ def test_missing_auth_account_ui_or_license_remains_unverified() -> None:
             application="planner",
             evidence=_evidence(**{field: False}),
         )
-        assert all(item.state is EffectiveCapabilityState.UNVERIFIED_LIVE for item in projected)
-        assert all(reason in item.reasons for item in projected)
+        by_cap = {item.definition.capability: item for item in projected}
+        for name in _READ_ONLY_DELIVERY:
+            assert by_cap[name].state is EffectiveCapabilityState.READ_SUPPORTED, (
+                name,
+                by_cap[name].reasons,
+            )
+        for name, item in by_cap.items():
+            if name not in _READ_ONLY_DELIVERY:
+                assert item.state is EffectiveCapabilityState.UNVERIFIED_LIVE, (
+                    name,
+                    item.reasons,
+                )
+                assert reason in item.reasons, (name, item.reasons)
 
 
 def test_planner_compatibility_output_keeps_keys_and_mock_not_supported() -> None:

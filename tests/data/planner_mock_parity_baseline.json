@@ -1,4 +1,6 @@
 {
+  "mode": "mock",
+  "live_support_claimed": false,
   "tools": {
     "planner_health": {
       "contract_version": "0.1.0",
@@ -205,6 +207,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -214,7 +217,7 @@
             },
             "reasons": [
               "LIVE_EVIDENCE_ABSENT",
-              "UI_NOT_ATTESTED"
+              "LIVE_READ_PATH_UNAVAILABLE"
             ],
             "state": "UNVERIFIED_LIVE",
             "supported": false,
@@ -230,6 +233,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -239,7 +243,7 @@
             },
             "reasons": [
               "LIVE_EVIDENCE_ABSENT",
-              "UI_NOT_ATTESTED"
+              "LIVE_READ_PATH_UNAVAILABLE"
             ],
             "state": "UNVERIFIED_LIVE",
             "supported": false,
@@ -255,6 +259,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -280,6 +285,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -305,6 +311,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -330,6 +337,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -355,6 +363,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -380,6 +389,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -405,6 +415,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -430,6 +441,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -455,6 +467,7 @@
               "authenticated": true,
               "license_available": true,
               "live_evidence": false,
+              "live_read_path": false,
               "policy_allowed": true,
               "runtime_healthy": true,
               "ui_attested": false,
@@ -464,7 +477,7 @@
             },
             "reasons": [
               "LIVE_EVIDENCE_ABSENT",
-              "UI_NOT_ATTESTED"
+              "LIVE_READ_PATH_UNAVAILABLE"
             ],
             "state": "UNVERIFIED_LIVE",
             "supported": false,
@@ -1287,7 +1300,5 @@
       "tool": "planner_smoke_test"
     }
   },
-  "live_support_claimed": false,
-  "mode": "mock",
-  "digest": "sha256:b29b5dd7e551407ae20d73baceced36b9824990feedbe476e55ac26894bda1be"
+  "digest": "sha256:328a36af1eed1dc025f0eec2120fbc24b48f4b003a757b70a0da30a56b4c5282"
 }

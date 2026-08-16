@@ -54,6 +54,8 @@ def _contract_set() -> UIContractSet:
 
 def _effective_evidence(
     attestation: CapabilityUIAttestation,
+    *,
+    capability: str,
 ) -> EffectiveCapabilityEvidence:
     return EffectiveCapabilityEvidence(
         authenticated=True,
@@ -66,6 +68,10 @@ def _effective_evidence(
         ui_drifted=attestation.drifted,
         ui_stale=attestation.stale,
         ui_reattestation_required=attestation.reattestation_required,
+        # Read-only delivery capabilities are authorized by the verified live read
+        # path, independent of UI fragment attestation (first-delivery gate).
+        live_read_path=capability
+        in {"plans.read", "tasks.read", "project_snapshot.read"},
     )
 
 
@@ -97,7 +103,7 @@ def test_stale_fragment_only_degrades_dependent_capabilities() -> None:
         for name in registry.capability_names("planner")
     }
     evidence = {
-        name: _effective_evidence(attestation)
+        name: _effective_evidence(attestation, capability=name)
         for name, attestation in attestations.items()
     }
     projected = project_effective_capabilities_by_capability(
