@@ -27,9 +27,12 @@ credential submission.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Worker-local operation names for the operator-only sign-in surface endpoints.
 # Used only for sanitized fail-closed detail/observability. The diagnose
@@ -97,8 +100,6 @@ _SURFACE_MARKERS: dict[SigninSurfaceKind, tuple[str, ...]] = {
         "consent",
     ),
     SigninSurfaceKind.METHOD_SELECTION: (
-        "sign-in options",
-        "opções de início",
         "choose how",
         "authentication method",
         "método de autenticação",
@@ -541,11 +542,233 @@ async def resolve_stay_signed_in_surface(
     )
 
 
+# ---------------------------------------------------------------------------
+# AUTH-115 — deterministic METHOD_SELECTION -> Microsoft Authenticator approval.
+#
+# The METHOD_SELECTION interstitial is a credential-free, MFA-free deterministic
+# surface that Microsoft can present when it asks the operator to choose a
+# verification method. It blocks progression while carrying no identity choice.
+# The ONLY action permitted here is a single click on ONE fixed Microsoft
+# Authenticator approval control matched from a CLOSED set of exact Microsoft
+# labels, and ONLY when that control is STRICTLY UNIQUE across the entire closed
+# set of labels AND roles (button + link).
+# ---------------------------------------------------------------------------
+
+AUTH_METHOD_SELECTION_OPERATION = "auth_resolve_method_selection_surface"
+
+# CLOSED set of exact Microsoft labels for the Microsoft Authenticator approval
+# control across en-US / pt-BR / pt-PT. No regex, no wildcard, no partial match.
+# The fourth English variant is a DISTINCT closed member (the longer
+# "Microsoft Authenticator" phrasing the live 503 surface can render), not a
+# duplicate of the shorter en-US label.
+AUTHENTICATOR_METHOD_LABELS: tuple[str, ...] = (
+    "Approve a request on my Authenticator app",
+    "Aprovar uma solicitação no meu aplicativo Authenticator",
+    "Aprovar um pedido na minha aplicação de Microsoft Authenticator",
+    "Approve a request on my Microsoft Authenticator app",
+    "Send notification",
+    "Enviar notificação",
+)
+
+
+async def click_authenticator_method(page: Any) -> bool:
+    """Click the fixed Microsoft Authenticator approval control at most once.
+
+    STRICTER-than-KMSI global uniqueness: every candidate control across the
+    entire CLOSED label set is counted via
+    ``page.get_by_text(label, exact=True).count()`` (awaited for every label),
+    and the candidate TOTAL across the entire closed set must equal EXACTLY one.
+    A single label that itself counts to exactly one is NOT sufficient if any
+    other closed label also matches (a ``1 + 1`` split yields a global total of
+    2 and is rejected, as is any per-label count of 2 or more).
+
+    The control is matched ONLY by exact text — never by ARIA role
+    (button/link) — per the deployed contract. Only when the global total
+    equals exactly one is the sole locator clicked exactly once. Zero or
+    more-than-one candidates never clicks. No regex, wildcard,
+    ``first``-of-many, or caller-supplied selector. Any locator/count exception
+    fails closed (returns False); nothing is ever logged/echoed. It performs no
+    fill/type/goto/press.
+    """
+    total = 0
+    sole_locator = None
+    try:
+        for label in AUTHENTICATOR_METHOD_LABELS:
+            locator = page.get_by_text(label, exact=True)
+            try:
+                count = await locator.count()
+            except Exception:  # noqa: BLE001 - fail closed on any count error
+                return False
+            if count:
+                total += count
+                if total == 1 and count == 1:
+                    sole_locator = locator
+    except Exception:  # noqa: BLE001 - fail closed on any iteration error
+        return False
+
+    if total != 1 or sole_locator is None:
+        return False
+    try:
+        await sole_locator.first.click(timeout=5000)
+    except Exception:  # noqa: BLE001 - fail closed, never echo
+        return False
+    return True
+
+
+# CLOSED set of exact Microsoft labels for the "Sign-in options" reveal control
+# on the initial METHOD_SELECTION surface that renders ONLY "Sign in" +
+# "Sign-in options" (no directly visible Authenticator control). Exact text
+# only — no regex, no wildcard, no partial match. The pt-PT variant is the
+# label the verified live surface renders.
+SIGNIN_OPTIONS_LABELS: tuple[str, ...] = (
+    "Sign-in options",
+    "Other ways to sign in",
+    "Sign in another way",
+    "Use a different verification option",
+    "Opções de início de sessão",
+)
+
+
+async def click_signin_options(page: Any) -> bool:
+    """Click the fixed "Sign-in options" reveal control at most once.
+
+    STRICT global uniqueness (same guarantee as ``click_authenticator_method``):
+    every candidate control across the entire CLOSED label set is counted via
+    ``page.get_by_text(label, exact=True)`` (awaited for every label) and the
+    global TOTAL across the entire closed set must equal EXACTLY one. A single
+    label counting to exactly one is NOT sufficient if the other closed label
+    also matches (a ``1 + 1`` split yields a global total of 2 and is rejected,
+    as is any per-label count of 2 or more).
+
+    Matched ONLY by exact text — never by ARIA role (button/link). Only when the
+    global total equals exactly one is the sole locator clicked exactly once.
+    Zero or more-than-one candidates never clicks. No regex, wildcard,
+    ``first``-of-many, or caller-supplied selector. Any locator/count exception
+    fails closed (returns False); nothing is ever logged/echoed. It performs no
+    fill/type/goto/press.
+    """
+    total = 0
+    sole_locator = None
+    try:
+        for label in SIGNIN_OPTIONS_LABELS:
+            locator = page.get_by_text(label, exact=True)
+            try:
+                count = await locator.count()
+            except Exception:  # noqa: BLE001 - fail closed on any count error
+                return False
+            if count:
+                total += count
+                if total == 1 and count == 1:
+                    sole_locator = locator
+    except Exception:  # noqa: BLE001 - fail closed on any iteration error
+        return False
+
+    if total != 1 or sole_locator is None:
+        return False
+    try:
+        await sole_locator.first.click(timeout=5000)
+    except Exception:  # noqa: BLE001 - fail closed, never echo
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------
+# TEMPORARY AUTH-115 diagnostics (remove after root-cause is confirmed).
+#
+# Minimal, value-free instrumentation to diagnose a METHOD_SELECTION surface
+# that does not resolve to the expected Authenticator control. It never logs
+# the raw page body: only closed authentication-candidate lines survive, and
+# those are redacted of emails / URLs / GUIDs / long digit runs.
+# ---------------------------------------------------------------------------
+
+# Closed authentication terms (EN/PT) used to keep only candidate lines.
+_METHOD_SELECTION_CANDIDATE_TERMS: tuple[str, ...] = (
+    "authenticator",
+    "notification",
+    "notificação",
+    "approve",
+    "aprovar",
+    "request",
+    "pedido",
+    "solicitação",
+    "verification",
+    "verificação",
+    "sign",
+    "início",
+    "method",
+    "método",
+)
+
+async def resolve_method_selection_surface(
+    page: Any, read_text: Any
+) -> SigninSurfaceResolution:
+    """Resolve a closed Microsoft Authenticator method-selection flow."""
+    text = await read_text()
+    classification = classify_signin_surface(text)
+
+    if classification.kind is SigninSurfaceKind.METHOD_SELECTION:
+        clicked_direct = await click_authenticator_method(page)
+        if clicked_direct:
+            final_text = await read_text()
+            final_classification = classify_signin_surface(final_text)
+            return SigninSurfaceResolution(
+                final_classification.kind,
+                advanced=True,
+                terminal_surface=final_classification.kind,
+            )
+    elif classification.kind is not SigninSurfaceKind.AMBIGUOUS:
+        return SigninSurfaceResolution(
+            SigninSurfaceKind.AMBIGUOUS,
+            advanced=False,
+            terminal_surface=classification.kind,
+        )
+
+    clicked_options = await click_signin_options(page)
+    if not clicked_options:
+        return SigninSurfaceResolution(
+            SigninSurfaceKind.AMBIGUOUS,
+            advanced=False,
+            terminal_surface=classification.kind,
+        )
+
+    await page.wait_for_timeout(1000)
+    text2 = await read_text()
+    classification2 = classify_signin_surface(text2)
+    if classification2.kind is not SigninSurfaceKind.METHOD_SELECTION:
+        return SigninSurfaceResolution(
+            SigninSurfaceKind.AMBIGUOUS,
+            advanced=False,
+            terminal_surface=classification2.kind,
+        )
+
+    clicked = await click_authenticator_method(page)
+    if not clicked:
+        return SigninSurfaceResolution(
+            SigninSurfaceKind.AMBIGUOUS,
+            advanced=False,
+            terminal_surface=classification2.kind,
+        )
+
+    text3 = await read_text()
+    classification3 = classify_signin_surface(text3)
+    return SigninSurfaceResolution(
+        classification3.kind,
+        advanced=True,
+        terminal_surface=classification3.kind,
+    )
+
+
 __all__ = [
     "AUTH_KMSI_OPERATION",
+    "AUTH_METHOD_SELECTION_OPERATION",
     "AUTH_RESOLVE_OPERATION",
+    "AUTHENTICATOR_METHOD_LABELS",
+    "SIGNIN_OPTIONS_LABELS",
     "KMSI_DECLINE_LABELS",
+    "click_authenticator_method",
+    "click_signin_options",
     "click_kmsi_decline",
+    "resolve_method_selection_surface",
     "resolve_stay_signed_in_surface",
     "SigninSurfaceKind",
     "SurfaceClassification",

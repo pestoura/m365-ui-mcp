@@ -184,9 +184,18 @@ class TestOrderedPipeline:
         monkeypatch.setattr(
             operator_auth_run, "_discover_email_gate", lambda: True
         )
+        # AUTH-119: the resolve failure now hands off to the worker-gated
+        # one-shot combined-form submit. With the worker rejecting, the
+        # incumbent RESOLVE_FAILED exit is preserved.
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_submit_credentials",
+            lambda: operator_auth_run.RunStatus.SUBMIT_REJECTED,
+        )
         rc = operator_auth_run.run_canonical()
         assert rc == operator_auth_run.RunStatus.RESOLVE_FAILED
         assert calls == ["navigate", "begin-signin", "resolve-signin-surface"]
+
 
     def test_surface_gate_failure_stops(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls: list[str] = []
@@ -237,7 +246,7 @@ class TestOrderedPipeline:
         monkeypatch.setattr(
             operator_auth_run,
             "_await_mfa_and_authenticate",
-            lambda: operator_auth_run.RunStatus.OK,
+            lambda *args, **kwargs: operator_auth_run.RunStatus.OK,
         )
 
         rc = operator_auth_run.run_canonical()
@@ -254,6 +263,503 @@ class TestOrderedPipeline:
             "email": "memory-only-value",
             "password": "memory-only-value",
         }
+
+
+class TestCombinedFormFallback:
+    """AUTH-119: resolve-signin-surface failure -> exactly one worker-gated
+    combined-form submit, no discover-email, no second submit."""
+
+    @staticmethod
+    def _pipeline(monkeypatch: pytest.MonkeyPatch) -> tuple[list[str], list[str]]:
+        steps: list[str] = []
+        gate_calls: list[str] = []
+
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
+            steps.append(label)
+            if label == "resolve-signin-surface":
+                raise operator_auth_run._StepFailed(label)
+
+        def _gate() -> bool:
+            gate_calls.append("discover-email")
+            return True
+
+        monkeypatch.setattr(operator_auth_run, "_require_endpoint_ok", _require)
+        monkeypatch.setattr(operator_auth_run, "_discover_email_gate", _gate)
+        return steps, gate_calls
+
+    def test_resolve_failure_single_submit_then_relay(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        steps, gate_calls = self._pipeline(monkeypatch)
+        submits: list[int] = []
+
+        def _submit() -> dict[str, object]:
+            submits.append(1)
+            return {"ok": True, "auth_state": "UNKNOWN"}
+
+        relayed: list[bool] = []
+
+        monkeypatch.setattr(operator_auth_run, "_submit_credentials", _submit)
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_finish_via_mfa_relay",
+            lambda allow_kmsi=True: (
+                relayed.append(allow_kmsi) or operator_auth_run.RunStatus.OK
+            ),
+        )
+
+        rc = operator_auth_run.run_canonical()
+        assert rc == operator_auth_run.RunStatus.OK
+        assert len(submits) == 1
+        assert gate_calls == []
+        assert relayed == [True]
+        assert steps == ["navigate", "begin-signin", "resolve-signin-surface"]
+
+    def test_resolve_failure_single_submit_then_fail_closed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        steps, gate_calls = self._pipeline(monkeypatch)
+        submits: list[int] = []
+
+        def _submit() -> int:
+            submits.append(1)
+            return operator_auth_run.RunStatus.SUBMIT_REJECTED
+
+        monkeypatch.setattr(operator_auth_run, "_submit_credentials", _submit)
+
+        def _no_relay(allow_kmsi: bool = True) -> int:
+            raise AssertionError("relay must not run when submit is rejected")
+
+        monkeypatch.setattr(operator_auth_run, "_finish_via_mfa_relay", _no_relay)
+
+        rc = operator_auth_run.run_canonical()
+        assert rc == operator_auth_run.RunStatus.RESOLVE_FAILED
+        assert len(submits) == 1
+        assert gate_calls == []
+        assert steps == ["navigate", "begin-signin", "resolve-signin-surface"]
+
+    def test_resolve_success_keeps_discover_plus_single_submit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        steps: list[str] = []
+        gate_calls: list[str] = []
+        submits: list[int] = []
+
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
+            steps.append(label)
+
+        def _gate() -> bool:
+            gate_calls.append("discover-email")
+            return True
+
+        def _submit() -> dict[str, object]:
+            submits.append(1)
+            return {"ok": True, "auth_state": "UNKNOWN"}
+
+        monkeypatch.setattr(operator_auth_run, "_require_endpoint_ok", _require)
+        monkeypatch.setattr(operator_auth_run, "_discover_email_gate", _gate)
+        monkeypatch.setattr(operator_auth_run, "_submit_credentials", _submit)
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_finish_via_mfa_relay",
+            lambda allow_kmsi=True: operator_auth_run.RunStatus.OK,
+        )
+
+        rc = operator_auth_run.run_canonical()
+        assert rc == operator_auth_run.RunStatus.OK
+        assert steps == ["navigate", "begin-signin", "resolve-signin-surface"]
+        assert gate_calls == ["discover-email"]
+        assert len(submits) == 1
+
+class TestMethodSelectionResolve:
+    """AUTH-118: the METHOD_SELECTION helper remains available but MUST NOT be
+    called by the canonical path (generic "Sign-in options" opens
+    passkey/organization options on this tenant, not an MFA chooser).
+    """
+
+    def test_canonical_path_never_calls_method_selection_shortcut(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        steps: list[str] = []
+        shortcut_calls: list[int] = []
+
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
+            steps.append(label)
+
+        monkeypatch.setattr(operator_auth_run, "_require_endpoint_ok", _require)
+        monkeypatch.setattr(operator_auth_run, "_discover_email_gate", lambda: True)
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_maybe_resolve_method_selection",
+            lambda: shortcut_calls.append(1) or True,
+        )
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_submit_credentials",
+            lambda: {"ok": True, "auth_state": "AUTHENTICATED"},
+        )
+
+        rc = operator_auth_run.run_canonical()
+        assert rc == operator_auth_run.RunStatus.OK
+        assert shortcut_calls == []
+        assert steps == [
+            "navigate",
+            "begin-signin",
+            "resolve-signin-surface",
+        ]
+
+    def test_method_selection_triggers_single_resolve(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[tuple[str, str]] = []
+
+        def _get(endpoint: str) -> tuple[int, str]:
+            calls.append(("GET", endpoint))
+            if endpoint == operator_auth_run._DIAGNOSE_SURFACE:
+                return 0, '{"ok":true,"surface":"METHOD_SELECTION","email_entry_present":false}'
+            return 0, ""
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            calls.append(("POST", endpoint))
+            return 0, ""
+
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _get)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+
+        operator_auth_run._maybe_resolve_method_selection()
+
+        assert ("GET", operator_auth_run._DIAGNOSE_SURFACE) in calls
+        assert ("POST", operator_auth_run._RESOLVE_METHOD_SELECTION) in calls
+        # Exactly one resolve, no retries.
+        assert calls.count(("POST", operator_auth_run._RESOLVE_METHOD_SELECTION)) == 1
+
+    def test_non_method_selection_skips_resolve(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[tuple[str, str]] = []
+
+        def _get(endpoint: str) -> tuple[int, str]:
+            calls.append(("GET", endpoint))
+            if endpoint == operator_auth_run._DIAGNOSE_SURFACE:
+                return 0, '{"ok":true,"surface":"EMAIL_ENTRY","email_entry_present":true}'
+            return 0, ""
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            calls.append(("POST", endpoint))
+            return 0, ""
+
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _get)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+
+        operator_auth_run._maybe_resolve_method_selection()
+
+        assert ("GET", operator_auth_run._DIAGNOSE_SURFACE) in calls
+        assert ("POST", operator_auth_run._RESOLVE_METHOD_SELECTION) not in calls
+
+    def test_diagnose_failure_is_diagnostic_only(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A diagnose transport/parse failure must NOT trigger resolve and must
+        # NOT raise; the existing flow continues unchanged.
+        posts: list[str] = []
+
+        monkeypatch.setattr(
+            operator_auth_run, "_docker_exec_get", lambda e: (7, "unreachable")
+        )
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_docker_exec_post",
+            lambda e: posts.append(e) or (0, ""),
+        )
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+
+        # Must not raise.
+        operator_auth_run._maybe_resolve_method_selection()
+        assert posts == []
+
+    def test_method_selection_resolve_failure_is_diagnostic_only(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A non-zero resolve for METHOD_SELECTION must not raise or retry.
+        def _get(endpoint: str) -> tuple[int, str]:
+            if endpoint == operator_auth_run._DIAGNOSE_SURFACE:
+                return 0, '{"ok":true,"surface":"METHOD_SELECTION","email_entry_present":false}'
+            return 0, ""
+
+        posts: list[str] = []
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            posts.append(endpoint)
+            return 22, "policy-denied"
+
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _get)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+
+        operator_auth_run._maybe_resolve_method_selection()
+        # Called exactly once, no retry on failure.
+        assert posts == [operator_auth_run._RESOLVE_METHOD_SELECTION]
+
+    def test_method_selection_surface_still_takes_canonical_email_password_flow(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # AUTH-118: even when the surface would diagnose as METHOD_SELECTION,
+        # the canonical path no longer short-circuits. With
+        # prompt=select_account the account chooser is handled by
+        # resolve-signin-surface, so the flow stays
+        # begin-signin -> resolve-signin-surface -> discover-email -> submit.
+        steps: list[str] = []
+        posts: list[str] = []
+
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
+            steps.append(label)
+
+        def _get(endpoint: str) -> tuple[int, str]:
+            if endpoint == operator_auth_run._DIAGNOSE_SURFACE:
+                return 0, '{"ok":true,"surface":"METHOD_SELECTION","email_entry_present":false}'
+            return 0, ""
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            posts.append(endpoint)
+            return 0, ""
+
+        monkeypatch.setattr(operator_auth_run, "_require_endpoint_ok", _require)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _get)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+        monkeypatch.setattr(operator_auth_run, "_discover_email_gate", lambda: True)
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_submit_credentials",
+            lambda: {"ok": True, "auth_state": "AUTHENTICATED"},
+        )
+
+        rc = operator_auth_run.run_canonical()
+        assert rc == operator_auth_run.RunStatus.OK
+        assert steps == ["navigate", "begin-signin", "resolve-signin-surface"]
+        # The METHOD_SELECTION resolver endpoint is never invoked.
+        assert operator_auth_run._RESOLVE_METHOD_SELECTION not in posts
+
+    def test_non_method_selection_keeps_incumbent_email_password_flow(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A non-METHOD_SELECTION surface keeps the incumbent email/password
+        # flow untouched: resolve-signin-surface -> discover -> submit -> relay.
+        steps: list[str] = []
+        posts: list[str] = []
+        submitted: dict[str, object] = {}
+
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
+            steps.append(label)
+
+        def _get(endpoint: str) -> tuple[int, str]:
+            if endpoint == operator_auth_run._DIAGNOSE_SURFACE:
+                return 0, '{"ok":true,"surface":"EMAIL_ENTRY","email_entry_present":true}'
+            return 0, ""
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            posts.append(endpoint)
+            return 0, ""
+
+        monkeypatch.setattr(operator_auth_run, "_require_endpoint_ok", _require)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _get)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+        monkeypatch.setattr(operator_auth_run, "_discover_email_gate", lambda: True)
+        monkeypatch.setattr(
+            operator_auth_run, "_decrypt_credential", lambda n: "memory-only-value"
+        )
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_run_in_container_submit",
+            lambda p: submitted.__setitem__("payload", p)
+            or (0, '{"ok":true,"auth_state":"UNKNOWN"}'),
+        )
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_await_mfa_and_authenticate",
+            lambda *args, **kwargs: operator_auth_run.RunStatus.OK,
+        )
+
+        rc = operator_auth_run.run_canonical()
+        assert rc == operator_auth_run.RunStatus.OK
+        assert steps == ["navigate", "begin-signin", "resolve-signin-surface"]
+        assert operator_auth_run._RESOLVE_METHOD_SELECTION not in posts
+        # Email/password was submitted on the incumbent flow.
+        assert "payload" in submitted
+
+    def test_method_selection_resolve_non200_keeps_incumbent_flow(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # METHOD_SELECTION diagnosed but the resolve returns non-zero (no HTTP
+        # 200) -> advanced=False. The incumbent email/password flow must run.
+        steps: list[str] = []
+        submitted: dict[str, object] = {}
+
+        def _require(label: str, endpoint: str, retries: int = 1) -> None:
+            steps.append(label)
+
+        def _get(endpoint: str) -> tuple[int, str]:
+            if endpoint == operator_auth_run._DIAGNOSE_SURFACE:
+                return 0, '{"ok":true,"surface":"METHOD_SELECTION","email_entry_present":false}'
+            return 0, ""
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            if endpoint == operator_auth_run._RESOLVE_METHOD_SELECTION:
+                return 22, "policy-denied"  # non-zero -> advanced False
+            return 0, ""
+
+        monkeypatch.setattr(operator_auth_run, "_require_endpoint_ok", _require)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _get)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+        monkeypatch.setattr(operator_auth_run, "_discover_email_gate", lambda: True)
+        monkeypatch.setattr(
+            operator_auth_run, "_decrypt_credential", lambda n: "memory-only-value"
+        )
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_run_in_container_submit",
+            lambda p: submitted.__setitem__("payload", p)
+            or (0, '{"ok":true,"auth_state":"UNKNOWN"}'),
+        )
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_await_mfa_and_authenticate",
+            lambda *args, **kwargs: operator_auth_run.RunStatus.OK,
+        )
+
+        rc = operator_auth_run.run_canonical()
+        assert rc == operator_auth_run.RunStatus.OK
+        # Incumbent flow executed despite METHOD_SELECTION being diagnosed.
+        assert steps == ["navigate", "begin-signin", "resolve-signin-surface"]
+        assert "payload" in submitted
+
+    def test_return_true_only_on_method_selection_and_200(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The bool contract: advanced=True requires both METHOD_SELECTION AND a
+        # successful (exit 0) resolve-method-selection-surface.
+        def _get(endpoint: str) -> tuple[int, str]:
+            if endpoint == operator_auth_run._DIAGNOSE_SURFACE:
+                return 0, '{"ok":true,"surface":"METHOD_SELECTION"}'
+            return 0, ""
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            return 0, ""  # HTTP 200
+
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _get)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+        assert operator_auth_run._maybe_resolve_method_selection() is True
+
+    def test_return_false_on_method_selection_but_non200(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A non-zero resolve (no HTTP 200) must yield advanced=False even when
+        # the surface is METHOD_SELECTION, so the incumbent flow is preserved.
+        def _get(endpoint: str) -> tuple[int, str]:
+            if endpoint == operator_auth_run._DIAGNOSE_SURFACE:
+                return 0, '{"ok":true,"surface":"METHOD_SELECTION"}'
+            return 0, ""
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            return 22, "policy-denied"
+
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _get)
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+        assert operator_auth_run._maybe_resolve_method_selection() is False
+
+
+class TestBeginSigninReProbe:
+    """begin-signin must tolerate SPA hydration with bounded retries."""
+
+    def test_begin_signin_retries_then_succeeds_without_resubmit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # SPA hydration: the first two begin-signin probes fail, the third
+        # succeeds. The pipeline must absorb the transient and NEVER re-submit
+        # credentials as part of the retry.
+        attempts = {"n": 0}
+        posts: list[str] = []
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            posts.append(endpoint)
+            if endpoint == operator_auth_run._BEGIN_SIGNIN:
+                attempts["n"] += 1
+                if attempts["n"] < 3:
+                    return 22, "transient hydration"
+                return 0, ""
+            return 0, ""
+
+        submits = {"n": 0}
+
+        def _submit(payload: str) -> tuple[int, str]:
+            submits["n"] += 1
+            return 0, '{"ok":true,"auth_state":"UNKNOWN"}'
+
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+        monkeypatch.setattr(operator_auth_run, "_BEGIN_SIGNIN_INTERVAL_S", 0.0, raising=False)
+        monkeypatch.setattr(operator_auth_run, "_discover_email_gate", lambda: True)
+        monkeypatch.setattr(operator_auth_run, "_decrypt_credential", lambda n: "v")
+        monkeypatch.setattr(operator_auth_run, "_run_in_container_submit", _submit)
+        monkeypatch.setattr(
+            operator_auth_run,
+            "_await_mfa_and_authenticate",
+            lambda *args, **kwargs: operator_auth_run.RunStatus.OK,
+        )
+        # AUTH-115: keep this test focused on begin-signin retry only. Stub the
+        # new METHOD_SELECTION branch so run_canonical() never enters it.
+        monkeypatch.setattr(
+            operator_auth_run, "_maybe_resolve_method_selection", lambda: False
+        )
+
+        rc = operator_auth_run.run_canonical()
+        assert rc == operator_auth_run.RunStatus.OK
+        # Exactly three begin-signin probes were needed (bounded at 3).
+        assert attempts["n"] == 3
+        # Credentials were submitted exactly once, never repeated per retry.
+        assert submits["n"] == 1
+
+    def test_begin_signin_three_failures_returns_begin_signin_failed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        attempts = {"n": 0}
+
+        def _post(endpoint: str) -> tuple[int, str]:
+            if endpoint == operator_auth_run._BEGIN_SIGNIN:
+                attempts["n"] += 1
+                return 22, "transient hydration"
+            return 0, ""
+
+        submits = {"n": 0}
+
+        def _submit(payload: str) -> tuple[int, str]:
+            submits["n"] += 1
+            return 0, '{"ok":true}'
+
+        monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _post)
+        monkeypatch.setattr(operator_auth_run, "_DISCOVER_INTERVAL_S", 0.0)
+        monkeypatch.setattr(operator_auth_run, "_BEGIN_SIGNIN_INTERVAL_S", 0.0, raising=False)
+        monkeypatch.setattr(operator_auth_run, "_discover_email_gate", lambda: True)
+        monkeypatch.setattr(operator_auth_run, "_decrypt_credential", lambda n: "v")
+        monkeypatch.setattr(operator_auth_run, "_run_in_container_submit", _submit)
+
+        rc = operator_auth_run.run_canonical()
+        assert rc == operator_auth_run.RunStatus.BEGIN_SIGNIN_FAILED
+        # Bounded at exactly 3 attempts; no unbounded retry loop.
+        assert attempts["n"] == 3
+        # Fail-closed: no credential submit happened at all.
+        assert submits["n"] == 0
+
+    def test_begin_signin_retry_bound_is_three(self) -> None:
+        # The bound is declared in source, not derived from caller input.
+        assert operator_auth_run._BEGIN_SIGNIN_RETRIES == 3
+        assert operator_auth_run._BEGIN_SIGNIN_INTERVAL_S == pytest.approx(2.0)
 
 
 class TestNoSecretExposure:
@@ -376,7 +882,7 @@ class TestResolveReProbe:
         monkeypatch.setattr(
             operator_auth_run,
             "_await_mfa_and_authenticate",
-            lambda: operator_auth_run.RunStatus.OK,
+            lambda *args, **kwargs: operator_auth_run.RunStatus.OK,
         )
         rc = operator_auth_run.run_canonical()
         # The transient resolve failure was absorbed; the pre-MFA pipeline completed.

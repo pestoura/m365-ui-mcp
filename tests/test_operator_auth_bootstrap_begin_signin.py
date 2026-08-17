@@ -61,6 +61,38 @@ BEGIN_SIGNIN_PATH = "/auth/bootstrap/begin-signin"
 # --------------------------------------------------------------------------
 
 
+class _FakeLocator:
+    """Minimal Playwright locator double.
+
+    Models a role-based locator so planner_web tests can express
+    ``page.get_by_role('button', name='Sign In', exact=True)``, then
+    ``count()`` and ``click()``. The fake page owns the candidate set produced
+    by ``get_by_role`` — the wire-up between page state and role candidates is
+    the production responsibility under test (RED: production never resolves or
+    clicks a Sign In candidate).
+    """
+
+    def __init__(self, page: _FakePage, role: str, name: str, exact: bool) -> None:
+        self._page = page
+        self._role = role
+        self._name = name
+        self._exact = exact
+        self.clicks = 0
+
+    async def count(self) -> int:
+        # Delegate to the page so the production code (not the test) decides
+        # which elements match the role/name/exact selector. In RED, production
+        # never queries the page, so this returns the authored candidate set.
+        return self._page._sign_in_candidates(self._role, self._name, self._exact)
+
+    async def click(self) -> None:
+        # 1:1 with the real locator contract — click must be fail-closed on
+        # count != 1.
+        assert await self.count() == 1, "click() requires exactly one matching element"
+        self.clicks += 1
+        self._page._record_sign_in_click()
+
+
 class _FakePage:
     def __init__(self, url: str = "about:blank", landing_url: str | None = None) -> None:
         self.url = url
@@ -70,20 +102,98 @@ class _FakePage:
         # successful navigation to the target.
         self.landing_url = landing_url
         self.goto_calls: list[str] = []
+        # Sign In candidate modeling for planner_web click tests.
+        self.sign_in_candidates: int = 1
+        self.sign_in_clicks: int = 0
+        self.credential_fills: list[str] = []
+        self.credential_types: list[str] = []
+        self.credential_presses: list[str] = []
+        self.popup_urls_on_click: list[str] = []
+        # Popups appended to context.pages ONLY after the Sign In click
+        # coroutine has returned and the caller has snapshotted context.pages —
+        # models a popup window that opens asynchronously after the click
+        # resolves (delayed-popup regression).
+        self.delayed_popup_urls_after_click: list[str] = []
+        self.delayed_popup_delay_s: float = 0.02
+        self._context = None
+        self.closed = False
 
     async def goto(self, url: str) -> None:
         self.goto_calls.append(url)
         self.url = self.landing_url if self.landing_url is not None else url
 
+    def get_by_role(self, role: str, *, name: str, exact: bool = False) -> _FakeLocator:
+        # Exposes the role-based locator API used by the planner_web Sign In
+        # click path. The candidate count is owned by the page state so the
+        # production resolver (RED: absent) is what would populate it.
+        return _FakeLocator(self, role, name, exact)
+
+    def _sign_in_candidates(self, role: str, name: str, exact: bool) -> int:
+        # The test-authored candidate count. Production is responsible for
+        # deriving this from the live DOM; the fake only mirrors it.
+        return self.sign_in_candidates
+
+    def _record_sign_in_click(self) -> None:
+        self.sign_in_clicks += 1
+        if self.popup_urls_on_click:
+            assert self._context is not None
+            for popup_url in self.popup_urls_on_click:
+                popup = _FakePage(popup_url)
+                popup._context = self._context
+                self._context.pages.append(popup)
+            return
+        if self.delayed_popup_urls_after_click:
+            # Append the fake popups ONLY after the Sign In click coroutine
+            # returns and the caller has snapshotted context.pages, modeling a
+            # window that opens asynchronously after the click resolves.
+            assert self._context is not None
+            loop = asyncio.get_running_loop()
+            delay = self.delayed_popup_delay_s
+            urls = self.delayed_popup_urls_after_click
+            ctx = self._context
+
+            async def _append_late_popups() -> None:
+                await asyncio.sleep(delay)
+                for popup_url in urls:
+                    popup = _FakePage(popup_url)
+                    popup._context = ctx
+                    ctx.pages.append(popup)
+
+            loop.create_task(_append_late_popups())
+            return
+        self.url = (
+            self.landing_url
+            if self.landing_url is not None
+            else MICROSOFT_AUTH_BOOTSTRAP_URL
+        )
+
+    async def close(self) -> None:
+        self.closed = True
+        if self._context is not None and self in self._context.pages:
+            self._context.pages.remove(self)
+
+    async def fill(self, selector: str, value: str) -> None:
+        # Credential primitive — must never be exercised by begin-signin.
+        self.credential_fills.append(value)
+
+    async def type(self, text: str) -> None:
+        self.credential_types.append(text)
+
+    async def press(self, key: str) -> None:
+        self.credential_presses.append(key)
+
 
 class _FakeContext:
     def __init__(self, pages: list[_FakePage] | None = None) -> None:
         self.pages = pages if pages is not None else []
+        for page in self.pages:
+            page._context = self
         self.new_page_calls = 0
 
     async def new_page(self) -> _FakePage:
         self.new_page_calls += 1
         page = _FakePage()
+        page._context = self
         self.pages.append(page)
         return page
 
@@ -630,8 +740,9 @@ def test_existing_planner_web_page_is_reused_for_begin_signin() -> None:
     browser = _started_production_browser()
     browser._context = context  # noqa: SLF001
     asyncio.run(browser.begin_auth_signin())
-    # Exactly one navigation, and it landed on the SAME existing page.
-    assert context.pages[0].goto_calls == [MICROSOFT_AUTH_BOOTSTRAP_URL]
+    # Exactly one fixed Sign In click on the SAME existing page; no direct goto.
+    assert context.pages[0].sign_in_clicks == 1
+    assert context.pages[0].goto_calls == []
     assert context.new_page_calls == 0
     assert len(context.pages) == 1
 
@@ -686,16 +797,193 @@ def test_arbitrary_origin_source_fails_closed_without_hijacking() -> None:
     assert all(p.goto_calls == [] for p in context.pages)
 
 
-def test_begin_signin_introduces_no_credential_fill_click_type() -> None:
-    # Inspect the production method source: it must navigate only. No fill,
-    # click, type, press, locator() or to_submit primitives may appear.
+def test_begin_signin_clicks_fixed_sign_in_on_planner_web_no_credentials() -> None:
+    # RED: the planner_web branch must resolve the fixed Sign In button by
+    # role and click exactly one candidate — it must NOT navigate via
+    # page.goto on planner_web, and it must never exercise credential
+    # primitives (fill / type / press / to_submit).
     import inspect
 
     source = inspect.getsource(PersistentBrowser.begin_auth_signin)
-    for forbidden in ("fill", "click", "type", "press", "locator", "to_submit"):
+    # Credential entry is always forbidden.
+    for forbidden in ("fill(", "type(", "press(", "to_submit"):
         assert forbidden not in source
-    # The only browser action permitted is a single closed-target navigation.
-    assert "page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)" in source
+    # The fixed Sign In locator must be resolved by role, then clicked exactly
+    # once (gated on count() == 1).
+    assert 'get_by_role("button", name="Sign In", exact=True)' in source
+    assert ".click()" in source
+
+
+
+def test_begin_signin_promotes_single_approved_popup_and_closes_planner_source() -> None:
+    source = _planner_web_page_with_candidates(1)
+    source.popup_urls_on_click = ["https://login.microsoftonline.com/common/oauth2/v2.0/authorize"]
+    context = _FakeContext([source])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    asyncio.run(browser.begin_auth_signin())
+    assert source.closed is True
+    assert len(context.pages) == 1
+    popup = context.pages[0]
+    assert popup is not source
+    assert popup.closed is False
+    assert popup.url.startswith("https://login.microsoftonline.com/")
+
+
+def test_begin_signin_rejects_unapproved_popup_and_closes_only_new_popup() -> None:
+    source = _planner_web_page_with_candidates(1)
+    source.popup_urls_on_click = ["https://evil.example/"]
+    context = _FakeContext([source])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+    assert source.closed is False
+    assert context.pages == [source]
+
+
+def test_begin_signin_rejects_multiple_new_popups_and_closes_only_new_pages() -> None:
+    source = _planner_web_page_with_candidates(1)
+    source.popup_urls_on_click = [
+        "https://login.microsoftonline.com/a",
+        "https://login.microsoftonline.com/b",
+    ]
+    context = _FakeContext([source])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+    assert source.closed is False
+    assert context.pages == [source]
+
+
+def test_begin_signin_promotes_delayed_approved_popup_after_click_returns() -> None:
+    # Delayed-popup regression. The Planner Sign In click resolves immediately
+    # (source Planner page remains Planner), then exactly ONE new fake popup is
+    # appended to context.pages asynchronously AFTER the click returns (0.02s).
+    # Desired production behavior: begin_auth_signin waits BOUNDEDLY for the
+    # late popup, promotes it because its URL is an approved Microsoft auth
+    # origin, closes ONLY the Planner source, leaves exactly one page (popup),
+    # and returns success. Current production snapshots context.pages
+    # synchronously after click() and sees no popup, so it treats the flow as
+    # same-tab and fails the landing gate (RED).
+    source = _planner_web_page_with_candidates(1)
+    source.delayed_popup_urls_after_click = [
+        "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+    ]
+    context = _FakeContext([source])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    asyncio.run(browser.begin_auth_signin())
+    # Exactly the Planner source is closed; the late approved popup remains as
+    # the single page.
+    assert source.closed is True
+    assert len(context.pages) == 1
+    popup = context.pages[0]
+    assert popup is not source
+    assert popup.closed is False
+    assert popup.url.startswith("https://login.microsoftonline.com/")
+
+
+def test_begin_signin_rejects_multiple_delayed_popups() -> None:
+    # Fail-closed: two new fake popups appear asynchronously AFTER the Sign In
+    # click returns. Desired behavior closes ONLY the two new popups and
+    # preserves the source Planner page (no promotion, no hijack). Current
+    # production snapshots context.pages synchronously after click() and sees no
+    # new pages, falling through to the same-tab path; it never observes the
+    # delayed multi-popup topology (RED due missing popup-creation wait). We
+    # keep the event loop alive after the call so the delayed popups actually
+    # materialize, which current production leaves unhandled.
+    source = _planner_web_page_with_candidates(1)
+    source.delayed_popup_urls_after_click = [
+        "https://login.microsoftonline.com/a",
+        "https://login.microsoftonline.com/b",
+    ]
+    context = _FakeContext([source])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+
+    async def _run() -> None:
+        with pytest.raises(PolicyDenied):
+            await browser.begin_auth_signin()
+        # Allow the asynchronously-scheduled delayed popups to materialize.
+        await asyncio.sleep(0.05)
+
+    asyncio.run(_run())
+    # Source preserved; only the newly-spawned popups are closed.
+    assert source.closed is False
+    assert context.pages == [source]
+# --------------------------------------------------------------------------
+# Sign In resolution on planner_web (RED: production still always page.goto and
+# does not resolve/click a Sign In candidate).
+# --------------------------------------------------------------------------
+
+
+def _planner_web_page_with_candidates(n: int) -> _FakePage:
+    page = _FakePage("https://planner.cloud.microsoft/")
+    page.sign_in_candidates = n
+    return page
+
+
+def test_planner_web_single_sign_in_candidate_clicks_once_no_goto() -> None:
+    # Exactly one Sign In candidate on planner_web: begin-signin must click it
+    # exactly once and must NOT page.goto the auth target.
+    context = _FakeContext([_planner_web_page_with_candidates(1)])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    asyncio.run(browser.begin_auth_signin())
+    assert context.pages[0].sign_in_clicks == 1
+    assert context.pages[0].goto_calls == []
+    assert context.new_page_calls == 0
+
+
+def test_planner_web_zero_sign_in_candidates_fails_closed() -> None:
+    # No Sign In candidate: fail closed — no click, no navigation, no new page.
+    context = _FakeContext([_planner_web_page_with_candidates(0)])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+    assert context.pages[0].sign_in_clicks == 0
+    assert context.pages[0].goto_calls == []
+    assert context.new_page_calls == 0
+
+
+def test_planner_web_multiple_sign_in_candidates_fails_closed() -> None:
+    # Ambiguous topology: more than one Sign In candidate must fail closed.
+    context = _FakeContext([_planner_web_page_with_candidates(2)])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+    assert context.pages[0].sign_in_clicks == 0
+    assert context.pages[0].goto_calls == []
+    assert context.new_page_calls == 0
+
+
+def test_post_click_landing_on_non_approved_origin_fails_closed() -> None:
+    # After clicking Sign In, the post-click landing verification must still
+    # fail closed if the committed origin is not an approved auth origin.
+    page = _planner_web_page_with_candidates(1)
+    page.landing_url = "https://example.com/blocked"
+    context = _FakeContext([page])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    with pytest.raises(PolicyDenied):
+        asyncio.run(browser.begin_auth_signin())
+    assert context.new_page_calls == 0
+
+
+def test_neutral_page_still_uses_fixed_goto_and_no_click() -> None:
+    # Neutral surface keeps the existing closed-target navigation and must not
+    # click any Sign In candidate.
+    context = _FakeContext([_FakePage("about:blank")])
+    browser = _started_production_browser()
+    browser._context = context  # noqa: SLF001
+    asyncio.run(browser.begin_auth_signin())
+    assert context.pages[0].goto_calls == [MICROSOFT_AUTH_BOOTSTRAP_URL]
+    assert context.pages[0].sign_in_clicks == 0
+    assert context.new_page_calls == 0
 
 
 # --------------------------------------------------------------------------
@@ -711,7 +999,8 @@ def test_landing_on_approved_auth_origin_succeeds() -> None:
     browser = _started_production_browser()
     browser._context = context  # noqa: SLF001
     asyncio.run(browser.begin_auth_signin())
-    assert context.pages[0].goto_calls == [MICROSOFT_AUTH_BOOTSTRAP_URL]
+    assert context.pages[0].sign_in_clicks == 1
+    assert context.pages[0].goto_calls == []
     assert context.pages[0].url == "https://login.microsoftonline.com/"
     assert context.new_page_calls == 0
 

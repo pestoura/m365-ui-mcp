@@ -7,13 +7,19 @@ surface and never exports authenticated session material.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from m365_browser_worker.auth_bootstrap import AuthOriginStatus, auth_origin_status
+from m365_browser_worker.auth_bootstrap import (
+    AuthOriginStatus,
+    _is_approved_auth_origin,
+    auth_origin_status,
+)
 from m365_browser_worker.bootstrap_navigation import (
     AUTH_BEGIN_EMAIL_STAGE_OPERATION,
     AUTH_BEGIN_SIGNIN_OPERATION,
@@ -35,20 +41,26 @@ from m365_browser_worker.locator_runtime import (
     resolve_visible_locator,
 )
 from m365_browser_worker.operator_signin import (
+    COMBINED_FORM_PASSWORD_ID,
+    COMBINED_FORM_SUBMIT_ID,
     EMAIL_SELECTOR_NAME,
     NEXT_SELECTOR_NAME,
     PASSWORD_SELECTOR_NAME,
     SIGNIN_SELECTOR_NAME,
     OperatorSignInInput,
     common_auth_locator_plan,
+    detect_combined_signin_form,
+    submit_combined_signin_form,
 )
 from m365_browser_worker.signin_surface import (
     AUTH_DIAGNOSE_OPERATION,
     AUTH_KMSI_OPERATION,
+    AUTH_METHOD_SELECTION_OPERATION,
     AUTH_RESOLVE_OPERATION,
     SigninSurfaceKind,
     SurfaceClassification,
     classify_signin_surface,
+    resolve_method_selection_surface,
     resolve_signin_surface_to_email_entry,
     resolve_stay_signed_in_surface,
 )
@@ -94,6 +106,42 @@ CONDITIONAL_ACCESS_MARKERS = (
 # a unique visible match before failing closed. Keeps the operator submit path
 # from hanging against a live Microsoft sign-in page.
 OPERATOR_SIGNIN_STAGE_TIMEOUT_MS = 5_000
+
+# AUTH-118 popup-aware begin-signin bounds. After a Sign In click spawns a
+# popup window, the popup's URL may sit on ``about:blank`` for a moment before
+# committing to a Microsoft authentication origin. We wait a SHORT bounded window
+# (sum ~0.3s) polling the popup URL via the closed ``_is_approved_auth_origin``
+# check — never a long poll, never an invented host, never raw text/DOM.
+_POPUP_APPROVED_ORIGIN_WAIT_ITERS = 6
+_POPUP_APPROVED_ORIGIN_WAIT_S = 0.05
+
+# AUTH-118 delayed-popup stabilization after the Sign In click. A popup window
+# may be created ASYNCHRONOUSLY by the browser/Planner Web only after the click
+# coroutine has already resolved. Before computing new_pages we poll
+# context.pages ONLY by object identity over a SHORT bounded window
+# (total <=0.5s) so late popups are observed without ever reading a URL,
+# text, DOM or value. No page guard is relaxed; the existing popup logic
+# below is reused exactly.
+_POPUP_CREATION_STABILIZE_ITERS = 10
+_POPUP_CREATION_STABILIZE_WAIT_S = 0.03
+
+# Bounded post-submit surface-transition verification for the sequential path.
+# After the Microsoft form Sign-in click, the fixed password input (id=i0118)
+# and submit control (id=idSIButton9) must disappear — the surface transitioned
+# to the next auth step. A single non-unique sample is NOT enough: a transient
+# dip (control momentarily absent then back to uniquely present) must not be
+# accepted as a transition. Require a small consecutive streak of
+# ``_SUBMIT_TRANSITION_ABSENCE_STREAK`` samples where EITHER control is absent or
+# non-unique before concluding the surface transitioned; a return to uniquely
+# present resets the streak. If the stable-absence streak is never reached, the
+# sign-in did NOT progress (observed METHOD_SELECTION / reauth stall) and
+# submit_operator_signin fails closed instead of reporting success. Only control
+# counts are read; no text/DOM read, no field value, no URL logged. Mirrors the
+# fixed control ids already used by ``detect_combined_signin_form``. Total wait is
+# ~0.25s (<=1s budget).
+_SUBMIT_TRANSITION_WAIT_ITERS = 5
+_SUBMIT_TRANSITION_WAIT_S = 0.05
+_SUBMIT_TRANSITION_ABSENCE_STREAK = 3
 
 def detect_conditional_access_block(page_text: str) -> bool:
     """Detect a Conditional Access managed-device wall from page text."""
@@ -386,7 +434,8 @@ class PersistentBrowser:
                     )
                 existing_neutral = candidate
 
-        if existing_planner_web is not None:
+        planner_web_selected = existing_planner_web is not None
+        if planner_web_selected:
             page = existing_planner_web
         elif existing_neutral is not None:
             page = existing_neutral
@@ -396,8 +445,86 @@ class PersistentBrowser:
             # auth origin, or no pages yet), so open exactly one new page.
             page = await context.new_page()
 
-        # Exactly one navigation per operator call; no retry loop.
-        await page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)
+        # The page the post-click landing gate / surface reset applies to.
+        # Defaults to the navigated/clicked page; becomes the approved popup
+        # when the source Planner Web page is closed for an approved popup.
+        final_page: Any = page
+
+        if not planner_web_selected:
+            # Exactly one fixed navigation for neutral/new-page bootstrap; no retry loop.
+            await page.goto(MICROSOFT_AUTH_BOOTSTRAP_URL)
+        else:
+            sign_in = page.get_by_role("button", name="Sign In", exact=True)
+            sign_in_count = await sign_in.count()
+            if sign_in_count != 1:
+                raise PolicyDenied(
+                    "begin sign-in requires exactly one Planner Web Sign In control",
+                    operation=AUTH_BEGIN_SIGNIN_OPERATION,
+                )
+            # AUTH-118 popup-aware begin-signin. Snapshot the live context pages
+            # by object identity BEFORE the click so we can detect ONLY the
+            # pages the click actually spawns (a popup window). Pre-existing
+            # pages are never closed/hijacked arbitrarily; only newly-spawned
+            # pages are evaluated and closed on policy failure. The source
+            # Planner Web page remains the click target throughout.
+            before_pages = set(id(p) for p in context.pages)
+            await sign_in.click()
+            # AUTH-118 delayed-popup stabilization: after the Sign In click
+            # returns, a popup window may be created ASYNCHRONOUSLY by the
+            # browser/Planner Web only after the click coroutine has resolved.
+            # Snapshotting context.pages synchronously here would miss a late
+            # popup and misclassify the flow as same-tab. Perform a SHORT bounded
+            # wait that polls context.pages ONLY by object identity (never a
+            # URL/text/DOM/value read) so newly-spawned popup objects are
+            # observed before new_pages is computed. Total added wait is bounded
+            # (<=0.5s) and the existing popup guards below are reused exactly.
+            stabilized = list(context.pages)
+            for _ in range(_POPUP_CREATION_STABILIZE_ITERS):
+                await asyncio.sleep(_POPUP_CREATION_STABILIZE_WAIT_S)
+                current = list(context.pages)
+                if set(id(p) for p in current) == set(id(p) for p in stabilized):
+                    break
+                stabilized = current
+            after_pages = stabilized
+            new_pages = [p for p in after_pages if id(p) not in before_pages]
+
+            if len(new_pages) == 0:
+                # Same-tab flow unchanged: the Sign In click performed an
+                # in-place navigation on the source page. Preserve exactly the
+                # existing same-tab behavior + landing gate below.
+                pass
+            elif len(new_pages) == 1:
+                popup = new_pages[0]
+                if await self._popup_reaches_approved_auth_origin(popup):
+                    # Approved popup: close ONLY the source Planner Web page and
+                    # leave the popup as the single page for the next steps.
+                    await page.close()
+                    final_page = popup
+                else:
+                    # Unapproved popup surface: close ONLY the new popup and
+                    # fail closed; the source remains untouched.
+                    await popup.close()
+                    raise PolicyDenied(
+                        "begin sign-in popup did not reach an approved "
+                        "Microsoft authentication origin; refusing",
+                        operation=AUTH_BEGIN_SIGNIN_OPERATION,
+                    )
+            else:
+                # More than one new page spawned: ambiguous topology. Close ONLY
+                # the newly-spawned pages and fail closed; the source remains.
+                for np in new_pages:
+                    await np.close()
+                raise PolicyDenied(
+                    "begin sign-in refused an ambiguous multi-popup topology",
+                    operation=AUTH_BEGIN_SIGNIN_OPERATION,
+                )
+
+        # AUTH-117: once begin-signin has chosen the final landing page and
+        # verified it sits on an approved Microsoft auth origin, the flow invokes
+        # ``_maybe_force_reauth_on_landing`` on that page exactly once (see the
+        # landing-gate block below). The native Planner Web OAuth
+        # redirect_uri/state/PKCE query is preserved and only ``prompt=login`` is
+        # set/replaced; the origin is re-validated after the eventual navigation.
 
         # AUTH-112: a (re)navigation to the Microsoft auth target may recreate a
         # pre-email intermediate surface (account chooser / "use another
@@ -418,7 +545,115 @@ class PersistentBrowser:
         # the REAL landing origin on the exact page object that was navigated
         # (no stale reference) using the closed auth-origin policy. The URL is
         # reduced to a closed classification and never returned to a caller.
-        await self._require_landed_on_approved_auth_origin(page)
+        await self._require_landed_on_approved_auth_origin(final_page)
+
+        # AUTH-117: force reauthentication on the landing page so a remembered
+        # session does not bypass the combined credential form. This preserves
+        # the Planner-generated OAuth redirect_uri/state/PKCE exactly and only
+        # sets prompt=login. Fails closed inside the helper (no navigation on a
+        # non-approved origin or an origin without a query string).
+        await self._maybe_force_reauth_on_landing(final_page)
+
+        # Re-validate the landing origin after the eventual same-page
+        # reauthentication navigation; fails closed if the page left the
+        # approved Microsoft auth origin.
+        await self._require_landed_on_approved_auth_origin(final_page)
+
+    async def _maybe_force_reauth_on_landing(self, page: Any) -> None:
+        """Force reauthentication when the combined credential form is absent.
+
+        AUTH-117 (minimal, fail-closed). After begin-signin lands on a Microsoft
+        OAuth authorization URL, the persistent professional profile may be
+        silently routed to a remembered-session surface (Sign-in options /
+        passkey) instead of the credential form. We must force reauthentication
+        while PRESERVING the Planner-generated OAuth redirect_uri / state / PKCE.
+
+        Behavior:
+
+        * first check the closed combined-form structural ids (i0116 + i0118 +
+          idSIButton9) WITHOUT reading any value;
+        * if all three are uniquely present -> return normally, no extra goto;
+        * if they are NOT present AND the current page URL is a Microsoft OAuth
+          authorization URL (an approved auth origin host with a non-empty query
+          string) -> parse the CURRENT URL locally, preserve every existing
+          query parameter/value exactly, set/replace ONLY
+          ``prompt=login``, and
+          navigate the SAME page once to that modified URL;
+        * otherwise (non-approved origin, or an approved origin with no query
+          string) -> fail closed: no navigation, no logging, no URL/value return;
+        * never loops or retries; never uses Sign-in options; never touches
+          credentials here.
+
+        The URL and its query values are reduced to a closed host/query-shape
+        decision and are never logged, returned, or placed in any error. Only
+        the sanitized boolean outcome of the structural form check leaves this
+        method.
+        """
+        from m365_browser_worker.auth_bootstrap import _is_approved_auth_origin
+        from m365_browser_worker.operator_signin import (
+            detect_combined_signin_form,
+        )
+
+        # Closed structural check only; never reads field values.
+        form_present = await detect_combined_signin_form(page)
+        if form_present:
+            # Combined credential form already available: no extra navigation.
+            return
+
+        # Form absent: only force reauth on an approved Microsoft OAuth
+        # authorization URL that already carries a query string (so we can
+        # preserve the Planner-generated redirect_uri/state/PKCE exactly).
+        raw = str(getattr(page, "url", "") or "")
+        parsed = urlsplit(raw)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if not parsed.query or not _is_approved_auth_origin(host):
+            # Fail closed: non-approved origin, or an approved origin without a
+            # query string. No navigation, no URL/value leak.
+            return
+
+        # Preserve every existing query parameter/value; set/replace ONLY
+        # prompt=login (forces credential re-entry and interrupts SSO, ensuring
+        # the combined sign-in form is presented rather than a remembered
+        # session). The query string is reconstructed locally from the
+        # parsed current URL; no value is logged or returned.
+        params = parse_qsl(parsed.query, keep_blank_values=True)
+        filtered = [(k, v) for (k, v) in params if k.lower() != "prompt"]
+        filtered.append(("prompt", "login"))
+        new_query = urlencode(filtered)
+        rebuilt = urlunsplit(
+            (parsed.scheme, parsed.netloc, parsed.path, new_query, parsed.fragment)
+        )
+        # Exactly one same-page navigation; no retry loop.
+        await page.goto(rebuilt)
+
+    async def _popup_reaches_approved_auth_origin(self, popup: Any) -> bool:
+        """Boundedly wait for a popup to attain an approved Microsoft auth origin.
+
+        AUTH-118 (popup-aware begin-signin). A Sign In click MAY spawn a popup
+        window whose URL initially is ``about:blank`` and only later commits to
+        the Microsoft authentication origin. This helper performs a SHORT bounded
+        wait (never a long poll) for the popup's URL to reach an auth Microsoft
+        origin already approved by the existing closed ``auth_origin_status``
+        function — it does NOT invent hosts and never reads raw text/DOM. If the
+        popup leaves ``about:blank`` but lands on a non-approved origin, or the
+        bounded wait elapses without an approved origin, it returns False so the
+        caller closes ONLY the popup and fails closed.
+
+        No wildcard origin, identity selection, credential or MFA is involved.
+        The URL is reduced to the closed ``auth_origin_status`` classification
+        and is never returned to a caller.
+        """
+        from urllib.parse import urlsplit
+
+        # Bound the wait: a popup either commits to an auth origin quickly or it
+        # never does. We never block the operator flow for long.
+        for _ in range(_POPUP_APPROVED_ORIGIN_WAIT_ITERS):
+            raw = str(getattr(popup, "url", "") or "")
+            host = (urlsplit(raw).hostname or "").lower().rstrip(".")
+            if raw.startswith("https://") and _is_approved_auth_origin(host):
+                return True
+            await asyncio.sleep(_POPUP_APPROVED_ORIGIN_WAIT_S)
+        return False
 
     async def _require_landed_on_approved_auth_origin(self, page: Any) -> None:
         """Fail closed unless ``page`` now sits on an approved Microsoft auth origin.
@@ -678,6 +913,63 @@ class PersistentBrowser:
             )
         return resolution.terminal_surface
 
+    async def resolve_method_selection_surface(self) -> SigninSurfaceKind:
+        """Operator-only deterministic METHOD_SELECTION -> Microsoft
+        Authenticator approval resolution (AUTH-115).
+
+        Resolves the credential-free, MFA-free Microsoft Entra ID method-
+        selection interstitial by clicking ONLY the fixed Microsoft
+        Authenticator approval control, and ONLY when that control is strictly
+        unique (exactly one candidate across the entire CLOSED label set AND
+        both button/link roles).
+
+        Fail-closed contract:
+
+        * guard chain identical to ``resolve_kmsi_surface`` (started live
+          browser, dedicated persistent professional profile, approved Microsoft
+          authentication origin, exactly one open auth page);
+        * NO credential is typed, NO cached identity is selected, NO Sign in is
+          clicked, NO URL/locator navigation is performed;
+        * any non-``METHOD_SELECTION`` surface, or an absent/ambiguous fixed
+          control (global candidate count != 1), raises ``PolicyDenied`` with
+          only the sanitized closed terminal-surface enum;
+        * bounded visible body text is read internally and never logged/returned.
+
+        Returns the sanitized closed post-resolution ``SigninSurfaceKind``.
+        """
+        if not self.started:
+            raise WorkerUnavailable(
+                "METHOD_SELECTION surface resolution requires a started live browser",
+                operation=AUTH_METHOD_SELECTION_OPERATION,
+            )
+        if not self.is_dedicated_persistent_profile():
+            raise PolicyDenied(
+                "METHOD_SELECTION surface resolution requires the dedicated "
+                "persistent professional browser profile",
+                operation=AUTH_METHOD_SELECTION_OPERATION,
+            )
+        if not self.auth_origin_approved():
+            raise PolicyDenied(
+                "METHOD_SELECTION surface resolution requires the page to be on "
+                "an approved Microsoft authentication origin",
+                operation=AUTH_METHOD_SELECTION_OPERATION,
+            )
+
+        page = self._require_single_auth_page()
+
+        async def _read() -> str:
+            return await self.read_visible_body_bounded(max_chars=2000)
+
+        resolution = await resolve_method_selection_surface(page, _read)
+        if not resolution.advanced:
+            raise PolicyDenied(
+                "sign-in surface is not a deterministic METHOD_SELECTION stage; "
+                "manual operator intervention required",
+                operation=AUTH_METHOD_SELECTION_OPERATION,
+                terminal_surface=resolution.terminal_surface.value,
+            )
+        return resolution.terminal_surface
+
     async def diagnose_signin_surface(self) -> SurfaceClassification:
         """READ-ONLY closed classification of the current sign-in surface.
 
@@ -807,6 +1099,53 @@ class PersistentBrowser:
                 operation=AUTH_OPERATOR_SUBMIT_OPERATION,
             )
 
+        page = self._require_single_auth_page()
+
+        # OBSERVED combined Entra ID form (email + password + submit on one
+        # page). Probe the fixed control ids deterministically; when they are
+        # ALL uniquely present, submit the combined form directly. This is the
+        # minimal change for the observed combined form; the incumbent
+        # sequential email -> Next -> password -> Sign-in flow below remains the
+        # fallback when the combined form is not uniquely present. Only the fixed
+        # ids are used; no text read, no navigation, no selector guessing. Any
+        # detection failure silently falls through to the sequential path.
+        combined_present = False
+        try:
+            combined_present = await detect_combined_signin_form(page)
+        except Exception:  # noqa: BLE001 - fail closed: prefer sequential fallback
+            combined_present = False
+        if combined_present:
+            await submit_combined_signin_form(page, signin)
+            # The combined submit MUST NOT be trusted blindly. Either the
+            # password surface transitions away stably (success), or the
+            # OBSERVED password-only surface remains/reappears (password input
+            # + Sign-in uniquely present) and the SAME call continues with the
+            # password tail ONLY: re-fill the fixed password id, click the fixed
+            # Sign-in id once, and require the same stable transition. The
+            # email/Next stage is never rerun. Only the fixed control ids and
+            # locator counts are used; no text/value/URL/DOM read.
+            if await self._password_surface_transitioned(page):
+                return
+            page_locator = getattr(page, "locator", None)
+            if page_locator is None:
+                raise WorkerUnavailable(
+                    "operator sign-in cannot verify the combined-form password "
+                    "tail without a page locator primitive",
+                    operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+                )
+            # Memory-only: the password is consumed for exactly one fill and
+            # then dropped. It is never stored, logged, or returned.
+            await page_locator(f"#{COMBINED_FORM_PASSWORD_ID}").fill(signin.password)
+            await page_locator(f"#{COMBINED_FORM_SUBMIT_ID}").click()
+            if await self._password_surface_transitioned(page):
+                return
+            raise PolicyDenied(
+                "operator sign-in password-only tail did not advance the "
+                "authentication surface; the sign-in form remained present "
+                "after submission",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+
         # Structured progression plans are loaded only from the attested
         # common.auth fragments. If any of the four declared selectors is absent
         # the flow cannot proceed; fail closed with no selector value leaked.
@@ -821,7 +1160,6 @@ class PersistentBrowser:
                 operation=AUTH_OPERATOR_SUBMIT_OPERATION,
             )
 
-        page = self._require_single_auth_page()
         timeout_ms = OPERATOR_SIGNIN_STAGE_TIMEOUT_MS
 
         # Stage 1 — resolve and fill the email field.
@@ -895,6 +1233,69 @@ class PersistentBrowser:
                 reason=exc.reason,
             ) from None
         await cast("Any", signin_locator.locator).click()
+
+        # Post-click surface-transition verification (sequential path). Reuses
+        # the SAME stable-transition helper as the combined password-only tail
+        # so both paths share exactly one implementation. If the surface did not
+        # transition, fail closed instead of reporting success.
+        if not await self._password_surface_transitioned(page):
+            raise PolicyDenied(
+                "operator sign-in click did not advance the authentication "
+                "surface; the sign-in form remained present after submission",
+                operation=AUTH_OPERATOR_SUBMIT_OPERATION,
+            )
+
+    async def _password_surface_transitioned(self, page: Any) -> bool:
+        """Return whether the fixed password surface transitioned away stably.
+
+        Shared by the sequential Sign-in path and the combined password-only
+        tail. The fixed password input (id=i0118) and submit control
+        (id=idSIButton9) must be absent/non-unique for a small consecutive
+        sample streak before the transition is accepted (a transient dip that
+        returns to uniquely present resets the streak). Only control counts are
+        read -- no text/DOM read, no field value, no URL logged or returned.
+        Reuses the exact fixed combined-form control ids already imported for
+        ``detect_combined_signin_form``.
+
+        Returns ``True`` iff the stable-absence streak is reached within the
+        bounded wait; ``False`` otherwise (including any count error, which is
+        never accepted as a transition). A surface object lacking the
+        ``locator`` primitive (non-Playwright harness) cannot be verified and is
+        treated as already transitioned rather than inventing a control check.
+        """
+        page_locator = getattr(page, "locator", None)
+        if page_locator is None:
+            return True
+        try:
+            absent_streak = 0
+            for _ in range(_SUBMIT_TRANSITION_WAIT_ITERS):
+                try:
+                    pw_count = await page_locator(
+                        f"#{COMBINED_FORM_PASSWORD_ID}"
+                    ).count()
+                    sb_count = await page_locator(
+                        f"#{COMBINED_FORM_SUBMIT_ID}"
+                    ).count()
+                except Exception:  # noqa: BLE001 - surface not provably gone
+                    # A count error neither proves the surface gone nor
+                    # present; do not accept a transient transition. Stop
+                    # sampling and report no stable transition.
+                    return False
+                if pw_count != 1 or sb_count != 1:
+                    # Either control is no longer uniquely present: this is a
+                    # candidate transition sample. Require a small consecutive
+                    # streak before concluding the surface transitioned; a
+                    # return to uniquely present resets the streak so a
+                    # transient dip is never accepted as a stable transition.
+                    absent_streak += 1
+                else:
+                    # A control returned to uniquely present: the earlier
+                    # absence was transient; reset the streak.
+                    absent_streak = 0
+                await asyncio.sleep(_SUBMIT_TRANSITION_WAIT_S)
+        except Exception:  # noqa: BLE001 - any wait failure fails closed
+            return False
+        return absent_streak >= _SUBMIT_TRANSITION_ABSENCE_STREAK
 
     def _require_single_auth_page(self) -> Any:
         """Return the single open Microsoft auth page, or fail closed."""
