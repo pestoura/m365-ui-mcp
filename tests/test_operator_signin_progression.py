@@ -49,7 +49,7 @@ from m365_browser_worker.operator_signin import (
     OperatorSignInInput,
 )
 from m365_mcp.locators import LocatorCandidate, LocatorPlan, LocatorStrategy
-from planner_mcp.errors import PolicyDenied
+from planner_mcp.errors import PolicyDenied, WorkerUnavailable
 
 PROGRESSION_KEYS = (
     EMAIL_SELECTOR_NAME,
@@ -403,3 +403,274 @@ async def test_unattested_common_auth_fails_before_resolve(
     # Nothing was resolved or applied.
     assert scenario.resolver.calls == []
     assert scenario.actions == []
+
+
+# ------------------------------------------------------------------------------
+# Post-click transition: after the Sign-in click the password surface MUST have
+# transitioned away. If the password input and the sign-in button remain
+# uniquely present after the click, the sign-in did not progress (observed
+# METHOD_SELECTION / reauth stall) and submit_operator_signin MUST fail closed
+# (PolicyDenied / WorkerUnavailable) instead of returning success.
+# ------------------------------------------------------------------------------
+
+
+class _CountingLocator:
+    def __init__(self, n: int) -> None:
+        self._n = n
+
+    async def count(self) -> int:
+        return self._n
+
+
+class _TransitionPage:
+    """Fake auth page reporting control counts for a post-click surface check.
+
+    Before the Sign-in click the password/sign-in controls are uniquely present.
+    After the click they either disappear (``transitions=True``) or stay uniquely
+    present (``transitions=False``). Counts are selector-agnostic so the test
+    does not pin the exact locator a transition check would use.
+    """
+
+    def __init__(self, url: str, *, transitions: bool) -> None:
+        self.url = url
+        self._transitions = transitions
+        self.signed_in_clicked = False
+
+    def locator(self, sel: str) -> _CountingLocator:
+        if not self.signed_in_clicked:
+            return _CountingLocator(1)
+        return _CountingLocator(0 if self._transitions else 1)
+
+
+class _TransitionRecordingLocator:
+    """Recording locator that flips the page surface on the Sign-in click."""
+
+    def __init__(
+        self, selector_key: str, actions: list[tuple], page: _TransitionPage
+    ) -> None:
+        self.selector_key = selector_key
+        self._actions = actions
+        self._page = page
+
+    @property
+    def first(self) -> _TransitionRecordingLocator:
+        return self
+
+    def wait_for(self, *, state: str = "visible", timeout: int | None = None) -> None:
+        return None
+
+    def count(self) -> int:
+        return 1
+
+    async def fill(self, value: str) -> None:
+        self._actions.append(("fill", self.selector_key, value))
+
+    async def click(self) -> None:
+        self._actions.append(("click", self.selector_key))
+        if self.selector_key == SIGNIN_SELECTOR_NAME:
+            self._page.signed_in_clicked = True
+
+
+class _TransitionResolver:
+    def __init__(self, actions: list[tuple], page: _TransitionPage) -> None:
+        self.actions = actions
+        self.calls: list[tuple[str, int]] = []
+        self._page = page
+
+    async def __call__(self, page, plan, *, timeout_ms: int) -> ResolvedLocator:
+        self.calls.append((plan.selector_key, timeout_ms))
+        locator = _TransitionRecordingLocator(plan.selector_key, self.actions, self._page)
+        return ResolvedLocator(candidate=plan.primary, locator=locator)
+
+
+def _build_transition_browser(
+    monkeypatch: pytest.MonkeyPatch, *, transitions: bool
+) -> tuple[PersistentBrowser, list[tuple]]:
+    actions: list[tuple] = []
+    page = _TransitionPage("https://login.microsoftonline.com/", transitions=transitions)
+    resolver = _TransitionResolver(actions, page)
+
+    plans = {key: _plan_for(key) for key in PROGRESSION_KEYS}
+
+    def _locator_plan(name: str) -> LocatorPlan | None:
+        return plans.get(name)
+
+    monkeypatch.setattr(browser_module, "common_auth_attested", lambda: True)
+    monkeypatch.setattr(browser_module, "common_auth_locator_plan", _locator_plan)
+    monkeypatch.setattr(browser_module, "resolve_visible_locator", resolver)
+
+    # Force the sequential email -> Next -> password -> Sign-in path so the
+    # post-click transition applies to that flow's Sign-in click.
+    async def _no_combined(page):  # noqa: ANN001
+        return False
+
+    monkeypatch.setattr(browser_module, "detect_combined_signin_form", _no_combined)
+
+    browser = PersistentBrowser(
+        config=BrowserConfig(
+            profile_dir=Path("/tmp/wt-m365-fake-profile"),  # noqa: S108 - fake path only
+            headless=True,
+            mode="live",
+        )
+    )
+    browser._playwright = object()
+    browser._context = _FakeContext([page])
+    browser.is_dedicated_persistent_profile = lambda: True  # type: ignore[method-assign]
+    browser._signin_surface_resolved = True  # type: ignore[attr-defined]
+    browser.auth_origin_approved = lambda: True  # type: ignore[method-assign]
+    return browser, actions
+
+
+async def test_submit_operator_signin_fails_closed_when_password_surface_does_not_transition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RED: password input and sign-in button stay uniquely present after the
+
+    Sign-in click, so the sign-in surface never transitioned. The email fill,
+    Next click, password fill and Sign-in click all run, but the method must NOT
+    report success; it must fail closed with PolicyDenied/WorkerUnavailable.
+    """
+    browser, actions = _build_transition_browser(monkeypatch, transitions=False)
+    signin = OperatorSignInInput(email=FAKE_EMAIL, password=FAKE_PASSWORD)
+
+    with pytest.raises((PolicyDenied, WorkerUnavailable)):
+        await browser.submit_operator_signin(signin)
+
+    # The full sequential progression ran up to and including the Sign-in click.
+    assert actions == [
+        ("fill", EMAIL_SELECTOR_NAME, FAKE_EMAIL),
+        ("click", NEXT_SELECTOR_NAME),
+        ("fill", PASSWORD_SELECTOR_NAME, FAKE_PASSWORD),
+        ("click", SIGNIN_SELECTOR_NAME),
+    ]
+
+
+async def test_submit_operator_signin_accepts_when_password_surface_transitions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Positive: after the Sign-in click the password controls disappear, so the
+
+    surface transitioned and the method returns without raising.
+    """
+    browser, actions = _build_transition_browser(monkeypatch, transitions=True)
+    signin = OperatorSignInInput(email=FAKE_EMAIL, password=FAKE_PASSWORD)
+
+    await browser.submit_operator_signin(signin)
+
+    assert actions == [
+        ("fill", EMAIL_SELECTOR_NAME, FAKE_EMAIL),
+        ("click", NEXT_SELECTOR_NAME),
+        ("fill", PASSWORD_SELECTOR_NAME, FAKE_PASSWORD),
+        ("click", SIGNIN_SELECTOR_NAME),
+    ]
+
+
+# ------------------------------------------------------------------------------
+# Transient password-surface disappearance: after the Sign-in click the password
+# input / sign-in button transiently disappear (an early verification sample
+# reports them absent or non-unique) but return to uniquely present for
+# subsequent samples. The desired fail-closed behavior requires the surface to
+# be present/stable at the END of the bounded verification; a transient dip must
+# NOT be accepted as a successful transition.
+# ------------------------------------------------------------------------------
+
+
+class _TransientLocator:
+    """Async count() driven by a per-call index on the owning page.
+
+    Call indices are grouped in pairs (password, submit) per verification
+    sample. The first ``transient_samples`` samples report counts != 1 (the
+    surface transiently disappeared); every later sample reports exactly 1 (the
+    surface returned and is stable).
+    """
+
+    def __init__(self, page: _TransientPage) -> None:
+        self._page = page
+
+    async def count(self) -> int:
+        idx = self._page._count_call
+        self._page._count_call += 1
+        sample = idx // 2
+        return 0 if sample < self._page._transient_samples else 1
+
+
+class _TransientPage:
+    """Fake auth page whose control counts transiently dip then stabilize.
+
+    Mirrors ``_TransitionPage`` for the sequential submit path; only the
+    post-click ``locator(...).count()`` surface check differs.
+    """
+
+    def __init__(self, url: str, *, transient_samples: int = 1) -> None:
+        self.url = url
+        self._transient_samples = transient_samples
+        self._count_call = 0
+        self.signed_in_clicked = False
+
+    def locator(self, sel: str) -> _TransientLocator:
+        return _TransientLocator(self)
+
+
+def _build_transient_browser(
+    monkeypatch: pytest.MonkeyPatch, *, transient_samples: int = 1
+) -> tuple[PersistentBrowser, list[tuple]]:
+    actions: list[tuple] = []
+    page = _TransientPage(
+        "https://login.microsoftonline.com/", transient_samples=transient_samples
+    )
+    resolver = _TransitionResolver(actions, page)
+
+    plans = {key: _plan_for(key) for key in PROGRESSION_KEYS}
+
+    def _locator_plan(name: str) -> LocatorPlan | None:
+        return plans.get(name)
+
+    monkeypatch.setattr(browser_module, "common_auth_attested", lambda: True)
+    monkeypatch.setattr(browser_module, "common_auth_locator_plan", _locator_plan)
+    monkeypatch.setattr(browser_module, "resolve_visible_locator", resolver)
+
+    # Force the sequential email -> Next -> password -> Sign-in path so the
+    # post-click surface check applies to that flow's Sign-in click.
+    async def _no_combined(page):  # noqa: ANN001
+        return False
+
+    monkeypatch.setattr(browser_module, "detect_combined_signin_form", _no_combined)
+
+    browser = PersistentBrowser(
+        config=BrowserConfig(
+            profile_dir=Path("/tmp/wt-m365-fake-profile"),  # noqa: S108 - fake path only
+            headless=True,
+            mode="live",
+        )
+    )
+    browser._playwright = object()
+    browser._context = _FakeContext([page])
+    browser.is_dedicated_persistent_profile = lambda: True  # type: ignore[method-assign]
+    browser._signin_surface_resolved = True  # type: ignore[attr-defined]
+    browser.auth_origin_approved = lambda: True  # type: ignore[method-assign]
+    return browser, actions
+
+
+async def test_submit_operator_signin_rejects_transient_password_surface_disappearance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RED: an early post-click sample shows the password surface absent/non-unique,
+
+    but it returns to uniquely present for later samples. The current production
+    returns success on the first non-unique sample; the desired fail-closed
+    behavior must reject the transient disappearance because the surface is
+    present/stable at the END of the bounded verification.
+    """
+    browser, actions = _build_transient_browser(monkeypatch, transient_samples=1)
+    signin = OperatorSignInInput(email=FAKE_EMAIL, password=FAKE_PASSWORD)
+
+    with pytest.raises((PolicyDenied, WorkerUnavailable)):
+        await browser.submit_operator_signin(signin)
+
+    # The full sequential progression ran up to and including the Sign-in click.
+    assert actions == [
+        ("fill", EMAIL_SELECTOR_NAME, FAKE_EMAIL),
+        ("click", NEXT_SELECTOR_NAME),
+        ("fill", PASSWORD_SELECTOR_NAME, FAKE_PASSWORD),
+        ("click", SIGNIN_SELECTOR_NAME),
+    ]

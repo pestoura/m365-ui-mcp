@@ -20,7 +20,7 @@ from planner_mcp.auth import AuthState, MfaChallenge
 _NUMBER_MATCH_PHRASE = re.compile(
     r"(?:enter the number|number matching|type the number|the number shown|"
     r"number shown on your|open your authenticator[^0-9]{0,80}?)"
-    r"[^0-9\n]{0,40}?(\d{2})\b",
+    r"[^0-9]{0,80}?(\d{2})\b",
     re.IGNORECASE | re.DOTALL,
 )
 

@@ -46,6 +46,12 @@ AUTH_BOOTSTRAP_OPERATIONS = frozenset(
     {"auth_status", "auth_start", "auth_resume", "auth_bootstrap_open_planner_web"}
 )
 
+# The single bootstrap operation whose sanctioned source may ALSO be the fixed
+# Planner Web surface (AUTH-116 reuses the restored Planner Web tab). Declared
+# literally here to avoid importing ``bootstrap_navigation`` (which imports this
+# module); the value is pinned by test to the operation constant exported there.
+_PLANNER_WEB_BOOTSTRAP_OPERATION = "auth_bootstrap_open_planner_web"
+
 # Strict subset of the Microsoft 365 egress allowlist: identity entry points.
 # The bootstrap guard refuses unless the live context is on one of these hosts
 # (or no page is open yet, so the operator may begin navigation to one).
@@ -129,12 +135,17 @@ class AuthBootstrapGuard:
         approved_auth_origin_provider: Callable[[], bool],
         fully_attested_provider: Callable[[], bool],
         strict_live_guard: Callable[[str], None],
+        planner_web_bootstrap_source_provider: Callable[[], bool] | None = None,
     ) -> None:
         self._browser_started = browser_started_provider
         self._dedicated_profile = dedicated_profile_provider
         self._approved_origin = approved_auth_origin_provider
         self._fully_attested = fully_attested_provider
         self._strict_live_guard = strict_live_guard
+        # OPERATION-SPECIFIC source predicate for
+        # ``auth_bootstrap_open_planner_web`` ONLY. Defaults to closed, so
+        # omitting it preserves the previous behaviour exactly.
+        self._planner_web_source = planner_web_bootstrap_source_provider or (lambda: False)
 
     def guard(self, operation: str) -> None:
         """Allow only constrained authentication bootstrap; fail closed else."""
@@ -170,11 +181,24 @@ class AuthBootstrapGuard:
             )
 
         if not self._approved_origin():
-            raise PolicyDenied(
-                "authentication bootstrap requires an approved Microsoft "
-                "authentication origin",
-                operation=operation,
-            )
+            # Narrow, operation-specific admission: the fixed Planner Web
+            # bootstrap operation (AUTH-116) explicitly REUSES the restored
+            # Planner Web tab of the dedicated persistent professional profile,
+            # so that source must be admitted for THIS operation only. Planner
+            # Web is NOT reclassified as an authentication origin
+            # (``_AUTH_ORIGIN_SUFFIXES`` / ``auth_origin_status`` unchanged) and
+            # every other bootstrap operation (auth_status / auth_start /
+            # auth_resume, plus begin-signin / credential / MFA paths that never
+            # used this guard) still requires an approved Microsoft origin.
+            if not (
+                operation == _PLANNER_WEB_BOOTSTRAP_OPERATION
+                and self._planner_web_source()
+            ):
+                raise PolicyDenied(
+                    "authentication bootstrap requires an approved Microsoft "
+                    "authentication origin",
+                    operation=operation,
+                )
 
         # Constrained bootstrap allowed. No content is returned by this guard.
 

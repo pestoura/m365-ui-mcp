@@ -51,7 +51,7 @@
           "attested": false,
           "fail_closed_error": "UI_CONTRACT_UNATTESTED",
           "selector_count": 12,
-          "ui_contract_set_digest": "sha256:b620abbb71680c84daa382dc80fa31fe7db774ad39dc3fc99784be97fcc8d2e1",
+          "ui_contract_set_digest": "sha256:b021e4a8feeb9cd8c1bed75358d6c0349e6dece91c088aecfee317889257162a",
           "ui_contract_version": "0.1.0",
           "unverified_selectors": [
             "plan.list_container",
@@ -69,7 +69,7 @@
           "mode": "mock",
           "ok": true,
           "ui_contract_attested": false,
-          "ui_contract_set_digest": "sha256:561568bc66fab9e78496c41442e492a6058fdf2b3dcabf27793afda634df0903",
+          "ui_contract_set_digest": "sha256:f539d82ab36fcbda87c4027c49a84e97f130b3e4a7fb1a04166287c8dc627af7",
           "ui_contract_version": "0.1.0",
           "version": "0.1.0"
         }
@@ -502,7 +502,7 @@
           "BLOCKED",
           "OUT_OF_SCOPE"
         ],
-        "ui_contract_set_digest": "sha256:b620abbb71680c84daa382dc80fa31fe7db774ad39dc3fc99784be97fcc8d2e1",
+        "ui_contract_set_digest": "sha256:b021e4a8feeb9cd8c1bed75358d6c0349e6dece91c088aecfee317889257162a",
         "ui_fragment_attestation": [
           {
             "application": "planner",
@@ -981,7 +981,7 @@
         "attested": false,
         "fail_closed_error": "UI_CONTRACT_UNATTESTED",
         "selector_count": 12,
-        "ui_contract_set_digest": "sha256:b620abbb71680c84daa382dc80fa31fe7db774ad39dc3fc99784be97fcc8d2e1",
+        "ui_contract_set_digest": "sha256:b021e4a8feeb9cd8c1bed75358d6c0349e6dece91c088aecfee317889257162a",
         "ui_contract_version": "0.1.0",
         "unverified_selectors": [
           "plan.list_container",
@@ -1300,5 +1300,5 @@
       "tool": "planner_smoke_test"
     }
   },
-  "digest": "sha256:328a36af1eed1dc025f0eec2120fbc24b48f4b003a757b70a0da30a56b4c5282"
+  "digest": "sha256:7edc94d86423b5b7d95e5eaab085ff6596f11809d39aafd83cd45e1a7813c973"
 }

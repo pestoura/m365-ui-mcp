@@ -37,6 +37,15 @@
         {
           "strategy": "label",
           "value": "E-mail, telemóvel ou Skype"
+        },
+        {
+          "strategy": "role",
+          "value": "textbox",
+          "name": "Enter your email or phone"
+        },
+        {
+          "strategy": "placeholder",
+          "value": "Email or phone"
         }
       ]
     },

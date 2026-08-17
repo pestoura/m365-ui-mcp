@@ -69,6 +69,7 @@ from m365_browser_worker.session_broker import SessionCapabilityBroker
 from m365_browser_worker.signin_surface import (
     AUTH_DIAGNOSE_OPERATION,
     AUTH_KMSI_OPERATION,
+    AUTH_METHOD_SELECTION_OPERATION,
     AUTH_RESOLVE_OPERATION,
     SigninSurfaceKind,
 )
@@ -91,6 +92,42 @@ from .observation import observe_signin_state
 
 def _mode() -> str:
     return os.getenv("PLANNER_MODE", "mock").lower()
+
+
+async def _operator_submit_surface_allowed(worker_browser: Any) -> bool:
+    """AUTH-112 combined-form escape hatch for operator-submit (minimal, fail-closed).
+
+    Returns True iff credentials may be applied, using the NARROWEST possible OR:
+
+    * the pre-email sign-in surface was deterministically resolved to
+      EMAIL_ENTRY (incumbent ``resolve-signin-surface`` latch), OR
+    * the live Microsoft authentication page structurally proves the OBSERVED
+      combined Entra ID form is uniquely present (exactly one of each fixed
+      control id: ``#i0116``, ``#i0118``, ``#idSIButton9``), which means the
+      combined-form submit path is safe and deterministic.
+
+    Any detection error, a non-unique control, or an absent control returns
+    False so the incumbent sequential EMAIL_ENTRY gate still applies (fail
+    closed). The optical/textual EMAIL_ENTRY resolution is NEVER relaxed: when
+    the combined form is not structurally proven, the caller must still resolve
+    the textual EMAIL_ENTRY surface before submitting.
+    """
+    if worker_browser.signin_surface_resolved():
+        return True
+    try:
+        page = worker_browser._require_single_auth_page()
+    except Exception:  # noqa: BLE001 - fail closed: no page -> no combined proof
+        return False
+    try:
+        from m365_browser_worker.operator_signin import (
+            detect_combined_signin_form,
+        )
+    except Exception:  # noqa: BLE001 - import failure must not widen the gate
+        return False
+    try:
+        return bool(await detect_combined_signin_form(page))
+    except Exception:  # noqa: BLE001 - detection failure -> fall through to gate
+        return False
 
 
 def _is_mock() -> bool:
@@ -145,6 +182,14 @@ def create_app(
         approved_auth_origin_provider=worker_browser.auth_origin_approved,
         fully_attested_provider=lambda: load_status().attested,
         strict_live_guard=worker_browser.ensure_live_allowed,
+        # OPERATION-SPECIFIC: only ``auth_bootstrap_open_planner_web`` may be
+        # admitted from the fixed Planner Web surface, because AUTH-116 reuses
+        # the restored Planner Web tab of the dedicated persistent profile. The
+        # predicate is the existing closed single-page classification; it adds
+        # no auth origin and relaxes no other operation.
+        planner_web_bootstrap_source_provider=getattr(
+            worker_browser, "planner_web_surface_present", lambda: False
+        ),
     )
     app = FastAPI(
         title="planner-browser-worker",
@@ -806,6 +851,66 @@ def create_app(
 
         return {"ok": True, "surface": surface.value}
 
+    @app.post("/auth/bootstrap/resolve-method-selection-surface")
+    async def auth_bootstrap_resolve_method_selection_surface(
+        request: Request,
+    ) -> dict[str, Any]:
+        """OPERATOR-ONLY loopback deterministic METHOD_SELECTION surface resolver
+        (AUTH-115).
+
+        Resolves the credential-free, MFA-free Microsoft Entra ID method-
+        selection interstitial that can block progression with a verification-
+        method chooser, by clicking ONLY the fixed Microsoft Authenticator
+        approval control (matched from a CLOSED exact-label set and ONLY when
+        strictly unique across the entire closed label set AND both button/link
+        roles). Security shape (identical family to AUTH-114):
+
+        * NOT an MCP tool; absent from every tool/capability/agent-card catalog,
+          the typed ``/operations`` dispatcher and the control-plane worker client;
+        * SOCKET-level loopback admission only (``127.0.0.1``/``::1``); proxy
+          headers are never consulted; a Docker-network peer gets ``404``;
+        * POST only with NO body and NO parameters; any body or query string is
+          rejected with ``400`` and never reaches the browser;
+        * the browser applies ONLY the fixed Microsoft Authenticator approval
+          control, matched from a CLOSED exact-label set and ONLY when the global
+          candidate count across the entire closed set equals exactly one. It
+          never types a credential, never selects a cached identity, never clicks
+          Sign in, and never navigates by URL/selector;
+        * fails closed with ``503 POLICY_DENIED`` on any non-METHOD_SELECTION
+          surface or an absent/ambiguous control, carrying only the sanitized
+          closed terminal-surface enum;
+        * returns only ``{ok, surface}``. No URL, DOM, page text, cookie, token,
+          UPN, tenant id, account identifier or browser handle is ever returned.
+        """
+        client = request.client
+        if not is_loopback_peer(client.host if client else None):
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NOT_FOUND", "message": "Resource not available"},
+            )
+        if request.url.query:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No parameters are accepted"},
+            )
+        if await request.body():
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "INVALID_REQUEST", "message": "No request body is accepted"},
+            )
+
+        resolve_surface_guard(AUTH_METHOD_SELECTION_OPERATION)
+
+        if _is_mock():
+            return {"ok": True, "surface": SigninSurfaceKind.UNKNOWN.value}
+
+        try:
+            surface = await worker_browser.resolve_method_selection_surface()
+        except PlannerMcpError as exc:
+            raise HTTPException(status_code=503, detail=exc.to_dict()) from exc
+
+        return {"ok": True, "surface": surface.value}
+
     @app.get("/auth/bootstrap/diagnose-signin-surface")
     async def auth_bootstrap_diagnose_signin_surface(request: Request) -> dict[str, Any]:
         """OPERATOR-ONLY loopback READ-ONLY pre-email surface classifier (AUTH-109-diagnose).
@@ -938,10 +1043,15 @@ def create_app(
                 },
             )
 
-        if not _is_mock() and not worker_browser.signin_surface_resolved():
+        if not _is_mock() and not await _operator_submit_surface_allowed(worker_browser):
             # AUTH-112: the pre-email sign-in surface MUST have been
             # deterministically resolved to EMAIL_ENTRY before credentials are
-            # applied. This is the server-side enforcement of the conductor's
+            # applied, OR the live Microsoft page MUST structurally prove the
+            # OBSERVED combined Entra ID form (exactly one of each fixed control
+            # id #i0116 / #i0118 / #idSIButton9). The combined-form structural
+            # gate is the minimal fix for the production blocker where the live
+            # combined form was rejected before detect_combined_signin_form ran.
+            # This is the server-side enforcement of the conductor's
             # resolve->submit ordering; it fails closed on ANY other surface so
             # a direct operator-submit after begin-signin (account-chooser
             # recreation) cannot cause an email NO_MATCH. (Route docstring.)
@@ -949,7 +1059,8 @@ def create_app(
                 status_code=503,
                 detail={
                     "error": "SIGNIN_SURFACE_NOT_RESOLVED",
-                    "message": "pre-email sign-in surface not resolved to EMAIL_ENTRY;"
+                    "message": "pre-email sign-in surface not resolved to EMAIL_ENTRY"
+                    " and combined Entra ID form not structurally present;"
                     " run resolve-signin-surface first",
                 },
             )

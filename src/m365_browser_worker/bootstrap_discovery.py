@@ -34,6 +34,7 @@ from typing import Any
 
 from m365_browser_worker.locator_runtime import build_locator
 from m365_browser_worker.operator_signin import common_auth_locator_plan
+from m365_mcp.locators import LocatorStrategy
 
 
 class DiscoveryResultKind(StrEnum):
@@ -91,24 +92,58 @@ def _selector_structural_shape(
     metadata: dict[str, Any],
     match_index: int,
     match_count: int,
+    *,
+    candidate: Any | None = None,
 ) -> dict[str, Any]:
     """Build a closed, value-free structural shape for one selector match.
 
     Mirrors ``scripts/collect_live_attestation_observation.py:
-    _selector_structural_shape`` exactly: the locator *strategy* (derived from
-    the plan's primary candidate) is preserved as a structural signal, while the
-    locator *value* and any accessible name text are dropped so no tenant content
-    leaves the discovery boundary.
+    _selector_structural_shape`` exactly for the default (no ``candidate``) call
+    shape: the locator *strategy* (derived from the plan's primary candidate) is
+    preserved as a structural signal, while the locator *value* and any
+    accessible name text are dropped so no tenant content leaves the discovery
+    boundary.
+
+    When ``candidate`` is supplied, the strategy is taken from the candidate that
+    was actually selected during the ordered traversal, and a value-free
+    ``candidate_shape`` discriminator is added so two different selected
+    candidates never collapse to the same structural digest. The discriminator
+    carries only the candidate's structural identity (strategy, whether a value
+    and an accessible name are declared, and whether the candidate is the plan's
+    primary) — never the value or name text itself.
     """
     from m365_mcp.locators import locator_plan_from_metadata
 
     plan = locator_plan_from_metadata(selector_key, metadata)
-    strategy = plan.primary.strategy.value if plan is not None else "undeclared"
+    if candidate is None:
+        strategy = plan.primary.strategy.value if plan is not None else "undeclared"
+        return {
+            "selector_key": selector_key,
+            "strategy": strategy,
+            "match_index": match_index,
+            "match_count": match_count,
+        }
+
+    ordered = plan.ordered_candidates() if plan is not None else ()
+    identity = (candidate.strategy, candidate.value, candidate.name)
+    try:
+        candidate_index = [
+            (item.strategy, item.value, item.name) for item in ordered
+        ].index(identity)
+    except ValueError:
+        candidate_index = -1
     return {
         "selector_key": selector_key,
-        "strategy": strategy,
+        "strategy": candidate.strategy.value,
         "match_index": match_index,
         "match_count": match_count,
+        "candidate_shape": {
+            "candidate_index": candidate_index,
+            "is_primary": candidate_index == 0,
+            "has_value": bool(candidate.value),
+            "has_name": candidate.name is not None,
+            "exact": candidate.strategy is LocatorStrategy.ROLE,
+        },
     }
 
 
@@ -152,26 +187,42 @@ async def discover_key(page: Any, selector_key: str) -> KeyDiscovery:
     if plan is None:
         raise DiscoveryError("missing locator plan")
 
-    # Resolve/count the declared PRIMARY candidate only (identical to the
-    # operator script's live probe, which builds the locator from the plan's
-    # primary candidate and counts matches). This yields a single semantic
-    # count: 0 = NO_MATCH, 1 = UNIQUE_MATCH, >1 = AMBIGUOUS. No DOM text, no
-    # values, no interaction, no wait.
-    primary = plan.primary
-    locator = build_locator(page, primary)
-    try:
-        count = int(await locator.count())
-    except Exception as exc:
-        raise DiscoveryError("locator count could not be determined") from exc
+    # Walk the declared candidates deterministically in plan order (accessible
+    # semantics first), counting matches only. Per candidate:
+    #
+    #   count == 0 -> not present on this surface, try the next candidate
+    #   count == 1 -> UNIQUE_MATCH on the candidate actually selected
+    #   count > 1  -> AMBIGUOUS immediately, fail closed WITHOUT consulting any
+    #                 remaining fallback candidate
+    #
+    # A count error keeps the existing fail-closed behavior. When every declared
+    # candidate yields 0, the result is NO_MATCH. No DOM text, no values, no
+    # interaction, no wait.
+    ordered = plan.ordered_candidates()
+    metadata = {"locators": [candidate.to_dict() for candidate in ordered]}
+    for candidate in ordered:
+        locator = build_locator(page, candidate)
+        try:
+            count = int(await locator.count())
+        except Exception as exc:
+            raise DiscoveryError("locator count could not be determined") from exc
 
-    if count > 1:
-        return KeyDiscovery(selector_key, DiscoveryResultKind.AMBIGUOUS, None)
-    if count == 1:
-        # UNIQUE_MATCH: digest uses the canonical script-compatible shape with
-        # match_index=0 and match_count=1 (the only determined values).
-        metadata = {"locators": [candidate.to_dict() for candidate in plan.ordered_candidates()]}
-        shape = _selector_structural_shape(selector_key, metadata, match_index=0, match_count=1)
-        return KeyDiscovery(
-            selector_key, DiscoveryResultKind.UNIQUE_MATCH, _structural_digest(shape)
-        )
+        if count > 1:
+            # Ambiguity is fail-closed and terminal: never fall through to a
+            # fallback candidate after an ambiguous reading.
+            return KeyDiscovery(selector_key, DiscoveryResultKind.AMBIGUOUS, None)
+        if count == 1:
+            # UNIQUE_MATCH: the digest is derived from the candidate that was
+            # actually selected (match_index=0, match_count=1 are the only
+            # determined values).
+            shape = _selector_structural_shape(
+                selector_key,
+                metadata,
+                match_index=0,
+                match_count=1,
+                candidate=candidate,
+            )
+            return KeyDiscovery(
+                selector_key, DiscoveryResultKind.UNIQUE_MATCH, _structural_digest(shape)
+            )
     return KeyDiscovery(selector_key, DiscoveryResultKind.NO_MATCH, None)

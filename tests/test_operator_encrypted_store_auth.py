@@ -262,6 +262,93 @@ async def test_submit_requires_resolved_signin_surface(live_env) -> None:
     assert browser.submit_calls == []
 
 
+class _CombinedFormPage(_FakePage):
+    """Fake page where the OBSERVED combined Entra ID form is uniquely present."""
+
+    def __init__(self, url: str = "https://login.microsoftonline.com/") -> None:
+        super().__init__(url=url)
+        self._ids = {"i0116", "i0118", "idSIButton9"}
+
+    def locator(self, sel: str):
+        key = sel.lstrip("#")
+        n = 1 if key in self._ids else 0
+
+        class _Loc:
+            async def count(self) -> int:
+                return n
+
+        return _Loc()
+
+
+class _CombinedFormBrowser(_OperatorSubmitBrowser):
+    """Surface NOT resolved, but live page structurally proves combined form."""
+
+    def __init__(self, **kwargs) -> None:
+        kwargs.setdefault("surface_resolved", False)
+        super().__init__(pages=[_CombinedFormPage()], **kwargs)
+
+    def _require_single_auth_page(self):
+        for candidate in self.context.pages:
+            if str(candidate.url):
+                return candidate
+        raise AssertionError("no single auth page")
+
+
+async def test_submit_allows_combined_form_when_surface_unresolved(live_env) -> None:
+    # Minimal blocker fix: when the live page structurally proves the OBSERVED
+    # combined Entra ID form (exactly one of each fixed control id), operator-
+    # submit is allowed to proceed WITHOUT the textual EMAIL_ENTRY latch, and
+    # the credentials are applied. This is the narrow OR escape hatch; it must
+    # NOT relax any other gate (attestation still required, etc.).
+    browser = _CombinedFormBrowser()
+    app = create_app(browser=browser)
+    async with _client(app) as client:
+        response = await client.post(
+            OPERATOR_SUBMIT_PATH, json={"email": "a@b.com", "password": "secret"}
+        )
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert len(browser.submit_calls) == 1
+
+
+class _MissingCombinedFormPage(_CombinedFormPage):
+    """Fake page where the submit control is ABSENT (not the combined form)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._ids = {"i0116", "i0118"}  # idSIButton9 missing
+
+
+class _MissingCombinedFormBrowser(_OperatorSubmitBrowser):
+    """Surface NOT resolved AND combined form NOT structurally present."""
+
+    def __init__(self, **kwargs) -> None:
+        kwargs.setdefault("surface_resolved", False)
+        super().__init__(pages=[_MissingCombinedFormPage()], **kwargs)
+
+    def _require_single_auth_page(self):
+        for candidate in self.context.pages:
+            if str(candidate.url):
+                return candidate
+        raise AssertionError("no single auth page")
+
+
+async def test_submit_refuses_when_no_surface_and_no_combined_form(live_env) -> None:
+    # Fail-closed: without the EMAIL_ENTRY latch AND without a structurally
+    # proven combined form, operator-submit is still refused (503) and types
+    # nothing. The new OR gate must not widen the blocker beyond the combined
+    # form proof.
+    browser = _MissingCombinedFormBrowser()
+    app = create_app(browser=browser)
+    async with _client(app) as client:
+        response = await client.post(
+            OPERATOR_SUBMIT_PATH, json={"email": "a@b.com", "password": "secret"}
+        )
+    assert response.status_code == 503
+    assert response.json()["detail"]["error"] == "SIGNIN_SURFACE_NOT_RESOLVED"
+    assert browser.submit_calls == []
+
+
 # --------------------------------------------------------------------------
 # Allowed selectors only / closed body contract
 # --------------------------------------------------------------------------

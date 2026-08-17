@@ -98,12 +98,26 @@ async def read_surface(page: Any) -> dict[str, Any]:
 
 
 async def extract_plans(page: Any) -> list[dict[str, Any]]:
-    """Extract plan entries from the live Planner surface (read-only)."""
+    """Extract plan entries from the live Planner surface (read-only).
+
+    Considers the UNION of ``anchor_titles`` and ``row_titles``, applies the
+    plan-like heuristic, deduplicates case-insensitively (first-seen casing
+    wins), and returns the entries sorted case-insensitively. It does NOT rely
+    on ``visible_lines`` / ``surface_title`` / boolean flags.
+    """
     surface = await read_surface(page)
-    titles = sorted(
-        {t for t in surface.get("anchor_titles", []) if _is_plan_like(t)},
-        key=lambda s: s.lower(),
-    )
+    seen: set[str] = set()
+    union: list[str] = []
+    for title in list(surface.get("anchor_titles", [])) + list(surface.get("row_titles", [])):
+        t = title.strip()
+        if not t or not _is_plan_like(t):
+            continue
+        key = t.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        union.append(t)
+    titles = sorted(union, key=lambda s: s.lower())
     return [
         {
             "id": _slug(t),

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from planner_browser_worker.auth_flow import classify_page, detect_mfa_number
+from planner_browser_worker.auth_flow import (
+    classify_page,
+    detect_mfa_number,
+    resolve_mfa_number_unique,
+)
 from planner_mcp.auth import AuthContext, AuthState, MfaChallenge, can_transition
 
 
@@ -113,3 +117,15 @@ def test_resolve_mfa_number_unique_matches_phrase_bound_only() -> None:
     assert resolve_mfa_number_unique(
         "Microsoft Authenticator 2024 session 15 pending approval"
     ) is None
+
+
+def test_detect_mfa_number_across_line_break() -> None:
+    text = "Open your Authenticator app and enter the number shown to sign in.\n\n73\n"
+    assert detect_mfa_number(text) == "73"
+    assert resolve_mfa_number_unique(text) == "73"
+
+
+def test_detect_mfa_number_across_line_break_remains_ambiguous() -> None:
+    text = "Enter the number shown.\n73\nEnter the number shown.\n84\n"
+    assert detect_mfa_number(text) is None
+    assert resolve_mfa_number_unique(text) is None

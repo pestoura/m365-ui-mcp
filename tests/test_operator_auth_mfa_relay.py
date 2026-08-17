@@ -252,7 +252,7 @@ class TestCanonicalPipelineMfaCompletion:
         monkeypatch.setattr(
             operator_auth_run,
             "_await_mfa_and_authenticate",
-            lambda: calls.append("mfa") or operator_auth_run.RunStatus.OK,
+            lambda **_kwargs: calls.append("mfa") or operator_auth_run.RunStatus.OK,
         )
 
         assert operator_auth_run.run_canonical() == operator_auth_run.RunStatus.OK
@@ -276,3 +276,61 @@ class TestCanonicalPipelineMfaCompletion:
         )
 
         assert operator_auth_run.run_canonical() == operator_auth_run.RunStatus.OK
+
+
+async def test_auth_required_ambiguous_method_selection_resolves_once_then_relays_mfa(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+
+    # RED pin: a post-password AUTH_REQUIRED reading whose READ-ONLY diagnose
+    # reports an AMBIGUOUS method-selection surface must trigger EXACTLY ONE
+    # resolve-method-selection POST (and zero KMSI POSTs) before the MFA relay
+    # proceeds. probe sequencing: AUTH_REQUIRED/null,false -> MFA_REQUIRED/"42"
+    # -> AUTHENTICATED/null,false.
+    monkeypatch.setattr(operator_auth_run, "_MFA_POLL_INTERVAL_S", 0)
+
+    probe_sequence = [
+        (0, json.dumps({"state": "AUTH_REQUIRED", "mfa_number": None, "mfa_ambiguous": False})),
+        (0, json.dumps({"state": "MFA_REQUIRED", "mfa_number": "42", "mfa_ambiguous": False})),
+        (0, json.dumps({"state": "AUTHENTICATED", "mfa_number": None, "mfa_ambiguous": False})),
+    ]
+    probe_idx = {"n": 0}
+
+    def _probe() -> tuple[int, str]:
+        reading = probe_sequence[probe_idx["n"]]
+        probe_idx["n"] += 1
+        return reading
+
+    diagnose_calls: list[str] = []
+    post_calls: list[str] = []
+
+    def _fake_diagnose(endpoint: str) -> tuple[int, str]:
+        diagnose_calls.append(endpoint)
+        return 0, json.dumps(
+            {"ok": True, "surface": "AMBIGUOUS", "email_entry_present": False}
+        )
+
+    def _fake_post(endpoint: str) -> tuple[int, str]:
+        post_calls.append(endpoint)
+        return 0, json.dumps({"ok": True, "surface": "AMBIGUOUS"})
+
+    monkeypatch.setattr(operator_auth_run, "_docker_exec_get", _fake_diagnose)
+    monkeypatch.setattr(operator_auth_run, "_docker_exec_post", _fake_post)
+
+    notified: list[str] = []
+
+    def _notify(number: str) -> bool:
+        notified.append(number)
+        return True
+
+    rc = operator_auth_run._await_mfa_and_authenticate(
+        probe=_probe,
+        notify=_notify,
+        allow_kmsi=True,
+    )
+
+    assert rc == operator_auth_run.RunStatus.OK
+    assert post_calls.count(operator_auth_run._RESOLVE_METHOD_SELECTION) == 1
+    assert post_calls.count(operator_auth_run._RESOLVE_KMSI) == 0
+    assert notified == ["42"]

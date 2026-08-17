@@ -329,11 +329,13 @@ async def test_no_match_mapping(live_env) -> None:
     # Every declared candidate resolves to count 0 -> NO_MATCH, no digest.
     behaviors = {
         ("role", "textbox", "Email, phone, or Skype"): 0,
-        ("placeholder", "Email, phone, or Skype"): 0,
-        ("label", "Email, phone, or Skype"): 0,
+        ("role", "textbox", "Enter your email or phone"): 0,
+        ("placeholder", "Email or phone", None): 0,
+        ("placeholder", "Email, phone, or Skype", None): 0,
+        ("label", "Email, phone, or Skype", None): 0,
         ("role", "textbox", "E-mail, telemóvel ou Skype"): 0,
-        ("placeholder", "E-mail, telemóvel ou Skype"): 0,
-        ("label", "E-mail, telemóvel ou Skype"): 0,
+        ("placeholder", "E-mail, telemóvel ou Skype", None): 0,
+        ("label", "E-mail, telemóvel ou Skype", None): 0,
         ("role", "button", "Next"): 0,
         ("role", "button", "Seguinte"): 0,
     }
@@ -456,11 +458,13 @@ async def test_discover_key_unique_match_digest_present() -> None:
 async def test_discover_key_no_match_no_digest() -> None:
     behaviors = {
         ("role", "textbox", "Email, phone, or Skype"): 0,
-        ("placeholder", "Email, phone, or Skype"): 0,
-        ("label", "Email, phone, or Skype"): 0,
+        ("role", "textbox", "Enter your email or phone"): 0,
+        ("placeholder", "Email or phone", None): 0,
+        ("placeholder", "Email, phone, or Skype", None): 0,
+        ("label", "Email, phone, or Skype", None): 0,
         ("role", "textbox", "E-mail, telemóvel ou Skype"): 0,
-        ("placeholder", "E-mail, telemóvel ou Skype"): 0,
-        ("label", "E-mail, telemóvel ou Skype"): 0,
+        ("placeholder", "E-mail, telemóvel ou Skype", None): 0,
+        ("label", "E-mail, telemóvel ou Skype", None): 0,
     }
     discovery = await discover_key(_FakePage(behaviors), EMAIL_SELECTOR_NAME)
     assert discovery.result is DiscoveryResultKind.NO_MATCH
@@ -540,6 +544,8 @@ async def test_discover_key_await_preserves_semantics() -> None:
 
     nm_page = _FakePage({})
     nm_page.get_by_role = lambda role, *, name=None: no_match  # type: ignore[method-assign]
+    nm_page.get_by_label = lambda label: no_match  # type: ignore[method-assign]
+    nm_page.get_by_placeholder = lambda placeholder: no_match  # type: ignore[method-assign]
     un_page = _FakePage({})
     un_page.get_by_role = lambda role, *, name=None: unique  # type: ignore[method-assign]
     am_page = _FakePage({})
@@ -559,6 +565,96 @@ async def test_discover_key_await_preserves_semantics() -> None:
     assert no_match.count_executed is True
     assert unique.count_executed is True
     assert ambiguous.count_executed is True
+
+
+# --------------------------------------------------------------------------
+# Ordered fallback traversal (discover_key walks plan.ordered_candidates())
+# --------------------------------------------------------------------------
+
+
+_EMAIL_PRIMARY: tuple[str, str, str | None] = ("role", "textbox", "Email, phone, or Skype")
+_EMAIL_FALLBACK_PLACEHOLDER: tuple[str, str, str | None] = (
+    "placeholder",
+    "Email, phone, or Skype",
+    None,
+)
+
+
+async def test_discover_key_primary_zero_then_fallback_unique_match() -> None:
+    # Primary candidate has no match; the next declared candidate matches once.
+    # The key must resolve UNIQUE_MATCH via the fallback, not NO_MATCH.
+    behaviors: dict[tuple[str, str, str | None], int] = {_EMAIL_PRIMARY: 0}
+    page = _FakePage(behaviors)
+    discovery = await discover_key(page, EMAIL_SELECTOR_NAME)
+    assert discovery.result is DiscoveryResultKind.UNIQUE_MATCH
+    assert discovery.structural_digest is not None
+    # The primary was probed first, then the next ordered candidate.
+    assert page.calls[0] == _EMAIL_PRIMARY
+    assert len(page.calls) >= 2
+
+
+async def test_discover_key_primary_ambiguous_never_probes_fallback() -> None:
+    # An ambiguous primary is an immediate fail-closed AMBIGUOUS: no fallback
+    # candidate may be consulted afterwards.
+    behaviors: dict[tuple[str, str, str | None], int] = {_EMAIL_PRIMARY: 2}
+    page = _FakePage(behaviors)
+    discovery = await discover_key(page, EMAIL_SELECTOR_NAME)
+    assert discovery.result is DiscoveryResultKind.AMBIGUOUS
+    assert discovery.structural_digest is None
+    assert page.calls == [_EMAIL_PRIMARY]
+
+
+async def test_discover_key_all_candidates_zero_is_no_match() -> None:
+    behaviors = {
+        ("role", "textbox", "Email, phone, or Skype"): 0,
+        ("role", "textbox", "Enter your email or phone"): 0,
+        ("placeholder", "Email or phone", None): 0,
+        ("placeholder", "Email, phone, or Skype", None): 0,
+        ("label", "Email, phone, or Skype", None): 0,
+        ("role", "textbox", "E-mail, telemóvel ou Skype"): 0,
+        ("placeholder", "E-mail, telemóvel ou Skype", None): 0,
+        ("label", "E-mail, telemóvel ou Skype", None): 0,
+    }
+    page = _FakePage(behaviors)
+    discovery = await discover_key(page, EMAIL_SELECTOR_NAME)
+    assert discovery.result is DiscoveryResultKind.NO_MATCH
+    assert discovery.structural_digest is None
+    # Every declared candidate was probed before failing closed.
+    assert len(page.calls) == 8
+
+
+async def test_discover_key_digest_reflects_selected_candidate() -> None:
+    # The digest must be derived from the candidate actually selected, so a
+    # primary match and a fallback match cannot produce the same digest.
+    primary_hit = await discover_key(_FakePage({}), EMAIL_SELECTOR_NAME)
+    fallback_hit = await discover_key(_FakePage({_EMAIL_PRIMARY: 0}), EMAIL_SELECTOR_NAME)
+    assert primary_hit.result is DiscoveryResultKind.UNIQUE_MATCH
+    assert fallback_hit.result is DiscoveryResultKind.UNIQUE_MATCH
+    assert primary_hit.structural_digest != fallback_hit.structural_digest
+
+
+async def test_discover_key_count_error_on_fallback_fails_closed() -> None:
+    # A count failure anywhere in the traversal keeps the current fail-closed
+    # behavior (sanitized DiscoveryError, never a silent NO_MATCH).
+    class _BoomLocator:
+        async def count(self) -> int:
+            raise RuntimeError("injected count failure")
+
+    class _BoomOnPlaceholderPage(_FakePage):
+        def get_by_role(self, role: str, *, name: str | None = None) -> _FakeLocator:
+            self.calls.append(("role", role, name))
+            return _FakeLocator(0)
+
+        def get_by_label(self, label: str) -> _FakeLocator:
+            self.calls.append(("label", label, None))
+            return _FakeLocator(0)
+
+        def get_by_placeholder(self, placeholder: str):  # type: ignore[override]
+            self.calls.append(("placeholder", placeholder, None))
+            return _BoomLocator()
+
+    with pytest.raises(DiscoveryError):
+        await discover_key(_BoomOnPlaceholderPage({}), EMAIL_SELECTOR_NAME)
 
 
 # --------------------------------------------------------------------------
@@ -603,15 +699,29 @@ def test_selector_structural_shape_matches_script_helper() -> None:
 
 
 async def test_discover_key_digest_is_script_compatible() -> None:
+    # The digest is now bound to the candidate actually selected, so the
+    # comparison is made against the same candidate-aware shape. The value-free
+    # hashing and the script-compatible base fields are unchanged.
     attestation = _load_attestation_script_module()
     metadata = _auth_metadata()
+    selector_meta = {"locators": metadata[EMAIL_SELECTOR_NAME]["locators"]}  # type: ignore[index]
     page = _FakePage({})
     discovery = await discover_key(page, EMAIL_SELECTOR_NAME)
     assert discovery.result is DiscoveryResultKind.UNIQUE_MATCH
-    expected_shape = attestation._selector_structural_shape(
-        EMAIL_SELECTOR_NAME, {"locators": metadata[EMAIL_SELECTOR_NAME]["locators"]}, 0, 1
+
+    from m365_mcp.locators import locator_plan_from_metadata
+
+    plan = locator_plan_from_metadata(EMAIL_SELECTOR_NAME, selector_meta)
+    assert plan is not None
+    expected_shape = _selector_structural_shape(
+        EMAIL_SELECTOR_NAME, selector_meta, 0, 1, candidate=plan.primary
     )
-    assert discovery.structural_digest == attestation._structural_digest(expected_shape)
+    assert discovery.structural_digest == _structural_digest(expected_shape)
+    # The base (candidate-free) shape still matches the operator script exactly.
+    base = _selector_structural_shape(EMAIL_SELECTOR_NAME, selector_meta, 0, 1)
+    assert base == attestation._selector_structural_shape(EMAIL_SELECTOR_NAME, selector_meta, 0, 1)
+    # No value/name text leaks into the candidate-aware shape either.
+    assert "Email, phone, or Skype" not in json.dumps(expected_shape)
 
 
 # --------------------------------------------------------------------------

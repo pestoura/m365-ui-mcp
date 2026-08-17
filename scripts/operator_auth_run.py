@@ -38,12 +38,20 @@ _BEGIN_SIGNIN = "http://127.0.0.1:8090/auth/bootstrap/begin-signin"
 _RESOLVE_SURFACE = "http://127.0.0.1:8090/auth/bootstrap/resolve-signin-surface"
 _RESOLVE_KMSI = "http://127.0.0.1:8090/auth/bootstrap/resolve-kmsi-surface"
 _DIAGNOSE_SURFACE = "http://127.0.0.1:8090/auth/bootstrap/diagnose-signin-surface"
+_RESOLVE_METHOD_SELECTION = (
+    "http://127.0.0.1:8090/auth/bootstrap/resolve-method-selection-surface"
+)
 _OPERATOR_SUBMIT = "http://127.0.0.1:8090/auth/bootstrap/operator-submit"
 _DISCOVER_EMAIL = "http://127.0.0.1:8090/auth/bootstrap/discover-email"
 _OBSERVE = "http://127.0.0.1:8090/auth/bootstrap/observe"
 
 _DISCOVER_PROBES = 6
 _DISCOVER_INTERVAL_S = 3.0
+# SPA hydration on the Microsoft auth surface can make the first begin-signin
+# transition fail transiently. Bounded re-probe only: 3 attempts, ~2s apart. The
+# credential submit is NEVER part of this retry (it happens once, later).
+_BEGIN_SIGNIN_RETRIES = 3
+_BEGIN_SIGNIN_INTERVAL_S = 2.0
 _MFA_MAX_POLLS = 120
 _MFA_POLL_INTERVAL_S = 2.0
 
@@ -158,14 +166,21 @@ def _docker_exec_get(endpoint: str) -> tuple[int, str]:
 
 
 def _require_endpoint_ok(label: str, endpoint: str, retries: int = 1) -> None:
-    """Require one operator step to succeed within its bounded re-probe count."""
+    """Require one operator step to succeed within its bounded re-probe count.
+
+    The inter-attempt pause is derived from the step label so the signature stays
+    closed: ``begin-signin`` uses the SPA-hydration cadence, every other step
+    keeps the default discovery cadence. Only the read/transition probe is
+    repeated; no credential material is ever involved here.
+    """
+    interval_s = _BEGIN_SIGNIN_INTERVAL_S if label == "begin-signin" else _DISCOVER_INTERVAL_S
     code = 1
     for attempt in range(retries):
         code, _body = _docker_exec_post(endpoint)
         if code == 0:
             return
         if attempt + 1 < retries:
-            time.sleep(_DISCOVER_INTERVAL_S)
+            time.sleep(interval_s)
     sys.stderr.write(
         f"ERROR: operator step '{label}' failed (exit={code}); "
         "browser-worker rejected or unreachable.\n"
@@ -300,6 +315,7 @@ def _notify_mfa_via_hermes(number: str) -> bool:
 def _await_mfa_and_authenticate(
     probe: Callable[[], tuple[int, str]] | None = None,
     notify: Callable[[str], bool] | None = None,
+    allow_kmsi: bool = True,
 ) -> int:
     """Relay unique challenges and wait for human approval to authenticate."""
     if probe is None:
@@ -309,6 +325,7 @@ def _await_mfa_and_authenticate(
 
     notified_numbers: set[str] = set()
     kmsi_attempted = False
+    method_selection_attempted = False
     for poll_index in range(_MFA_MAX_POLLS):
         code, body = probe()
         if code != 0:
@@ -351,7 +368,12 @@ def _await_mfa_and_authenticate(
             # is showing rather than a genuine blocker. Attempt the fixed,
             # fail-closed KMSI resolution EXACTLY ONCE and only when the
             # READ-ONLY diagnose confirms the closed STAY_SIGNED_IN surface.
-            if state == "AUTH_REQUIRED" and not kmsi_attempted:
+            if state == "AUTH_REQUIRED" and not method_selection_attempted:
+                method_selection_attempted = True
+                if _maybe_resolve_method_selection():
+                    time.sleep(_MFA_POLL_INTERVAL_S)
+                    continue
+            if state == "AUTH_REQUIRED" and not kmsi_attempted and allow_kmsi:
                 kmsi_attempted = True
                 dcode, dbody = _docker_exec_get(_DIAGNOSE_SURFACE)
                 surface = None
@@ -365,7 +387,8 @@ def _await_mfa_and_authenticate(
                     if rcode == 0:
                         time.sleep(_MFA_POLL_INTERVAL_S)
                         continue
-            return RunStatus.MFA_BLOCKED
+            if state != "AUTH_REQUIRED":
+                return RunStatus.MFA_BLOCKED
 
         if poll_index + 1 < _MFA_MAX_POLLS:
             time.sleep(_MFA_POLL_INTERVAL_S)
@@ -404,45 +427,45 @@ def _submit_credentials() -> dict[str, object] | int:
         del username, password
 
 
-def run_canonical() -> int:
-    """Execute the complete deterministic sign-in and human-MFA pipeline."""
+def _maybe_resolve_method_selection() -> bool:
+    """Resolve a METHOD_SELECTION surface exactly once after begin-signin.
+
+    Returns True (advanced) only when the READ-ONLY diagnose classifies the
+    closed sign-in surface as METHOD_SELECTION or AMBIGUOUS AND the fixed OPERATOR-ONLY
+    resolve-method-selection-surface endpoint returns success (HTTP 200, exit
+    code 0). Any other surface, a diagnose failure, or a non-zero resolve yields
+    False so the incumbent email/password flow continues unchanged.
+
+    Failures are diagnostic only: the function never raises into the canonical
+    pipeline.
+    """
+    dcode, dbody = _docker_exec_get(_DIAGNOSE_SURFACE)
+    if dcode != 0:
+        return False
     try:
-        _require_endpoint_ok("navigate", _NAVIGATE)
-    except _StepFailed:
-        return RunStatus.NAVIGATE_FAILED
+        data = json.loads(dbody)
+    except Exception:
+        return False
+    if not isinstance(data, dict):
+        return False
+    if data.get("surface") not in {"METHOD_SELECTION", "AMBIGUOUS"}:
+        return False
+    # Surface is METHOD_SELECTION or AMBIGUOUS: apply the fixed resolver exactly once.
+    # No retries, no credential involvement. A non-zero resolve means the
+    # advanced surface was NOT cleared, so stay on the incumbent flow.
+    rcode, _rbody = _docker_exec_post(_RESOLVE_METHOD_SELECTION)
+    return rcode == 0
 
-    try:
-        _require_endpoint_ok("begin-signin", _BEGIN_SIGNIN)
-    except _StepFailed:
-        return RunStatus.BEGIN_SIGNIN_FAILED
 
-    try:
-        _require_endpoint_ok("resolve-signin-surface", _RESOLVE_SURFACE, retries=3)
-    except _StepFailed:
-        return RunStatus.RESOLVE_FAILED
+def _finish_via_mfa_relay(allow_kmsi: bool = True) -> int:
+    """Observe, relay MFA to Hermes/Telegram, and map the outcome.
 
-    if not _discover_email_gate():
-        sys.stderr.write(
-            "ERROR: email-entry surface not deterministically present after "
-            "resolve-signin-surface; refusing operator-submit (fail-closed).\n"
-        )
-        return RunStatus.SURFACE_GATE_FAILED
-
-    result = _submit_credentials()
-    if isinstance(result, int):
-        return result
-    if result.get("ok") is not True:
-        sys.stderr.write("ERROR: worker returned an unexpected response shape.\n")
-        return RunStatus.BAD_RESPONSE
-
-    auth_state = result.get("auth_state", "UNKNOWN")
-    if not isinstance(auth_state, str):
-        return RunStatus.BAD_RESPONSE
-    if auth_state == "AUTHENTICATED":
-        sys.stdout.write("ok=true auth_state=AUTHENTICATED\n")
-        return RunStatus.OK
-
-    final_status = _await_mfa_and_authenticate()
+    Single shared observe/MFA relay tail used by both the incumbent
+    email/password flow and the AUTH-115 advanced METHOD_SELECTION flow. It
+    NEVER approves MFA and NEVER exposes browser content. The operator-only
+    advanced flow disables the credential-free KMSI interstitial.
+    """
+    final_status = _await_mfa_and_authenticate(allow_kmsi=allow_kmsi)
     if final_status == RunStatus.OK:
         sys.stdout.write("ok=true auth_state=AUTHENTICATED\n")
         return RunStatus.OK
@@ -469,6 +492,112 @@ def run_canonical() -> int:
             "stopped fail-closed.\n"
         )
     return final_status
+
+
+def _post_submit_outcome(result: dict[str, object] | int) -> int:
+    """Map a submit result onto the incumbent post-submit tail."""
+    if isinstance(result, int):
+        return result
+    if result.get("ok") is not True:
+        sys.stderr.write("ERROR: worker returned an unexpected response shape.\n")
+        return RunStatus.BAD_RESPONSE
+
+    auth_state = result.get("auth_state", "UNKNOWN")
+    if not isinstance(auth_state, str):
+        return RunStatus.BAD_RESPONSE
+    if auth_state == "AUTHENTICATED":
+        sys.stdout.write("ok=true auth_state=AUTHENTICATED\n")
+        return RunStatus.OK
+
+    return _finish_via_mfa_relay(allow_kmsi=True)
+
+
+def _fallback_combined_submit() -> int:
+    """One-shot combined-form submit after a failed resolve-signin-surface.
+
+    The browser-worker is the authority: it only accepts operator-submit when
+    the combined sign-in form is structurally unambiguous. This helper performs
+    EXACTLY ONE ``_submit_credentials()`` call, never calls discover-email, and
+    never retries. On any non-success it preserves the incumbent
+    ``RESOLVE_FAILED`` exit so the run stays fail-closed.
+    """
+    sys.stderr.write(
+        "WARN: resolve-signin-surface did not resolve; attempting a single "
+        "worker-gated combined-form submit (fail-closed on rejection).\n"
+    )
+    result = _submit_credentials()
+    if isinstance(result, int) or result.get("ok") is not True:
+        sys.stderr.write(
+            "ERROR: combined-form submit was not accepted by the worker; "
+            "stopping fail-closed after resolve-signin-surface failure.\n"
+        )
+        return RunStatus.RESOLVE_FAILED
+    return _post_submit_outcome(result)
+
+
+def run_canonical() -> int:
+    """Execute the complete deterministic sign-in and human-MFA pipeline."""
+    try:
+        _require_endpoint_ok("navigate", _NAVIGATE)
+    except _StepFailed:
+        return RunStatus.NAVIGATE_FAILED
+
+    try:
+        # SPA hydration tolerance: bounded re-probe of the transition only.
+        # Credentials are not submitted here, so no submit is ever repeated.
+        _require_endpoint_ok(
+            "begin-signin",
+            _BEGIN_SIGNIN,
+            retries=_BEGIN_SIGNIN_RETRIES,
+        )
+    except _StepFailed:
+        return RunStatus.BEGIN_SIGNIN_FAILED
+
+    # AUTH-118: the METHOD_SELECTION pre-resolve shortcut is DISABLED on the
+    # canonical path. Generic "Sign-in options" on this tenant opens
+    # passkey/organization options, not an MFA method chooser, so clicking it
+    # derails authentication. With prompt=select_account the account chooser is
+    # handled by resolve-signin-surface itself. The helper
+    # ``_maybe_resolve_method_selection`` is retained (unreferenced by the
+    # canonical flow) to keep the diff minimal; it MUST NOT be called here.
+    # Canonical order: begin-signin -> resolve-signin-surface -> discover-email
+    # -> credential submit -> observe/MFA relay.
+
+    try:
+        _require_endpoint_ok("resolve-signin-surface", _RESOLVE_SURFACE, retries=3)
+    except _StepFailed:
+        # AUTH-119 combined-form fallback: resolve-signin-surface did NOT
+        # resolve. The worker owns the structural gate (#i0116 + #i0118 +
+        # #idSIButton9 each present exactly once) and rejects operator-submit
+        # otherwise, so attempt the credential submit EXACTLY ONCE and let the
+        # worker decide. discover-email is intentionally NOT called here (the
+        # combined form has no separate email-entry step). Any non-success keeps
+        # the incumbent fail-closed RESOLVE_FAILED exit; there is no retry and
+        # never a second submit.
+        return _fallback_combined_submit()
+
+    if not _discover_email_gate():
+        sys.stderr.write(
+            "ERROR: email-entry surface not deterministically present after "
+            "resolve-signin-surface; refusing operator-submit (fail-closed).\n"
+        )
+        return RunStatus.SURFACE_GATE_FAILED
+
+    result = _submit_credentials()
+    if isinstance(result, int):
+        return result
+    if result.get("ok") is not True:
+        sys.stderr.write("ERROR: worker returned an unexpected response shape.\n")
+        return RunStatus.BAD_RESPONSE
+
+    auth_state = result.get("auth_state", "UNKNOWN")
+    if not isinstance(auth_state, str):
+        return RunStatus.BAD_RESPONSE
+    if auth_state == "AUTHENTICATED":
+        sys.stdout.write("ok=true auth_state=AUTHENTICATED\n")
+        return RunStatus.OK
+
+    return _finish_via_mfa_relay(allow_kmsi=True)
 
 
 def main(argv: list[str]) -> int:

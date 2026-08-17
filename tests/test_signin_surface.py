@@ -71,8 +71,23 @@ def test_classify_stay_signed_in_is_not_forwardable() -> None:
     assert c.kind is SigninSurfaceKind.STAY_SIGNED_IN
 
 
-def test_classify_method_selection_is_not_forwardable() -> None:
+def test_classify_generic_sign_in_options_is_not_method_selection() -> None:
+    # The generic visible "Sign-in options" control is present on normal
+    # account-selection / sign-in pages and is NOT sufficient evidence of MFA
+    # method selection. It must no longer win METHOD_SELECTION classification.
+    c = classify_signin_surface("Sign in\nSign-in options")
+    assert c.kind is not SigninSurfaceKind.METHOD_SELECTION
+
+
+def test_classify_method_selection_choose_how_is_not_forwardable() -> None:
+    # A genuine method-selection prompt still classifies as METHOD_SELECTION.
     c = classify_signin_surface("Sign-in options\nChoose how to verify")
+    assert c.kind is SigninSurfaceKind.METHOD_SELECTION
+
+
+def test_classify_method_selection_authentication_method_is_not_forwardable() -> None:
+    # The method-specific marker (en/pt) must still classify METHOD_SELECTION.
+    c = classify_signin_surface("Choose your authentication method\nmétodo de autenticação")
     assert c.kind is SigninSurfaceKind.METHOD_SELECTION
 
 
